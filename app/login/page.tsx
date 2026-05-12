@@ -137,10 +137,10 @@ export default function LoginPage() {
 
           <button
             type="button"
-            onClick={() => router.push('/forgot-password')}
+            onClick={() => router.push('/recuperar-password')}
             className="w-full rounded-xl border border-blue-200 bg-blue-50 py-3 font-bold text-blue-700 hover:bg-blue-100"
           >
-            Recuperar contraseña
+            ¿Olvidaste tu contraseña?
           </button>
 
           <button
