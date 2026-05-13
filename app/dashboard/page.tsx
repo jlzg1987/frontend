@@ -100,15 +100,53 @@ export default function DashboardPage() {
                     </div>
 
                     <nav className="space-y-3 flex-1">
-                        <MenuItem label="Dashboard" active />
-                        <MenuItem label="Clientes" />
-                        <MenuItem label="Pagos" />
-                        <MenuItem label="Facturación" />
-                        <MenuItem label="MikroTik" />
-                        <MenuItem label="Tickets" />
-                        <MenuItem label="Usuarios" />
-                        <MenuItem label="Inventario" />
-                        <MenuItem label="Desarrollo Sistema" />
+
+                        <MenuItem
+                            label="Dashboard"
+                            href="/dashboard"
+                            active
+                        />
+
+                        <MenuItem
+                            label="Clientes"
+                            href="/clientes"
+                        />
+
+                        <MenuItem
+                            label="Pagos"
+                            href="/pagos"
+                        />
+
+                        <MenuItem
+                            label="Facturación"
+                            href="/facturacion"
+                        />
+
+                        <MenuItem
+                            label="MikroTik"
+                            href="/mikrotik"
+                        />
+
+                        <MenuItem
+                            label="Tickets"
+                            href="/tickets"
+                        />
+
+                        <MenuItem
+                            label="Usuarios"
+                            href="/usuarios"
+                        />
+
+                        <MenuItem
+                            label="Inventario"
+                            href="/inventario"
+                        />
+
+                        <MenuItem
+                            label="Desarrollo Sistema"
+                            href="/desarrollo-sistema"
+                        />
+
                     </nav>
 
                     <button
@@ -196,16 +234,29 @@ export default function DashboardPage() {
     );
 }
 
-function MenuItem({ label, active = false }: { label: string; active?: boolean }) {
+function MenuItem({
+    label,
+    href,
+    active = false,
+}: {
+    label: string;
+    href: string;
+    active?: boolean;
+}) {
+
+    const router = useRouter();
+
     return (
-        <div
-            className={`rounded-xl px-4 py-3 font-bold cursor-pointer ${active
+        <button
+            type="button"
+            onClick={() => router.push(href)}
+            className={`w-full text-left rounded-xl px-4 py-3 font-bold transition ${active
                 ? 'bg-blue-700 text-white'
                 : 'text-slate-300 hover:bg-slate-800 hover:text-white'
                 }`}
         >
             {label}
-        </div>
+        </button>
     );
 }
 
