@@ -17,6 +17,8 @@ type RouterMikrotik = {
     usa_wireguard?: number;
     ip_wireguard?: string;
     redes_internas?: string;
+    UsaWireGuard?: number;
+    IpWireGuard?: string;
 };
 
 const formInicial = {
@@ -39,12 +41,19 @@ export default function MikrotikPage() {
     const [error, setError] = useState('');
     const [editandoId, setEditandoId] = useState<number | null>(null);
     const [form, setForm] = useState(formInicial);
+    const [estadoRouters, setEstadoRouters] = useState<any>({});
 
     useEffect(() => {
         cargarRouters();
     }, []);
 
     const token = () => localStorage.getItem('isp_token');
+
+    function esWireGuard(valor: any) {
+        if (valor === 1 || valor === true) return true;
+        if (valor?.data?.[0] === 1) return true;
+        return false;
+    }
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
         const { name, value, type, checked } = e.target;
@@ -60,7 +69,15 @@ export default function MikrotikPage() {
         });
 
         const data = await res.json();
-        if (data.ok) setRouters(data.routers || []);
+        if (data.ok) {
+            const lista = data.routers || [];
+            setRouters(lista);
+
+            lista.forEach((r: any) => {
+                probarEstadoRouter(r);
+            });
+        }
+        console.log('ROUTERS BACKEND:', data.routers);
     }
 
     async function guardarRouter(e: React.FormEvent) {
@@ -111,6 +128,9 @@ export default function MikrotikPage() {
 
     function editarRouter(r: RouterMikrotik) {
         setEditandoId(r.id);
+
+        const usaWG = esWireGuard(r.UsaWireGuard || r.usa_wireguard);
+
         setForm({
             nombre: r.nombre || '',
             parroquia: r.parroquia || '',
@@ -119,9 +139,18 @@ export default function MikrotikPage() {
             puerto: String(r.puerto || 8728),
             usuario: r.usuario || '',
             password: '',
-            usa_wireguard: Number(r.usa_wireguard) === 1,
-            ip_wireguard: r.ip_wireguard || '',
-            redes_internas: r.redes_internas || '',
+
+            usa_wireguard: usaWG,
+
+            ip_wireguard:
+                r.IpWireGuard ||
+                r.ip_wireguard ||
+                '',
+
+            redes_internas:
+                (r as any).RedesInternas ||
+                r.redes_internas ||
+                '',
         });
     }
 
@@ -162,36 +191,50 @@ Uptime: ${data.router.uptime}`);
     }
 
     async function probarWireGuard(id: number) {
-        const res = await fetch(`${API_BASE}/api/mikrotik/routers/${id}/wireguard/test`, {
-            headers: { Authorization: `Bearer ${token()}` },
+        const res = await fetch(`${API_BASE}/api/mikrotik/routers/${id}/agent/estado`, {
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${token()}`,
+            },
         });
 
         const data = await res.json();
 
-        if (!data.ok) return alert(data.message || 'No conectó por WireGuard');
+        if (!data.ok) return alert(data.message || 'No conectó por Agent VPS');
 
-        alert(`✅ WireGuard conectado
+        const nombreRouter =
+            data.router?.router?.identity?.[0]?.name ||
+            data.router?.identity?.[0]?.name ||
+            data.nodo ||
+            'Router sin nombre';
 
-Router: ${data.router}
-IP VPN: ${data.ipWireGuard}`);
+        alert(`✅ Agent VPS conectado
+
+Nodo: ${data.nodo}
+Router: ${nombreRouter}
+Estado: ${data.conectado ? 'Activo' : 'Inactivo'}`);
     }
 
-    async function verEstadoWireGuard(id: number) {
-        const res = await fetch(`${API_BASE}/api/mikrotik/routers/${id}/wireguard/estado`, {
-            headers: { Authorization: `Bearer ${token()}` },
+    async function verEstadoRouter(id: number) {
+        const res = await fetch(`${API_BASE}/api/mikrotik/routers/${id}/estado`, {
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${token()}`,
+            },
         });
 
         const data = await res.json();
 
-        if (!data.ok) return alert(data.message || 'No se pudo obtener estado WireGuard');
+        if (!data.ok) {
+            return alert(data.message || 'Router inactivo');
+        }
 
-        alert(`🔐 Estado WireGuard
+        alert(`✅ Router conectado
 
-Router: ${data.router}
-IP VPN: ${data.ipWireGuard}
-
-Interfaces: ${data.interfaces?.length || 0}
-Peers: ${data.peers?.length || 0}`);
+Tipo: ${data.tipoConexion}
+Nodo: ${data.nodo || 'No aplica'}
+Router: ${data.routerNombre || 'Sin nombre'}
+Estado: ${data.conectado ? 'Activo' : 'Inactivo'}`);
     }
 
     async function verRedesInternas(id: number) {
@@ -222,6 +265,106 @@ ${data.redesInternas?.join('\n') || 'Sin redes registradas'}`);
 
         const ips = data.ips.map((x: any) => x.address).join('\n');
         alert(`IPs públicas:\n\n${ips}`);
+    }
+
+    async function probarEstadoAgent(id: number) {
+        try {
+            setEstadoRouters((prev: any) => ({
+                ...prev,
+                [id]: { loading: true, conectado: false }
+            }));
+
+            const res = await fetch(`${API_BASE}/api/mikrotik/routers/${id}/agent/estado`, {
+                headers: {
+                    Authorization: `Bearer ${token()}`
+                }
+            });
+
+            const data = await res.json();
+
+            setEstadoRouters((prev: any) => ({
+                ...prev,
+                [id]: {
+                    loading: false,
+                    conectado: data.conectado === true,
+                    message: data.message || '',
+                    nodo: data.nodo || '',
+                    tipoConexion: data.tipoConexion || '',
+                }
+            }));
+
+        } catch {
+            setEstadoRouters((prev: any) => ({
+                ...prev,
+                [id]: {
+                    loading: false,
+                    conectado: false,
+                    message: 'Sin conexión',
+                }
+            }));
+        }
+    }
+    async function probarEstadoRouter(r: RouterMikrotik) {
+        const id = r.id;
+
+        try {
+            setEstadoRouters((prev: any) => ({
+                ...prev,
+                [id]: { loading: true, conectado: false }
+            }));
+
+            const usaWG = esWireGuard(r.UsaWireGuard || r.usa_wireguard);
+
+            const url = usaWG
+                ? `${API_BASE}/api/mikrotik/routers/${id}/agent/estado`
+                : `${API_BASE}/api/mikrotik/routers/${id}/test`;
+
+            const res = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    Authorization: `Bearer ${token()}`
+                }
+            });
+
+            const data = await res.json();
+            console.log('ESTADO ROUTER:', r.nombre, data);
+            const conectado =
+                data.ok === true ||
+                data.conectado === true ||
+                data.data?.ok === true ||
+                data.router?.ok === true;
+
+            setEstadoRouters((prev: any) => ({
+                ...prev,
+                [id]: {
+                    loading: false,
+                    conectado,
+                    message: data.message || '',
+                    nodo: data.nodo || '',
+                    tipoConexion: usaWG ? 'WIREGUARD_AGENT' : 'API_PUBLICA',
+                    routerNombre:
+                        data.routerNombre ||
+                        data.router?.nombre ||
+                        data.router?.identity?.[0]?.name ||
+                        'Sin nombre',
+                }
+            }));
+
+        } catch {
+            setEstadoRouters((prev: any) => ({
+                ...prev,
+                [id]: {
+                    loading: false,
+                    conectado: false,
+                    tipoConexion:
+                        Number(r.UsaWireGuard) === 1 ||
+                            Number(r.usa_wireguard) === 1
+                            ? 'WIREGUARD_AGENT'
+                            : 'API_PUBLICA',
+                    message: 'Sin conexión',
+                }
+            }));
+        }
     }
 
     return (
@@ -291,34 +434,87 @@ ${data.redesInternas?.join('\n') || 'Sin redes registradas'}`);
                                         <th className="py-3">Nombre</th>
                                         <th className="py-3">Zona</th>
                                         <th className="py-3">Host</th>
-                                        <th className="py-3">WG</th>
-                                        <th className="py-3">Acciones</th>
+                                        <th className="py-3 px-4 text-left">WG</th>
+                                        <th className="py-3 px-6 text-left">Estado</th>
+                                        <th className="py-3 px-6 text-left">Acciones WG</th>
+
+                                        <th className="py-3 px-6 text-left">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {routers.map((r) => (
                                         <tr key={r.id} className="border-b">
-                                            <td className="py-3 font-black text-slate-800">{r.nombre}</td>
-                                            <td className="py-3 text-slate-600">{r.parroquia} / {r.sector}</td>
+                                            <td className="py-3 font-black text-slate-700">{r.nombre}</td>
+                                            <td className="py-3 text-slate-500 px-4 text-left">{r.parroquia} / {r.sector}</td>
                                             <td className="py-3 text-slate-600">{r.host}:{r.puerto}</td>
+                                            <td className="py-3 px-4 text-left" >
+                                                {esWireGuard(r.UsaWireGuard || r.usa_wireguard) ? 'Sí' : 'No'}
+                                            </td>
                                             <td className="py-3">
-                                                {Number(r.usa_wireguard) === 1 ? (
-                                                    <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-black text-green-700">
-                                                        {r.ip_wireguard}
-                                                    </span>
-                                                ) : (
-                                                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">
-                                                        No
-                                                    </span>
-                                                )}
+                                                <span
+                                                    style={{
+                                                        padding: '4px 10px',
+                                                        borderRadius: 20,
+                                                        fontSize: 12,
+                                                        fontWeight: 700,
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: 6,
+
+                                                        background: estadoRouters[r.id]?.loading
+                                                            ? '#FEF3C7'
+                                                            : estadoRouters[r.id]?.conectado
+                                                                ? '#DCFCE7'
+                                                                : '#FEE2E2',
+
+                                                        color: estadoRouters[r.id]?.loading
+                                                            ? '#92400E'
+                                                            : estadoRouters[r.id]?.conectado
+                                                                ? '#166534'
+                                                                : '#991B1B',
+                                                    }}
+                                                >
+                                                    {estadoRouters[r.id]?.loading
+                                                        ? '⏳ Probando...'
+                                                        : estadoRouters[r.id]?.conectado
+                                                            ? '🟢 Activo'
+                                                            : '🔴 Inactivo'}
+
+                                                    {!estadoRouters[r.id]?.loading && (
+                                                        <span
+                                                            style={{
+                                                                marginLeft: 6,
+                                                                padding: '2px 6px',
+                                                                borderRadius: 10,
+                                                                background:
+                                                                    estadoRouters[r.id]?.tipoConexion === 'WIREGUARD_AGENT'
+                                                                        ? '#2563EB'
+                                                                        : '#7C3AED',
+                                                                color: '#fff',
+                                                                fontSize: 10,
+                                                                fontWeight: 700,
+                                                            }}
+                                                        >
+                                                            {estadoRouters[r.id]?.tipoConexion === 'WIREGUARD_AGENT'
+                                                                ? 'AGENT'
+                                                                : 'API'}
+                                                        </span>
+                                                    )}
+                                                </span>
                                             </td>
                                             <td className="py-3">
                                                 <div className="flex flex-wrap gap-2">
-                                                    <Btn text="Test" onClick={() => probarConexion(r.id)} />
+
                                                     <Btn text="IP" onClick={() => verIpPublica(r.id)} />
-                                                    <Btn text="WG Test" onClick={() => probarWireGuard(r.id)} />
-                                                    <Btn text="WG Estado" onClick={() => verEstadoWireGuard(r.id)} />
+                                                    <Btn text="Test" onClick={() => probarWireGuard(r.id)} />
+                                                    <Btn text="Estado" onClick={() => verEstadoRouter(r.id)} />
                                                     <Btn text="Redes" onClick={() => verRedesInternas(r.id)} />
+                                                </div>
+                                            </td>
+
+                                            <td className="py-3">
+                                                <div className="flex flex-wrap gap-2">
+                                                    <Btn text="Test" onClick={() => probarConexion(r.id)} />
                                                     <Btn text="Editar" onClick={() => editarRouter(r)} />
                                                     <Btn danger text="Eliminar" onClick={() => eliminarRouter(r.id)} />
                                                 </div>
@@ -330,8 +526,8 @@ ${data.redesInternas?.join('\n') || 'Sin redes registradas'}`);
                         </div>
                     </section>
                 </div>
-            </div>
-        </main>
+            </div >
+        </main >
     );
 }
 
