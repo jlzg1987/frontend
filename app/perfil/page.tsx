@@ -9,7 +9,7 @@ function getToken() {
     return localStorage.getItem('isp_token')?.replaceAll('"', '') || '';
 }
 
-export default function PerfilPage() {
+export default function PerfilInterno({ onVolver }: { onVolver: () => void }) {
     const router = useRouter();
 
     const [loading, setLoading] = useState(true);
@@ -213,15 +213,6 @@ export default function PerfilPage() {
     return (
         <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-950 to-blue-950 text-white">
             <div className="max-w-6xl mx-auto p-5 md:p-8">
-
-                <div className="mb-6">
-                    <button
-                        onClick={() => router.push('/dashboard')}
-                        className="rounded-xl border border-cyan-500/30 bg-slate-900 px-4 py-2 text-cyan-300 font-bold hover:bg-slate-800 transition"
-                    >
-                        ← Volver al dashboard
-                    </button>
-                </div>
 
                 <div className="rounded-3xl bg-slate-900/95 border border-cyan-500/25 shadow-xl shadow-cyan-500/10 overflow-hidden">
 

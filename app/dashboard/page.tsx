@@ -2,10 +2,15 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import PerfilInterno from '../perfil/page';
+import MikroTikDashboardPageInterno from '../mikrotik/page';
+import MikrotikPageInterno from '../mikrotik/routers/page';
 
 export default function DashboardPage() {
     const router = useRouter();
     const [usuario, setUsuario] = useState<any>(null);
+    const [vistaActual, setVistaActual] = useState<
+        'dashboard' | 'perfil' | 'mikrotik' | 'mikrotikRouters'>('dashboard');
 
     useEffect(() => {
         const usuarioStorage = localStorage.getItem('isp_usuario');
@@ -64,8 +69,8 @@ export default function DashboardPage() {
             title: 'MikroTik',
             desc: 'Control de cortes, perfiles y clientes activos.',
             icon: '📡',
-            href: '/mikrotik',
             color: 'bg-orange-600',
+            href: '/mikrotik',
         },
         {
             title: 'Tickets',
@@ -89,6 +94,35 @@ export default function DashboardPage() {
         router.push('/login');
     }
 
+    function getHeaderInfo() {
+        if (vistaActual === 'perfil') {
+            return {
+                titulo: 'Perfil de usuario',
+                subtitulo: 'Administra tu información personal, foto y datos del sistema',
+            };
+        }
+
+        if (vistaActual === 'mikrotik') {
+            return {
+                titulo: 'Dashboard MikroTik',
+                subtitulo: 'Centro de control para nodos, clientes, monitoreo, firewall y reportes',
+            };
+        }
+        if (vistaActual === 'mikrotikRouters') {
+            return {
+                titulo: 'Administrar nodos MikroTik',
+                subtitulo: 'Registrar, editar, probar conexión y validar WireGuard de tus routers',
+            };
+        }
+
+        return {
+            titulo: 'Dashboard principal',
+            subtitulo: 'Bienvenido al panel administrativo ISP NetComp RF',
+        };
+    }
+
+    const headerInfo = getHeaderInfo();
+
     return (
         <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-950 to-blue-950">
             <div className="flex min-h-screen">
@@ -104,8 +138,8 @@ export default function DashboardPage() {
 
                         <MenuItem
                             label="Dashboard"
-                            href="/dashboard"
-                            active
+                            active={vistaActual === 'dashboard'}
+                            onClick={() => setVistaActual('dashboard')}
                         />
 
                         <MenuItem
@@ -125,7 +159,8 @@ export default function DashboardPage() {
 
                         <MenuItem
                             label="MikroTik"
-                            href="/mikrotik"
+                            active={vistaActual === 'mikrotik'}
+                            onClick={() => setVistaActual('mikrotik')}
                         />
 
                         <MenuItem
@@ -161,17 +196,18 @@ export default function DashboardPage() {
                 <section className="flex-1">
                     <header className="bg-slate-950/90 border-b border-cyan-500/20 px-5 md:px-8 py-5 flex items-center justify-between gap-4 shadow-lg shadow-cyan-500/10">    <div>
                         <h2 className="text-2xl font-black text-white">
-                            Dashboard principal
+                            {headerInfo.titulo}
                         </h2>
                         <p className="text-cyan-200/70 text-sm">
-                            Bienvenido al panel administrativo ISP NetComp RF
+                            {headerInfo.subtitulo}
                         </p>
                     </div>
 
                         <div className="flex items-center gap-4">
                             <button
                                 type="button"
-                                onClick={() => router.push('/perfil')}
+
+                                onClick={() => setVistaActual('perfil')}
                                 className="flex items-center gap-3 rounded-2xl border border-cyan-500/30 bg-slate-900 px-4 py-2 hover:bg-slate-800 transition shadow-lg shadow-cyan-500/10"
                             >
                                 <div className="hidden sm:block text-right">
@@ -199,34 +235,58 @@ export default function DashboardPage() {
                         </div>
                     </header>
                     <div className="p-5 md:p-8">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
-                            <StatCard title="Clientes activos" value="0" />
-                            <StatCard title="Pagos pendientes" value="0" />
-                            <StatCard title="Tickets abiertos" value="0" />
-                            <StatCard title="Equipos online" value="0" />
-                        </div>
+                        {vistaActual === 'dashboard' && (
+                            <>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
+                                    <StatCard title="Clientes activos" value="0" />
+                                    <StatCard title="Pagos pendientes" value="0" />
+                                    <StatCard title="Tickets abiertos" value="0" />
+                                    <StatCard title="Equipos online" value="0" />
+                                </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                            {cards.map((item) => (
-                                <button
-                                    key={item.title}
-                                    onClick={() => router.push(item.href)}
-                                    className="text-left rounded-3xl bg-slate-900/95 p-6 shadow-xl shadow-cyan-500/10 hover:scale-[1.02] transition border border-cyan-500/25 hover:border-cyan-400/60"
-                                >
-                                    <div className={`w-14 h-14 ${item.color} rounded-2xl flex items-center justify-center text-2xl mb-5`}>
-                                        {item.icon}
-                                    </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                                    {cards.map((item) => (
+                                        <button
+                                            key={item.title}
+                                            onClick={() => {
+                                                if (item.title === 'MikroTik') {
+                                                    setVistaActual('mikrotik');
+                                                    return;
+                                                }
 
-                                    <h3 className="text-xl font-black text-white">
-                                        {item.title}
-                                    </h3>
+                                                router.push(item.href);
+                                            }}
+                                            className="text-left rounded-3xl bg-slate-900/95 p-6 shadow-xl shadow-cyan-500/10 hover:scale-[1.02] transition border border-cyan-500/25 hover:border-cyan-400/60"
+                                        >
+                                            <div className={`w-14 h-14 ${item.color} rounded-2xl flex items-center justify-center text-2xl mb-5`}>
+                                                {item.icon}
+                                            </div>
 
-                                    <p className="text-cyan-100/70 mt-2 text-sm leading-6">
-                                        {item.desc}
-                                    </p>
-                                </button>
-                            ))}
-                        </div>
+                                            <h3 className="text-xl font-black text-white">
+                                                {item.title}
+                                            </h3>
+
+                                            <p className="text-cyan-100/70 mt-2 text-sm leading-6">
+                                                {item.desc}
+                                            </p>
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+
+                        {vistaActual === 'perfil' && (
+                            <PerfilInterno onVolver={() => setVistaActual('dashboard')} />
+                        )}
+                        {vistaActual === 'mikrotik' && (
+                            <MikroTikDashboardPageInterno
+                                onVolver={() => setVistaActual('dashboard')}
+                                onAbrirRouters={() => setVistaActual('mikrotikRouters')}
+                            />
+                        )}
+                        {vistaActual === 'mikrotikRouters' && (
+                            <MikrotikPageInterno />
+                        )}
                     </div>
                 </section>
             </div>
@@ -238,18 +298,28 @@ function MenuItem({
     label,
     href,
     active = false,
+    onClick,
 }: {
     label: string;
-    href: string;
+    href?: string;
     active?: boolean;
+    onClick?: () => void;
 }) {
-
     const router = useRouter();
 
     return (
         <button
             type="button"
-            onClick={() => router.push(href)}
+            onClick={() => {
+                if (onClick) {
+                    onClick();
+                    return;
+                }
+
+                if (href) {
+                    router.push(href);
+                }
+            }}
             className={`w-full text-left rounded-xl px-4 py-3 font-bold transition ${active
                 ? 'bg-blue-700 text-white'
                 : 'text-slate-300 hover:bg-slate-800 hover:text-white'
@@ -259,7 +329,6 @@ function MenuItem({
         </button>
     );
 }
-
 function StatCard({ title, value }: { title: string; value: string }) {
     return (
         <div className="rounded-2xl bg-slate-900/95 p-5 shadow-lg shadow-cyan-500/10 border border-cyan-500/25">
@@ -268,3 +337,4 @@ function StatCard({ title, value }: { title: string; value: string }) {
         </div>
     );
 }
+

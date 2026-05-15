@@ -1,17 +1,194 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-export default function MikroTikDashboardPage() {
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+
+async function fetchConTimeout(url: string, options: any = {}, ms = 4000) {
+    const controller = new AbortController();
+
+    const timeout = setTimeout(() => controller.abort(), ms);
+
+    try {
+        const resp = await fetch(url, {
+            ...options,
+            signal: controller.signal,
+        });
+
+        return resp;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+export default function MikroTikDashboardPageInterno({
+    onVolver,
+    onAbrirRouters,
+}: {
+    onVolver: () => void;
+    onAbrirRouters: () => void;
+}) {
     const router = useRouter();
+    const [loadingStats, setLoadingStats] = useState(true);
+
+    const [resumen, setResumen] = useState({
+        total: 0,
+        enLinea: 0,
+        inactivos: 0,
+        wireguard: 0,
+        apiPublica: 0,
+    });
+
+    function esWireGuard(valor: any): boolean {
+        if (valor === 1 || valor === true) return true;
+        if (valor === '1' || valor === 'true') return true;
+        if (valor?.data?.[0] === 1) return true;
+        return false;
+    }
+    const token = () => localStorage.getItem('isp_token');
+
+    async function cargarResumenMikrotik() {
+        try {
+            setLoadingStats(true);
+
+            const res = await fetch(`${API_BASE}/mikrotik/routers`, {
+                headers: {
+                    Authorization: `Bearer ${token()}`,
+                },
+            });
+
+            const data = await res.json();
+
+            console.log('Routers respuesta:', data);
+
+            const routers = data.routers || [];
+
+            let total = routers.length;
+            let wireguard = 0;
+            let apiPublica = 0;
+
+            const resultados = await Promise.all(
+                routers.map(async (r: any) => {
+                    const usaWG = esWireGuard(r.UsaWireGuard ?? r.usa_wireguard ?? r.WireGuard);
+
+                    if (usaWG) wireguard++;
+                    else apiPublica++;
+
+                    const routerId = r.id ?? r.Id ?? r.RouterId ?? r.routerId;
+
+                    const url = usaWG
+                        ? `${API_BASE}/mikrotik/routers/${routerId}/agent/estado`
+                        : `${API_BASE}/mikrotik/routers/${routerId}/test`;
+
+                    console.log('Consultando router:', r.Nombre, url);
+
+                    try {
+                        const resp = await fetchConTimeout(url, {
+                            method: 'GET',
+                            headers: {
+                                Authorization: `Bearer ${token()}`,
+                            },
+                        }, 4000);
+
+                        const estado = await resp.json();
+
+                        console.log('Estado router:', r.Nombre, estado);
+
+                        const conectado =
+                            estado?.ok === true &&
+                            (
+                                estado?.estado === 'ACTIVO' ||
+                                estado?.estado === 'Activo' ||
+                                estado?.conectado === true ||
+                                estado?.agent?.ok === true ||
+                                estado?.api?.ok === true
+                            );
+
+                        return {
+                            conectado,
+                        };
+
+                    } catch (err: any) {
+                        const nombreRouter =
+                            r.Nombre ??
+                            r.nombre ??
+                            r.NombreRouter ??
+                            r.alias ??
+                            'Router sin nombre';
+
+                        if (err?.name === 'AbortError') {
+                            console.warn('Timeout router inactivo:', nombreRouter);
+                        } else {
+                            console.error('Error consultando router:', nombreRouter, err);
+                        }
+
+                        return {
+                            conectado: false,
+                        };
+                    }
+                })
+            );
+
+            const enLinea = resultados.filter(r => r.conectado).length;
+            const inactivos = total - enLinea;
+
+            setResumen({
+                total,
+                enLinea,
+                inactivos,
+                wireguard,
+                apiPublica,
+            });
+
+        } catch (error) {
+            console.error('Error general dashboard MikroTik:', error);
+        } finally {
+            setLoadingStats(false);
+        }
+    }
+
+    useEffect(() => {
+        cargarResumenMikrotik();
+    }, []);
 
     const stats = [
-        { titulo: 'Nodos registrados', valor: '0', icono: '📡', color: '#38bdf8' },
-        { titulo: 'Nodos en línea', valor: '0', icono: '🟢', color: '#22c55e' },
-        { titulo: 'Nodos inactivos', valor: '0', icono: '🔴', color: '#ef4444' },
-        { titulo: 'Agent / WireGuard', valor: '0', icono: '🔐', color: '#a855f7' },
-        { titulo: 'API pública', valor: '0', icono: '🌐', color: '#f59e0b' },
-        { titulo: 'Clientes MOROSOS', valor: '0', icono: '🚫', color: '#f97316' },
+        {
+            titulo: 'Nodos registrados',
+            valor: loadingStats ? '...' : String(resumen.total),
+            icono: '📡',
+            color: '#38bdf8'
+        },
+        {
+            titulo: 'Nodos en línea',
+            valor: loadingStats ? '...' : String(resumen.enLinea),
+            icono: '🟢',
+            color: '#22c55e'
+        },
+        {
+            titulo: 'Nodos inactivos',
+            valor: loadingStats ? '...' : String(resumen.inactivos),
+            icono: '🔴',
+            color: '#ef4444'
+        },
+        {
+            titulo: 'Agent / WireGuard',
+            valor: loadingStats ? '...' : String(resumen.wireguard),
+            icono: '🔐',
+            color: '#a855f7'
+        },
+        {
+            titulo: 'API pública',
+            valor: loadingStats ? '...' : String(resumen.apiPublica),
+            icono: '🌐',
+            color: '#f59e0b'
+        },
+        {
+            titulo: 'Clientes MOROSOS',
+            valor: '0',
+            icono: '🚫',
+            color: '#f97316'
+        },
     ];
 
     const accesos = [
@@ -55,29 +232,6 @@ export default function MikroTikDashboardPage() {
 
     return (
         <main style={styles.page}>
-            <section style={styles.header}>
-                <div style={styles.topActions}>
-                    <button
-                        style={styles.backButton}
-                        onClick={() => router.push('/dashboard')}
-                    >
-                        ← Volver al menú principal
-                    </button>
-                </div>
-                <div>
-                    <h1 style={styles.title}>Dashboard MikroTik</h1>
-                    <p style={styles.subtitle}>
-                        Centro de control para nodos, clientes, monitoreo, firewall y reportes.
-                    </p>
-                </div>
-
-                <button
-                    style={styles.primaryButton}
-                    onClick={() => router.push('/mikrotik/routers')}
-                >
-                    + Administrar nodos
-                </button>
-            </section>
 
             <section style={styles.statsGrid}>
                 {stats.map((item, index) => (
@@ -104,7 +258,14 @@ export default function MikroTikDashboardPage() {
                         <button
                             key={index}
                             style={styles.accessCard}
-                            onClick={() => router.push(item.ruta)}
+                            onClick={() => {
+                                if (item.titulo === 'Administrar nodos') {
+                                    onAbrirRouters();
+                                    return;
+                                }
+
+                                router.push(item.ruta);
+                            }}
                         >
                             <div style={styles.accessIcon}>{item.icono}</div>
                             <h3 style={styles.accessTitle}>{item.titulo}</h3>
@@ -127,7 +288,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         background: 'rgba(15,23,42,0.95)',
         border: '1px solid rgba(56,189,248,0.35)',
         color: '#38bdf8',
-        padding: '10px 16px',
+        padding: '10px 10',
         borderRadius: 12,
         cursor: 'pointer',
         fontWeight: 700,

@@ -34,7 +34,7 @@ const formInicial = {
     redes_internas: '',
 };
 
-export default function MikrotikPage() {
+export default function MikrotikPageInterno() {
     const [routers, setRouters] = useState<RouterMikrotik[]>([]);
     const [loading, setLoading] = useState(false);
     const [mensaje, setMensaje] = useState('');
@@ -370,12 +370,7 @@ ${data.redesInternas?.join('\n') || 'Sin redes registradas'}`);
     return (
         <main className="min-h-screen bg-slate-950 px-4 py-8">
             <div className="mx-auto max-w-7xl">
-                <div className="mb-8">
-                    <h1 className="text-3xl font-black text-white">Administración MikroTik</h1>
-                    <p className="text-slate-400 mt-1">
-                        Registro de routers, WireGuard, redes internas y pruebas de conexión.
-                    </p>
-                </div>
+
 
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                     <section className="lg:col-span-1 rounded-3xl bg-white p-6 shadow-xl">
