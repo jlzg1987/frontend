@@ -31,6 +31,7 @@ export default function DashboardPage() {
         '';
 
     const fotoUsuario =
+        usuario?.fotoPerfil ||
         usuario?.foto ||
         usuario?.avatar ||
         usuario?.imagen ||
@@ -89,7 +90,7 @@ export default function DashboardPage() {
     }
 
     return (
-        <main className="min-h-screen bg-slate-950">
+        <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-950 to-blue-950">
             <div className="flex min-h-screen">
                 <aside className="hidden md:flex w-72 bg-slate-900 border-r border-slate-800 p-6 flex-col">
                     <div className="mb-10">
@@ -158,27 +159,26 @@ export default function DashboardPage() {
                 </aside>
 
                 <section className="flex-1">
-                    <header className="bg-white border-b border-slate-200 px-5 md:px-8 py-5 flex items-center justify-between gap-4">
-                        <div>
-                            <h2 className="text-2xl font-black text-slate-900">
-                                Dashboard principal
-                            </h2>
-                            <p className="text-slate-500 text-sm">
-                                Bienvenido al panel administrativo ISP NetComp RF
-                            </p>
-                        </div>
+                    <header className="bg-slate-950/90 border-b border-cyan-500/20 px-5 md:px-8 py-5 flex items-center justify-between gap-4 shadow-lg shadow-cyan-500/10">    <div>
+                        <h2 className="text-2xl font-black text-white">
+                            Dashboard principal
+                        </h2>
+                        <p className="text-cyan-200/70 text-sm">
+                            Bienvenido al panel administrativo ISP NetComp RF
+                        </p>
+                    </div>
 
                         <div className="flex items-center gap-4">
                             <button
                                 type="button"
                                 onClick={() => router.push('/perfil')}
-                                className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 hover:bg-slate-100 transition"
+                                className="flex items-center gap-3 rounded-2xl border border-cyan-500/30 bg-slate-900 px-4 py-2 hover:bg-slate-800 transition shadow-lg shadow-cyan-500/10"
                             >
                                 <div className="hidden sm:block text-right">
-                                    <p className="text-sm font-black text-slate-900">
+                                    <p className="text-sm font-black text-white">
                                         {nombreUsuario}
                                     </p>
-                                    <p className="text-xs text-slate-500">
+                                    <p className="text-xs text-cyan-200/70">
                                         {emailUsuario}
                                     </p>
                                 </div>
@@ -211,17 +211,17 @@ export default function DashboardPage() {
                                 <button
                                     key={item.title}
                                     onClick={() => router.push(item.href)}
-                                    className="text-left rounded-3xl bg-white p-6 shadow-xl hover:scale-[1.02] transition border border-slate-100"
+                                    className="text-left rounded-3xl bg-slate-900/95 p-6 shadow-xl shadow-cyan-500/10 hover:scale-[1.02] transition border border-cyan-500/25 hover:border-cyan-400/60"
                                 >
                                     <div className={`w-14 h-14 ${item.color} rounded-2xl flex items-center justify-center text-2xl mb-5`}>
                                         {item.icon}
                                     </div>
 
-                                    <h3 className="text-xl font-black text-slate-900">
+                                    <h3 className="text-xl font-black text-white">
                                         {item.title}
                                     </h3>
 
-                                    <p className="text-slate-500 mt-2 text-sm leading-6">
+                                    <p className="text-cyan-100/70 mt-2 text-sm leading-6">
                                         {item.desc}
                                     </p>
                                 </button>
@@ -262,9 +262,9 @@ function MenuItem({
 
 function StatCard({ title, value }: { title: string; value: string }) {
     return (
-        <div className="rounded-2xl bg-white p-5 shadow-lg border border-slate-100">
-            <p className="text-sm font-bold text-slate-500">{title}</p>
-            <h3 className="text-3xl font-black text-slate-900 mt-2">{value}</h3>
+        <div className="rounded-2xl bg-slate-900/95 p-5 shadow-lg shadow-cyan-500/10 border border-cyan-500/25">
+            <p className="text-sm font-bold text-cyan-200/70">{title}</p>
+            <h3 className="text-3xl font-black text-cyan-400 mt-2">{value}</h3>
         </div>
     );
 }
