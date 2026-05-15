@@ -5,12 +5,17 @@ import { useEffect, useState } from 'react';
 import PerfilInterno from '../perfil/page';
 import MikroTikDashboardPageInterno from '../mikrotik/page';
 import MikrotikPageInterno from '../mikrotik/routers/page';
+import AdminIspPageInterno from '../adnib-isp/page';
+import PlanesInternetPage from '../adnib-isp/planes-internet/page';
+import ClientesInterno from './components/ClientesInterno';
 
 export default function DashboardPage() {
     const router = useRouter();
     const [usuario, setUsuario] = useState<any>(null);
     const [vistaActual, setVistaActual] = useState<
-        'dashboard' | 'perfil' | 'mikrotik' | 'mikrotikRouters'>('dashboard');
+        'dashboard' | 'perfil' | 'mikrotik' | 'mikrotikRouters' | 'administracion' | 'PlanInternet'
+        | 'Clientes'
+    >('dashboard');
 
     useEffect(() => {
         const usuarioStorage = localStorage.getItem('isp_usuario');
@@ -48,7 +53,7 @@ export default function DashboardPage() {
             title: 'Clientes',
             desc: 'Registrar, buscar y administrar clientes ISP.',
             icon: '👥',
-            href: '/clientes',
+            href: '/Clientes',
             color: 'bg-blue-600',
         },
         {
@@ -114,7 +119,24 @@ export default function DashboardPage() {
                 subtitulo: 'Registrar, editar, probar conexión y validar WireGuard de tus routers',
             };
         }
-
+        if (vistaActual === 'administracion') {
+            return {
+                titulo: 'Administración ISP',
+                subtitulo: ' Centro de control para clientes, planes, pagos, publicidad, cortes y reportes.',
+            };
+        }
+        if (vistaActual === 'PlanInternet') {
+            return {
+                titulo: 'Planes de Internet',
+                subtitulo: 'Crear, editar y administrar planes, velocidades y precios.',
+            };
+        }
+        if (vistaActual === 'Clientes') {
+            return {
+                titulo: 'Clientes',
+                subtitulo: 'Registro, ubicación, estado y perfil de clientes ISP.',
+            };
+        }
         return {
             titulo: 'Dashboard principal',
             subtitulo: 'Bienvenido al panel administrativo ISP NetComp RF',
@@ -144,7 +166,8 @@ export default function DashboardPage() {
 
                         <MenuItem
                             label="Clientes"
-                            href="/clientes"
+                            active={vistaActual === 'Clientes'}
+                            onClick={() => setVistaActual('Clientes')}
                         />
 
                         <MenuItem
@@ -166,6 +189,11 @@ export default function DashboardPage() {
                         <MenuItem
                             label="Tickets"
                             href="/tickets"
+                        />
+                        <MenuItem
+                            label="Administracion"
+                            active={vistaActual === 'administracion'}
+                            onClick={() => setVistaActual('administracion')}
                         />
 
                         <MenuItem
@@ -253,6 +281,10 @@ export default function DashboardPage() {
                                                     setVistaActual('mikrotik');
                                                     return;
                                                 }
+                                                if (item.title === 'Clientes') {
+                                                    setVistaActual('Clientes');
+                                                    return;
+                                                }
 
                                                 router.push(item.href);
                                             }}
@@ -286,6 +318,19 @@ export default function DashboardPage() {
                         )}
                         {vistaActual === 'mikrotikRouters' && (
                             <MikrotikPageInterno />
+                        )}
+                        {vistaActual === 'administracion' && (
+                            <AdminIspPageInterno
+                                onVolver={() => setVistaActual('dashboard')}
+                                onAbrirAdministracion={() => setVistaActual('PlanInternet')}
+                                onAbrirClientes={() => setVistaActual('Clientes')}
+                            />
+                        )}
+                        {vistaActual === 'PlanInternet' && (
+                            <PlanesInternetPage />
+                        )}
+                        {vistaActual === 'Clientes' && (
+                            <ClientesInterno />
                         )}
                     </div>
                 </section>
