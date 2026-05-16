@@ -8,14 +8,46 @@ import MikrotikPageInterno from '../mikrotik/routers/page';
 import AdminIspPageInterno from '../adnib-isp/page';
 import PlanesInternetPage from '../adnib-isp/planes-internet/page';
 import ClientesInterno from './components/ClientesInterno';
+import ImportarClientesInterno from './components/ImportarClientesInterno';
+import { API_BASE, getToken } from '@/src/lib/api';
+import ContratosServiciosPage from '../contratos-servicios/page';
+import InfraestructuraPage from '../infraestructura/page';
+import TorresWispPage from '../infraestructura/torres-wips/page';
 
 export default function DashboardPage() {
     const router = useRouter();
     const [usuario, setUsuario] = useState<any>(null);
+    const [clientesActivos, setClientesActivos] = useState(0);
+
     const [vistaActual, setVistaActual] = useState<
         'dashboard' | 'perfil' | 'mikrotik' | 'mikrotikRouters' | 'administracion' | 'PlanInternet'
-        | 'Clientes'
+        | 'Clientes' | 'ImportarClientes' | 'contratosServicios' | 'infraestructura' | 'torre'
     >('dashboard');
+
+
+    const cargarResumenClientes = async () => {
+        try {
+            const token = await getToken();
+
+            const res = await fetch(`${API_BASE}/clientes`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            const data = await res.json();
+
+            if (data.ok) {
+                const activos = (data.clientes || []).filter(
+                    (c: any) => c.estadoCliente === 'ACTIVO'
+                ).length;
+
+                setClientesActivos(activos);
+            }
+        } catch (error) {
+            console.error('Error cargando resumen clientes:', error);
+        }
+    };
 
     useEffect(() => {
         const usuarioStorage = localStorage.getItem('isp_usuario');
@@ -27,7 +59,10 @@ export default function DashboardPage() {
                 setUsuario(null);
             }
         }
+        cargarResumenClientes();
     }, []);
+
+
 
     const nombreUsuario =
         usuario?.nombreCompleto ||
@@ -55,6 +90,13 @@ export default function DashboardPage() {
             icon: '👥',
             href: '/Clientes',
             color: 'bg-blue-600',
+        },
+        {
+            title: 'Contratos Servicios',
+            desc: 'Administrar servicios de internet, planes, PPPoE, GPON y estados.',
+            icon: '📡',
+            href: '/contratos-servicios',
+            color: 'bg-cyan-600',
         },
         {
             title: 'Pagos',
@@ -137,6 +179,34 @@ export default function DashboardPage() {
                 subtitulo: 'Registro, ubicación, estado y perfil de clientes ISP.',
             };
         }
+        if (vistaActual === 'ImportarClientes') {
+            return {
+                titulo: 'Importar clientes',
+                subtitulo: 'Descarga el formato Excel oficial e importa clientes masivamente.',
+            };
+        }
+
+        if (vistaActual === 'contratosServicios') {
+            return {
+                titulo: 'Contratos de Servicios',
+                subtitulo: ' Servicios de internet asignados a clientes, planes, MikroTik y datos técnicos.',
+            };
+        }
+        if (vistaActual === 'infraestructura') {
+            return {
+                titulo: 'Infraestructura',
+                subtitulo: '  Centro de control para WISP, fibra óptica, NAP, nodos, NAT y red física del ISP.',
+            };
+
+        }
+        if (vistaActual === 'torre') {
+            return {
+                titulo: 'Torres WISP',
+                subtitulo: 'Administración de torres inalámbricas, ubicación, IP pública y estado operativo.',
+            };
+
+        }
+
         return {
             titulo: 'Dashboard principal',
             subtitulo: 'Bienvenido al panel administrativo ISP NetComp RF',
@@ -185,7 +255,12 @@ export default function DashboardPage() {
                             active={vistaActual === 'mikrotik'}
                             onClick={() => setVistaActual('mikrotik')}
                         />
+                        <MenuItem
+                            label="Infraestructura"
+                            active={vistaActual === 'infraestructura'}
+                            onClick={() => setVistaActual('infraestructura')}
 
+                        />
                         <MenuItem
                             label="Tickets"
                             href="/tickets"
@@ -266,7 +341,7 @@ export default function DashboardPage() {
                         {vistaActual === 'dashboard' && (
                             <>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
-                                    <StatCard title="Clientes activos" value="0" />
+                                    <StatCard title="Clientes activos" value={String(clientesActivos)} />
                                     <StatCard title="Pagos pendientes" value="0" />
                                     <StatCard title="Tickets abiertos" value="0" />
                                     <StatCard title="Equipos online" value="0" />
@@ -283,6 +358,10 @@ export default function DashboardPage() {
                                                 }
                                                 if (item.title === 'Clientes') {
                                                     setVistaActual('Clientes');
+                                                    return;
+                                                }
+                                                if (item.title === 'Contratos Servicios') {
+                                                    setVistaActual('contratosServicios');
                                                     return;
                                                 }
 
@@ -324,6 +403,7 @@ export default function DashboardPage() {
                                 onVolver={() => setVistaActual('dashboard')}
                                 onAbrirAdministracion={() => setVistaActual('PlanInternet')}
                                 onAbrirClientes={() => setVistaActual('Clientes')}
+                                onAbrirImportarclientes={() => setVistaActual('ImportarClientes')}
                             />
                         )}
                         {vistaActual === 'PlanInternet' && (
@@ -332,6 +412,22 @@ export default function DashboardPage() {
                         {vistaActual === 'Clientes' && (
                             <ClientesInterno />
                         )}
+                        {vistaActual === 'ImportarClientes' && (
+                            <ImportarClientesInterno />
+                        )}
+                        {vistaActual === 'contratosServicios' && (
+                            <ContratosServiciosPage />
+                        )}
+                        {vistaActual === 'infraestructura' && (
+                            <InfraestructuraPage
+                                onVolver={() => setVistaActual('dashboard')}
+                                onAbrirtorre={() => setVistaActual('torre')}
+                            />
+                        )}
+                        {vistaActual === 'torre' && (
+                            <TorresWispPage />
+                        )}
+
                     </div>
                 </section>
             </div>

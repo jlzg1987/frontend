@@ -10,6 +10,7 @@ type Cliente = {
     apellidos: string;
     email: string;
     telefono: string;
+    fotoPerfil?: string | null;
     cedula: string;
     direccion: string;
     referencia?: string;
@@ -25,6 +26,17 @@ export default function ClientesInterno() {
     const [clientes, setClientes] = useState<Cliente[]>([]);
     const [loading, setLoading] = useState(false);
     const [editandoId, setEditandoId] = useState<string | null>(null);
+
+    const [modalPassword, setModalPassword] = useState(false);
+    const [clientePassword, setClientePassword] = useState<Cliente | null>(null);
+    const [nuevaPassword, setNuevaPassword] = useState('');
+    const [confirmarPassword, setConfirmarPassword] = useState('');
+
+    const [verPassword, setVerPassword] = useState(false);
+    const [verConfirmarPassword, setVerConfirmarPassword] = useState(false);
+
+    const [busqueda, setBusqueda] = useState('');
+
 
     const [form, setForm] = useState({
         nombres: '',
@@ -213,6 +225,80 @@ export default function ClientesInterno() {
         }
     };
 
+
+    const abrirModalPassword = (cliente: Cliente) => {
+        setClientePassword(cliente);
+        setNuevaPassword('');
+        setConfirmarPassword('');
+        setModalPassword(true);
+    };
+
+    const cerrarModalPassword = () => {
+        setModalPassword(false);
+        setClientePassword(null);
+        setNuevaPassword('');
+        setConfirmarPassword('');
+    };
+
+    const guardarNuevaPassword = async () => {
+        try {
+            if (!clientePassword) return;
+
+            if (!nuevaPassword || nuevaPassword.length < 6) {
+                alert('La contraseña debe tener mínimo 6 caracteres');
+                return;
+            }
+
+            if (nuevaPassword !== confirmarPassword) {
+                alert('Las contraseñas no coinciden');
+                return;
+            }
+
+            const token = await getToken();
+
+            const res = await fetch(`${API_BASE}/clientes/${clientePassword.clienteId}/password`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    password: nuevaPassword,
+                }),
+            });
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.message || 'No se pudo cambiar la contraseña');
+                return;
+            }
+
+            alert('Contraseña actualizada correctamente');
+            cerrarModalPassword();
+
+        } catch (error) {
+            console.error('Error cambiando contraseña:', error);
+            alert('Error cambiando contraseña');
+        }
+    };
+
+    const clientesFiltrados = clientes.filter((cliente) => {
+        const texto = busqueda.toLowerCase().trim();
+
+        const nombreCompleto = `${cliente.nombres} ${cliente.apellidos}`.toLowerCase();
+        const cedula = String(cliente.cedula || '').toLowerCase();
+        const telefono = String(cliente.telefono || '').toLowerCase();
+        const email = String(cliente.email || '').toLowerCase();
+
+        return (
+            nombreCompleto.includes(texto) ||
+            cedula.includes(texto) ||
+            telefono.includes(texto) ||
+            email.includes(texto)
+        );
+    });
+
     return (
         <section style={styles.wrapper}>
             <div style={styles.formCard}>
@@ -281,18 +367,49 @@ export default function ClientesInterno() {
                 </div>
             </div>
 
+            <div style={styles.searchCard}>
+                <div>
+                    <h3 style={styles.searchTitle}>Buscar cliente</h3>
+                    <p style={styles.searchSubtitle}>
+                        Filtra por nombre, cédula, celular o email.
+                    </p>
+                </div>
+
+                <input
+                    style={styles.searchInput}
+                    placeholder="Buscar cliente..."
+                    value={busqueda}
+                    onChange={(e) => setBusqueda(e.target.value)}
+                />
+            </div>
+
+
             <div style={styles.listHeader}>
                 <h2 style={styles.sectionTitle}>Clientes registrados</h2>
-                <span style={styles.counter}>{clientes.length} clientes</span>
+                <span style={styles.counter}>
+                    {clientesFiltrados.length} de {clientes.length} clientes
+                </span>
             </div>
 
             {loading ? (
                 <p style={styles.loading}>Cargando clientes...</p>
             ) : (
                 <div style={styles.grid}>
-                    {clientes.map((cliente) => (
+                    {clientesFiltrados.map((cliente) => (
                         <article key={cliente.clienteId} style={styles.card}>
                             <div style={styles.cardTop}>
+                                {cliente.fotoPerfil ? (
+                                    <img
+                                        src={cliente.fotoPerfil}
+                                        alt={`${cliente.nombres} ${cliente.apellidos}`}
+                                        style={styles.avatarImg}
+                                    />
+                                ) : (
+                                    <div style={styles.avatarFallback}>
+                                        {cliente.nombres?.charAt(0)?.toUpperCase() || 'C'}
+                                    </div>
+                                )}
+
                                 <div>
                                     <h3 style={styles.cardTitle}>
                                         {cliente.nombres} {cliente.apellidos}
@@ -332,6 +449,9 @@ export default function ClientesInterno() {
                                 <button style={styles.editButton} onClick={() => editarCliente(cliente)}>
                                     Editar
                                 </button>
+                                <button style={styles.passwordButton} onClick={() => abrirModalPassword(cliente)}>
+                                    Cambiar contraseña
+                                </button>
 
                                 <button style={styles.warningButton} onClick={() => cambiarEstado(cliente, 'SUSPENDIDO')}>
                                     Suspender
@@ -344,9 +464,75 @@ export default function ClientesInterno() {
                                 <button style={styles.deleteButton} onClick={() => eliminarCliente(cliente.clienteId)}>
                                     Eliminar
                                 </button>
+
                             </div>
                         </article>
                     ))}
+                </div>
+            )}
+
+            {modalPassword && clientePassword && (
+                <div style={styles.modalOverlay}>
+                    <div style={styles.modalCard}>
+                        <div style={styles.modalHeader}>
+                            <div>
+                                <h2 style={styles.modalTitle}>Cambiar contraseña</h2>
+                                <p style={styles.modalSubtitle}>
+                                    Cliente: {clientePassword.nombres} {clientePassword.apellidos}
+                                </p>
+                            </div>
+
+                            <button style={styles.closeButton} onClick={cerrarModalPassword}>
+                                ×
+                            </button>
+                        </div>
+
+                        <div style={styles.passwordWrapper}>
+                            <input
+                                style={styles.inputPassword}
+                                type={verPassword ? 'text' : 'password'}
+                                placeholder="Nueva contraseña"
+                                value={nuevaPassword}
+                                onChange={(e) => setNuevaPassword(e.target.value)}
+                            />
+
+                            <button
+                                type="button"
+                                style={styles.eyeButton}
+                                onClick={() => setVerPassword(!verPassword)}
+                            >
+                                {verPassword ? '🙈' : '👁️'}
+                            </button>
+                        </div>
+
+                        <div style={styles.passwordWrapper}>
+                            <input
+                                style={styles.inputPassword}
+                                type={verConfirmarPassword ? 'text' : 'password'}
+                                placeholder="Confirmar contraseña"
+                                value={confirmarPassword}
+                                onChange={(e) => setConfirmarPassword(e.target.value)}
+                            />
+
+                            <button
+                                type="button"
+                                style={styles.eyeButton}
+                                onClick={() => setVerConfirmarPassword(!verConfirmarPassword)}
+                            >
+                                {verConfirmarPassword ? '🙈' : '👁️'}
+                            </button>
+                        </div>
+
+                        <div style={styles.modalActions}>
+                            <button style={styles.cancelButton} onClick={cerrarModalPassword}>
+                                Cancelar
+                            </button>
+
+                            <button style={styles.savePasswordButton} onClick={guardarNuevaPassword}>
+                                Guardar contraseña
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </section>
@@ -354,6 +540,183 @@ export default function ClientesInterno() {
 }
 
 const styles: { [key: string]: React.CSSProperties } = {
+    avatarImg: {
+        width: '52px',
+        height: '52px',
+        borderRadius: '50%',
+        objectFit: 'cover',
+        border: '2px solid #22d3ee',
+        boxShadow: '0 0 14px rgba(34,211,238,0.35)',
+    },
+
+    avatarFallback: {
+        width: '52px',
+        height: '52px',
+        borderRadius: '50%',
+        background: 'linear-gradient(135deg, #0891b2, #2563eb)',
+        color: '#fff',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontWeight: 900,
+        fontSize: '20px',
+        border: '2px solid #22d3ee',
+    },
+
+    searchCard: {
+        background: '#0f172a',
+        border: '1px solid rgba(34,211,238,0.20)',
+        borderRadius: '18px',
+        padding: '18px',
+        marginBottom: '20px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: '16px',
+        flexWrap: 'wrap',
+    },
+
+    searchTitle: {
+        margin: 0,
+        color: '#fff',
+        fontSize: '18px',
+        fontWeight: 900,
+    },
+
+    searchSubtitle: {
+        margin: '6px 0 0 0',
+        color: '#94a3b8',
+        fontSize: '13px',
+    },
+
+    searchInput: {
+        width: '100%',
+        maxWidth: '420px',
+        background: '#020617',
+        border: '1px solid #334155',
+        color: '#fff',
+        padding: '13px 14px',
+        borderRadius: '12px',
+        outline: 'none',
+        fontSize: '14px',
+    },
+    passwordWrapper: {
+        position: 'relative',
+        width: '100%',
+    },
+
+    inputPassword: {
+        width: '100%',
+        background: '#020617',
+        border: '1px solid #334155',
+        color: '#fff',
+        padding: '13px 48px 13px 14px',
+        borderRadius: '12px',
+        outline: 'none',
+        fontSize: '14px',
+    },
+
+    eyeButton: {
+        position: 'absolute',
+        top: '50%',
+        right: '10px',
+        transform: 'translateY(-50%)',
+        width: '34px',
+        height: '34px',
+        borderRadius: '10px',
+        border: 'none',
+        background: '#1e293b',
+        color: '#fff',
+        cursor: 'pointer',
+        fontSize: '16px',
+    },
+
+    passwordButton: {
+        background: '#7c3aed',
+        color: '#fff',
+        border: 'none',
+        padding: '10px 13px',
+        borderRadius: '10px',
+        cursor: 'pointer',
+        fontWeight: 700,
+    },
+
+    modalOverlay: {
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(2,6,23,0.82)',
+        backdropFilter: 'blur(8px)',
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '20px',
+    },
+
+    modalCard: {
+        width: '100%',
+        maxWidth: '460px',
+        background: 'linear-gradient(180deg, #0f172a, #020617)',
+        border: '1px solid rgba(124,58,237,0.45)',
+        borderRadius: '24px',
+        padding: '24px',
+        boxShadow: '0 25px 80px rgba(124,58,237,0.25)',
+    },
+
+    modalHeader: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        gap: '16px',
+    },
+
+    modalTitle: {
+        margin: 0,
+        color: '#fff',
+        fontSize: '24px',
+        fontWeight: 900,
+    },
+
+    modalSubtitle: {
+        marginTop: '8px',
+        color: '#94a3b8',
+        fontSize: '14px',
+    },
+
+    closeButton: {
+        width: '36px',
+        height: '36px',
+        borderRadius: '999px',
+        border: 'none',
+        background: '#1e293b',
+        color: '#fff',
+        fontSize: '24px',
+        cursor: 'pointer',
+    },
+
+    modalBody: {
+        display: 'grid',
+        gap: '14px',
+        marginTop: '22px',
+    },
+
+    modalActions: {
+        display: 'flex',
+        justifyContent: 'flex-end',
+        gap: '12px',
+        marginTop: '24px',
+        flexWrap: 'wrap',
+    },
+
+    savePasswordButton: {
+        background: '#7c3aed',
+        color: '#fff',
+        border: 'none',
+        padding: '12px 18px',
+        borderRadius: '12px',
+        fontWeight: 900,
+        cursor: 'pointer',
+    },
     wrapper: {
         width: '100%',
     },

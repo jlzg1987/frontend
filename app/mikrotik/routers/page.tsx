@@ -64,7 +64,7 @@ export default function MikrotikPageInterno() {
     }
 
     async function cargarRouters() {
-        const res = await fetch(`${API_BASE}/api/mikrotik/routers`, {
+        const res = await fetch(`${API_BASE}/mikrotik/routers`, {
             headers: { Authorization: `Bearer ${token()}` },
         });
 
@@ -88,8 +88,8 @@ export default function MikrotikPageInterno() {
 
         try {
             const url = editandoId
-                ? `${API_BASE}/api/mikrotik/routers/${editandoId}`
-                : `${API_BASE}/api/mikrotik/routers`;
+                ? `${API_BASE}/mikrotik/routers/${editandoId}`
+                : `${API_BASE}/mikrotik/routers`;
 
             const method = editandoId ? 'PUT' : 'POST';
 
@@ -157,7 +157,7 @@ export default function MikrotikPageInterno() {
     async function eliminarRouter(id: number) {
         if (!confirm('¿Seguro que deseas eliminar este router?')) return;
 
-        const res = await fetch(`${API_BASE}/api/mikrotik/routers/${id}`, {
+        const res = await fetch(`${API_BASE}/mikrotik/routers/${id}`, {
             method: 'DELETE',
             headers: { Authorization: `Bearer ${token()}` },
         });
@@ -173,7 +173,7 @@ export default function MikrotikPageInterno() {
     }
 
     async function probarConexion(id: number) {
-        const res = await fetch(`${API_BASE}/api/mikrotik/routers/${id}/test`, {
+        const res = await fetch(`${API_BASE}/mikrotik/routers/${id}/test`, {
             headers: { Authorization: `Bearer ${token()}` },
         });
 
@@ -191,7 +191,7 @@ Uptime: ${data.router.uptime}`);
     }
 
     async function probarWireGuard(id: number) {
-        const res = await fetch(`${API_BASE}/api/mikrotik/routers/${id}/agent/estado`, {
+        const res = await fetch(`${API_BASE}/mikrotik/routers/${id}/agent/estado`, {
             method: 'GET',
             headers: {
                 Authorization: `Bearer ${token()}`,
@@ -216,7 +216,7 @@ Estado: ${data.conectado ? 'Activo' : 'Inactivo'}`);
     }
 
     async function verEstadoRouter(id: number) {
-        const res = await fetch(`${API_BASE}/api/mikrotik/routers/${id}/estado`, {
+        const res = await fetch(`${API_BASE}/mikrotik/routers/${id}/estado`, {
             method: 'GET',
             headers: {
                 Authorization: `Bearer ${token()}`,
@@ -238,7 +238,7 @@ Estado: ${data.conectado ? 'Activo' : 'Inactivo'}`);
     }
 
     async function verRedesInternas(id: number) {
-        const res = await fetch(`${API_BASE}/api/mikrotik/routers/${id}/redes-internas`, {
+        const res = await fetch(`${API_BASE}/mikrotik/routers/${id}/redes-internas`, {
             headers: { Authorization: `Bearer ${token()}` },
         });
 
@@ -255,7 +255,7 @@ ${data.redesInternas?.join('\n') || 'Sin redes registradas'}`);
     }
 
     async function verIpPublica(id: number) {
-        const res = await fetch(`${API_BASE}/api/mikrotik/routers/${id}/ip-publica`, {
+        const res = await fetch(`${API_BASE}/mikrotik/routers/${id}/ip-publica`, {
             headers: { Authorization: `Bearer ${token()}` },
         });
 
@@ -274,7 +274,7 @@ ${data.redesInternas?.join('\n') || 'Sin redes registradas'}`);
                 [id]: { loading: true, conectado: false }
             }));
 
-            const res = await fetch(`${API_BASE}/api/mikrotik/routers/${id}/agent/estado`, {
+            const res = await fetch(`${API_BASE}/mikrotik/routers/${id}/agent/estado`, {
                 headers: {
                     Authorization: `Bearer ${token()}`
                 }
@@ -316,8 +316,8 @@ ${data.redesInternas?.join('\n') || 'Sin redes registradas'}`);
             const usaWG = esWireGuard(r.UsaWireGuard || r.usa_wireguard);
 
             const url = usaWG
-                ? `${API_BASE}/api/mikrotik/routers/${id}/agent/estado`
-                : `${API_BASE}/api/mikrotik/routers/${id}/test`;
+                ? `${API_BASE}/mikrotik/routers/${id}/agent/estado`
+                : `${API_BASE}/mikrotik/routers/${id}/test`;
 
             const res = await fetch(url, {
                 method: 'GET',

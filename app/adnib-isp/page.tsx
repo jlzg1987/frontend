@@ -1,16 +1,19 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import ImportarClientesInterno from '../dashboard/components/ImportarClientesInterno';
 
 export default function AdminIspPageInterno({
     onVolver,
     onAbrirAdministracion,
     onAbrirClientes,
+    onAbrirImportarclientes,
 
 }: {
     onVolver: () => void;
     onAbrirAdministracion: () => void;
     onAbrirClientes: () => void;
+    onAbrirImportarclientes: () => void;
 }) {
     const router = useRouter();
 
@@ -77,6 +80,13 @@ export default function AdminIspPageInterno({
                 ruta: '/configuracion-isp',
                 color: '#64748b',
             },
+            {
+                titulo: 'Importar clientes',
+                descripcion: 'Descargar formato Excel y cargar clientes masivamente.',
+                icono: '📥',
+                ruta: '/dashboard/components/importarClientesInterno',
+                color: '#14b8a6',
+            },
         ];
 
     return (
@@ -121,6 +131,11 @@ export default function AdminIspPageInterno({
                                 onAbrirClientes();
                                 return;
                             }
+                            if (card.titulo === 'Importar clientes') {
+                                onAbrirImportarclientes();
+                                return;
+                            }
+
 
                             router.push(card.ruta);
                         }}
