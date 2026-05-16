@@ -49,23 +49,21 @@ const modules: ModuleItem[] = [
         href: '/infraestructura/nap-splitter',
         color: 'bg-violet-600',
     },
-    {
-        title: 'NAT / Redes',
-        desc: 'Gestionar NAT, pools IP y segmentos de red.',
-        icon: '🌐',
-        href: '/infraestructura/nat-redes',
-        color: 'bg-blue-600',
-    },
+
 ];
 
 export default function InfraestructuraPage({
     onVolver,
     onAbrirtorre,
-
+    onAbrirsectorial,
+    onAbrirnodofibra,
+    onAbrirNapSplitter,
 }: {
     onVolver: () => void;
     onAbrirtorre: () => void;
-
+    onAbrirsectorial: () => void;
+    onAbrirnodofibra: () => void;
+    onAbrirNapSplitter: () => void;
 }) {
     const router = useRouter();
 
@@ -80,20 +78,29 @@ export default function InfraestructuraPage({
         try {
             setLoading(true);
 
-            const [resTorres, resSectoriales] = await Promise.all([
+            const [
+                resTorres,
+                resSectoriales,
+                resNodosFibra,
+                resNapSplitter
+            ] = await Promise.all([
                 fetch(`${API_BASE}/torres-wisp`),
                 fetch(`${API_BASE}/sectoriales-wisp`),
+                fetch(`${API_BASE}/nodos-fibra`),
+                fetch(`${API_BASE}/nap-splitter`),
             ]);
 
             const torresData = await resTorres.json();
             const sectorialesData = await resSectoriales.json();
+            const nodosFibraData = await resNodosFibra.json();
+            const napSplitterData = await resNapSplitter.json();
 
             setTotalTorres(torresData.torres?.length || 0);
             setTotalSectoriales(sectorialesData.sectoriales?.length || 0);
+            setTotalNodosFibra(nodosFibraData.nodos?.length || 0);
+            setTotalNap(napSplitterData.naps?.length || 0);
 
-            // Estos quedan listos para cuando creemos sus backend:
-            setTotalNodosFibra(0);
-            setTotalNap(0);
+            // Este queda en 0 hasta crear NAT / Redes
             setTotalNatRedes(0);
 
         } catch (error) {
@@ -132,12 +139,7 @@ export default function InfraestructuraPage({
             icon: '📦',
             color: '#8b5cf6',
         },
-        {
-            title: 'NAT / Redes',
-            value: String(totalNatRedes),
-            icon: '🌐',
-            color: '#2563eb',
-        },
+
     ];
 
     return (
@@ -177,14 +179,6 @@ export default function InfraestructuraPage({
                 ))}
             </section>
 
-            <section style={styles.sectionHeader}>
-                <div>
-                    <h2 style={styles.sectionTitle}>Módulos de infraestructura</h2>
-                    <p style={styles.sectionSubtitle}>
-                        Selecciona un módulo para administrar la red física y lógica del ISP.
-                    </p>
-                </div>
-            </section>
 
             <section style={styles.modulesGrid}>
                 {modules.map((mod) => (
@@ -198,7 +192,18 @@ export default function InfraestructuraPage({
                                 onAbrirtorre();
                                 return;
                             }
-
+                            if (mod.title === 'Sectoriales WISP') {
+                                onAbrirsectorial();
+                                return;
+                            }
+                            if (mod.title === 'Nodos Fibra') {
+                                onAbrirnodofibra();
+                                return;
+                            }
+                            if (mod.title === 'NAP / Splitter') {
+                                onAbrirNapSplitter();
+                                return;
+                            }
 
                             router.push(mod.href)
                         }}

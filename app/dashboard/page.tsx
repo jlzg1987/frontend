@@ -13,6 +13,9 @@ import { API_BASE, getToken } from '@/src/lib/api';
 import ContratosServiciosPage from '../contratos-servicios/page';
 import InfraestructuraPage from '../infraestructura/page';
 import TorresWispPage from '../infraestructura/torres-wips/page';
+import SectorialesWispPage from '../infraestructura/sectoriales-wisp/page';
+import NodosFibraPage from '../infraestructura/nodos-fibra/page';
+import NapSplitterPage from '../infraestructura/nap-splitter/page';
 
 export default function DashboardPage() {
     const router = useRouter();
@@ -21,7 +24,8 @@ export default function DashboardPage() {
 
     const [vistaActual, setVistaActual] = useState<
         'dashboard' | 'perfil' | 'mikrotik' | 'mikrotikRouters' | 'administracion' | 'PlanInternet'
-        | 'Clientes' | 'ImportarClientes' | 'contratosServicios' | 'infraestructura' | 'torre'
+        | 'Clientes' | 'ImportarClientes' | 'contratosServicios' | 'infraestructura' | 'torre' | 'sectorial'
+        | 'nodofibra' | 'NapSplitter'
     >('dashboard');
 
 
@@ -206,6 +210,28 @@ export default function DashboardPage() {
             };
 
         }
+        if (vistaActual === 'sectorial') {
+            return {
+                titulo: 'Sectoriales WISP',
+                subtitulo: 'Administra sectoriales, IP, SSID y frecuencia por cada torre',
+            };
+
+        }
+        if (vistaActual === 'nodofibra') {
+            return {
+                titulo: 'Módulos de infraestructura',
+                subtitulo: 'Selecciona un módulo para administrar la red física y lógica del ISP.',
+            };
+
+        }
+
+        if (vistaActual === 'NapSplitter') {
+            return {
+                titulo: 'NAP / Splitter',
+                subtitulo: 'Controla cajas NAP, splitters, capacidad de puertos y distribución GPON.',
+            };
+
+        }
 
         return {
             titulo: 'Dashboard principal',
@@ -365,6 +391,7 @@ export default function DashboardPage() {
                                                     return;
                                                 }
 
+
                                                 router.push(item.href);
                                             }}
                                             className="text-left rounded-3xl bg-slate-900/95 p-6 shadow-xl shadow-cyan-500/10 hover:scale-[1.02] transition border border-cyan-500/25 hover:border-cyan-400/60"
@@ -422,11 +449,24 @@ export default function DashboardPage() {
                             <InfraestructuraPage
                                 onVolver={() => setVistaActual('dashboard')}
                                 onAbrirtorre={() => setVistaActual('torre')}
+                                onAbrirsectorial={() => setVistaActual('sectorial')}
+                                onAbrirnodofibra={() => setVistaActual('nodofibra')}
+                                onAbrirNapSplitter={() => setVistaActual('NapSplitter')}
                             />
                         )}
                         {vistaActual === 'torre' && (
                             <TorresWispPage />
                         )}
+                        {vistaActual === 'sectorial' && (
+                            <SectorialesWispPage />
+                        )}
+                        {vistaActual === 'nodofibra' && (
+                            <NodosFibraPage />
+                        )}
+                        {vistaActual === 'NapSplitter' && (
+                            <NapSplitterPage />
+                        )}
+
 
                     </div>
                 </section>
