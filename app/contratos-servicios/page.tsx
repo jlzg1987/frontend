@@ -63,6 +63,13 @@ type Servicio = {
     nombreTorre?: string;
     nombreSectorial?: string;
 
+    estadoAtencion:
+    | 'SIN_ASIGNACION_TECNICO'
+    | 'TECNICO_ASIGNADO'
+    | 'EN_PROCESO_INSTALACION'
+    | 'OPERATIVO'
+    | 'REPROGRAMADO'
+    | 'CANCELADO';
 };
 
 export default function ContratosServiciosPage() {
@@ -143,6 +150,7 @@ export default function ContratosServiciosPage() {
         cedulaPosteriorUrl: '',
         contratoPdfUrl: '',
         fechaFirmaContrato: '',
+        estadoAtencion: 'SIN_ASIGNACION_TECNICO',
     });
 
     const limpiarFormulario = () => {
@@ -186,6 +194,7 @@ export default function ContratosServiciosPage() {
             cedulaPosteriorUrl: '',
             contratoPdfUrl: '',
             fechaFirmaContrato: '',
+            estadoAtencion: 'SIN_ASIGNACION_TECNICO',
         });
 
         setBusquedaCliente('');
@@ -302,8 +311,31 @@ export default function ContratosServiciosPage() {
                 return '#f59e0b';
         }
     };
+    const colorEstadoAtencion = (estado: string) => {
+        switch (estado) {
 
+            case 'SIN_ASIGNACION_TECNICO':
+                return '#f59e0b';
 
+            case 'TECNICO_ASIGNADO':
+                return '#2563eb';
+
+            case 'EN_PROCESO_INSTALACION':
+                return '#7c3aed';
+
+            case 'OPERATIVO':
+                return '#16a34a';
+
+            case 'REPROGRAMADO':
+                return '#ea580c';
+
+            case 'CANCELADO':
+                return '#dc2626';
+
+            default:
+                '#475569';
+        }
+    };
     const clientesFiltrados = clientes
         .filter((c) => {
             const texto = `${c.nombres} ${c.apellidos} ${c.cedula} ${c.telefono} ${c.email}`.toLowerCase();
@@ -419,6 +451,7 @@ export default function ContratosServiciosPage() {
             cedulaPosteriorUrl: servicio.cedulaPosteriorUrl || '',
             contratoPdfUrl: servicio.contratoPdfUrl || '',
             fechaFirmaContrato: servicio.fechaFirmaContrato?.substring(0, 10) || '',
+            estadoAtencion: 'SIN_ASIGNACION_TECNICO',
         });
 
         setShowModal(true);
@@ -512,6 +545,20 @@ export default function ContratosServiciosPage() {
             day: '2-digit',
         });
     };
+
+    const abrirAutorizacionInstalacion = (servicio: Servicio) => {
+        window.open(
+            `${API_BASE}/cliente-servicio/${servicio.servicioId}/autorizacion-instalacion-pdf`,
+            '_blank'
+        );
+    };
+    const abrirFichaTecnicaPdf = (servicio: Servicio) => {
+        window.open(
+            `${API_BASE}/cliente-servicio/${servicio.servicioId}/ficha-tecnica-pdf`,
+            '_blank'
+        );
+    };
+
     return (
         <main style={styles.page}>
             <section style={styles.header}>
@@ -579,6 +626,12 @@ export default function ContratosServiciosPage() {
                                     <span style={styles.typeBadge}>
                                         {servicio.tipoServicio}
                                     </span>
+                                    <span style={{
+                                        ...styles.badge,
+                                        backgroundColor: colorEstadoAtencion(servicio.estadoAtencion),
+                                    }}>
+                                        {servicio.estadoAtencion}
+                                    </span>
                                 </div>
 
                                 <div style={styles.infoBox}>
@@ -592,7 +645,10 @@ export default function ContratosServiciosPage() {
                                 <div style={styles.contractBox}>
                                     <p><strong>Contrato:</strong> {servicio.tipoContrato || 'No definido'}</p>
                                     <p>
-                                        <strong>Fecha de firma/instalación:</strong> {formatearFecha(servicio.fechaInstalacion)}
+                                        <strong>Fecha de firma:</strong> {formatearFecha(servicio.fechaFirmaContrato)}
+                                    </p>
+                                    <p>
+                                        <strong>Fecha de instalación:</strong> {formatearFecha(servicio.fechaInstalacion)}
                                     </p>
                                     <p><strong>Canal:</strong> {servicio.canalContrato || 'No definido'}</p>
                                     <p><strong>Tiempo:</strong> {servicio.tiempoContratoMeses ? `${servicio.tiempoContratoMeses} meses` : 'No definido'}</p>
@@ -673,6 +729,34 @@ export default function ContratosServiciosPage() {
                                         </button>
                                     )}
                                 </div>
+
+                                <p><strong>Autorización / Ficha de Instalación:</strong></p>
+                                <div style={styles.actions}>
+
+                                    <button
+                                        style={styles.secondaryButton}
+                                        onClick={() => abrirContratoPdf(servicio)}
+                                    >
+                                        PDF contrato
+                                    </button>
+                                    <button
+                                        style={styles.secondaryButton}
+                                        onClick={() =>
+                                            abrirAutorizacionInstalacion(servicio)
+                                        }
+                                    >
+                                        Autorización
+                                    </button>
+                                    <button
+                                        style={styles.secondaryButton}
+                                        onClick={() => abrirFichaTecnicaPdf(servicio)}
+                                    >
+                                        Ficha técnica
+                                    </button>
+
+                                </div>
+
+
                                 <p><strong>Acción:</strong></p>
                                 <div style={styles.actions}>
 
@@ -685,12 +769,6 @@ export default function ContratosServiciosPage() {
 
 
 
-                                    <button
-                                        style={styles.secondaryButton}
-                                        onClick={() => abrirContratoPdf(servicio)}
-                                    >
-                                        PDF contrato
-                                    </button>
 
                                     <button
                                         style={styles.secondaryButton}
@@ -908,7 +986,18 @@ export default function ContratosServiciosPage() {
                                 onChange={handleChange}
                                 style={styles.inputDate}
                             />
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>Fecha de firma del contrato</label>
 
+                                <input
+                                    type="date"
+                                    name="fechaFirmaContrato"
+                                    value={formData.fechaFirmaContrato}
+                                    onChange={handleChange}
+                                    style={styles.inputDate || styles.input}
+                                    className="inputDate"
+                                />
+                            </div>
                             {/* WISP */}
                             {(tipoServicioSeleccionado === 'RADIO' ||
                                 tipoServicioSeleccionado === 'MIXTO') && (

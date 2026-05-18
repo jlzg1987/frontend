@@ -16,6 +16,18 @@ import TorresWispPage from '../infraestructura/torres-wips/page';
 import SectorialesWispPage from '../infraestructura/sectoriales-wisp/page';
 import NodosFibraPage from '../infraestructura/nodos-fibra/page';
 import NapSplitterPage from '../infraestructura/nap-splitter/page';
+import ContratosPdfPage from '../contratos-pdf/page';
+import GestionIspPage from '../gestion-isp/page';
+import FichasTecnicasPage from '../fichas-tecnicas/page';
+import AutorizacionesInstalacionPage from '../autorizaciones-instalacion/page';
+import ConfiguracionFacturacionPage from '../configuracion/page';
+import EmpresaPage from '../configuracion/empresa/page';
+import ImpuestosPage from '../configuracion/impuestos/page';
+import DescuentosPage from '../configuracion/descuentos/page';
+import DashboardFacturacionInternaPage from '../facturacion-interna/page';
+import FacturaManualPage from '../facturacion-interna/manual/page';
+import ListadoFacturasInternasPage from '../facturacion-interna/listado/page';
+import FormasPagoPage from '../configuracion/formas-pago/page';
 
 export default function DashboardPage() {
     const router = useRouter();
@@ -25,7 +37,9 @@ export default function DashboardPage() {
     const [vistaActual, setVistaActual] = useState<
         'dashboard' | 'perfil' | 'mikrotik' | 'mikrotikRouters' | 'administracion' | 'PlanInternet'
         | 'Clientes' | 'ImportarClientes' | 'contratosServicios' | 'infraestructura' | 'torre' | 'sectorial'
-        | 'nodofibra' | 'NapSplitter'
+        | 'nodofibra' | 'NapSplitter' | 'contratospdf' | 'gestionisp' | 'autorizacionesinstalacion' | 'fichastecnicas'
+        | 'confg' | 'descuentos' | 'empresa' | 'impuestos' | 'facturacion' | 'facturasinternas' | 'facturamanual'
+        | 'formaspago'
     >('dashboard');
 
 
@@ -95,6 +109,7 @@ export default function DashboardPage() {
             href: '/Clientes',
             color: 'bg-blue-600',
         },
+
         {
             title: 'Contratos Servicios',
             desc: 'Administrar servicios de internet, planes, PPPoE, GPON y estados.',
@@ -102,6 +117,7 @@ export default function DashboardPage() {
             href: '/contratos-servicios',
             color: 'bg-cyan-600',
         },
+
         {
             title: 'Pagos',
             desc: 'Control de mensualidades, deudas y cortes.',
@@ -233,6 +249,76 @@ export default function DashboardPage() {
 
         }
 
+        if (vistaActual === 'contratospdf') {
+            return {
+                titulo: 'Historial de Contratos PDF',
+                subtitulo: ' Consulta, filtra y reimprime contratos generados.',
+            };
+
+        }
+
+        if (vistaActual === 'gestionisp') {
+            return {
+                titulo: 'Centro de Gestión ISP',
+                subtitulo: ' Panel premium para administrar clientes, contratos, autorizaciones, fichas técnicas y documentos operativos del servicio.',
+            };
+
+        }
+
+        if (vistaActual === 'empresa') {
+            return {
+                titulo: 'Datos de empresa',
+                subtitulo: 'Configuración de sistema información de local o empresa',
+            };
+
+        }
+        if (vistaActual === 'impuestos') {
+            return {
+                titulo: 'Impuestos',
+                subtitulo: 'Configuración de sistema contable',
+            };
+
+        }
+        if (vistaActual === 'descuentos') {
+            return {
+                titulo: 'Descuentos',
+                subtitulo: 'Configuración de sistema contable',
+            };
+
+        }
+
+        if (vistaActual === 'facturasinternas') {
+            return {
+                titulo: 'Facturas Internas',
+                subtitulo: ' Consulta, filtra y reimprime facturas internas del sistema ISP.',
+            };
+
+        }
+
+        if (vistaActual === 'facturamanual') {
+            return {
+                titulo: ' Factura Manual Interna',
+                subtitulo: 'Crear factura interna reusable para ventas, instalación, soporte o cobros manuales.',
+            };
+
+        }
+
+        if (vistaActual === 'facturacion') {
+            return {
+                titulo: ' Dashboard de Facturación Interna',
+                subtitulo: 'Centro de control para generar facturas internas, consultar comprobantes \n reimprimir PDF, configurar impuestos, descuentos y datos de empresa.',
+            };
+
+        }
+
+        if (vistaActual === 'formaspago') {
+            return {
+                titulo: 'Formas de Pago',
+                subtitulo: ' Crear, editar, eliminar, activar y desactivar formas de pago.',
+            };
+
+        }
+
         return {
             titulo: 'Dashboard principal',
             subtitulo: 'Bienvenido al panel administrativo ISP NetComp RF',
@@ -261,9 +347,9 @@ export default function DashboardPage() {
                         />
 
                         <MenuItem
-                            label="Clientes"
-                            active={vistaActual === 'Clientes'}
-                            onClick={() => setVistaActual('Clientes')}
+                            label="Gestión ISP"
+                            active={vistaActual === 'gestionisp'}
+                            onClick={() => setVistaActual('gestionisp')}
                         />
 
                         <MenuItem
@@ -273,7 +359,8 @@ export default function DashboardPage() {
 
                         <MenuItem
                             label="Facturación"
-                            href="/facturacion"
+                            active={vistaActual === 'facturacion'}
+                            onClick={() => setVistaActual('facturacion')}
                         />
 
                         <MenuItem
@@ -310,6 +397,11 @@ export default function DashboardPage() {
                         <MenuItem
                             label="Desarrollo Sistema"
                             href="/desarrollo-sistema"
+                        />
+                        <MenuItem
+                            label="Configuración"
+                            active={vistaActual === 'confg'}
+                            onClick={() => setVistaActual('confg')}
                         />
 
                     </nav>
@@ -390,6 +482,12 @@ export default function DashboardPage() {
                                                     setVistaActual('contratosServicios');
                                                     return;
                                                 }
+                                                if (item.title === 'Contratos ISP') {
+                                                    setVistaActual('contratospdf');
+                                                    return;
+                                                }
+
+
 
 
                                                 router.push(item.href);
@@ -466,8 +564,64 @@ export default function DashboardPage() {
                         {vistaActual === 'NapSplitter' && (
                             <NapSplitterPage />
                         )}
+                        {vistaActual === 'contratospdf' && (
+                            <ContratosPdfPage />
+                        )}
+
+                        {vistaActual === 'gestionisp' && (
+                            <GestionIspPage
+                                onVolver={() => setVistaActual('dashboard')}
+                                onAbrirCliente={() => setVistaActual('Clientes')}
+                                onAbrirServicioCliente={() => setVistaActual('contratosServicios')}
+                                onAbrirImprimirServicioCliente={() => setVistaActual('contratospdf')}
+                                onAbrirImprimirAutorizacionCliente={() => setVistaActual('autorizacionesinstalacion')}
+                                onAbrirImprimirfichaCliente={() => setVistaActual('fichastecnicas')}
 
 
+                            />
+                        )}
+                        {vistaActual === 'autorizacionesinstalacion' && (
+                            <AutorizacionesInstalacionPage />
+                        )}
+                        {vistaActual === 'fichastecnicas' && (
+                            <FichasTecnicasPage />
+                        )}
+
+                        {vistaActual === 'confg' && (
+                            <ConfiguracionFacturacionPage
+                                onVolver={() => setVistaActual('dashboard')}
+                                onAbrirDatoempresa={() => setVistaActual('empresa')}
+                                onAbrirImpuestos={() => setVistaActual('impuestos')}
+                                onAbrirDescuentos={() => setVistaActual('descuentos')}
+                                onAbrirFormaspago={() => setVistaActual('formaspago')}
+                            />
+                        )}
+                        {vistaActual === 'empresa' && (
+                            <EmpresaPage />
+                        )}
+                        {vistaActual === 'impuestos' && (
+                            <ImpuestosPage />
+                        )}
+                        {vistaActual === 'descuentos' && (
+                            <DescuentosPage />
+                        )}
+                        {vistaActual === 'formaspago' && (
+                            <FormasPagoPage />
+                        )}
+                        {vistaActual === 'facturacion' && (
+                            <DashboardFacturacionInternaPage
+                                onVolver={() => setVistaActual('dashboard')}
+                                onAbrirFacturamanual={() => setVistaActual('facturamanual')}
+                                onAbrirFacturasinternas={() => setVistaActual('facturasinternas')}
+                            />
+                        )}
+
+                        {vistaActual === 'facturamanual' && (
+                            <FacturaManualPage />
+                        )}
+                        {vistaActual === 'facturasinternas' && (
+                            <ListadoFacturasInternasPage />
+                        )}
                     </div>
                 </section>
             </div>
