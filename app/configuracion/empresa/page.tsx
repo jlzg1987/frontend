@@ -19,6 +19,7 @@ export default function EmpresaPage() {
         logo_url: '',
         obligado_contabilidad: 'NO',
         estado: 'ACTIVO',
+        es_principal: 0,
 
         representante_legal: '',
         representante_cedula: '',
@@ -52,12 +53,14 @@ export default function EmpresaPage() {
             logo_url: '',
             obligado_contabilidad: 'NO',
             estado: 'ACTIVO',
+            es_principal: 0,
 
             representante_legal: '',
             representante_cedula: '',
             representante_cargo: '',
             representante_telefono: '',
             representante_email: '',
+
         });
     };
 
@@ -127,12 +130,14 @@ export default function EmpresaPage() {
             logo_url: e.logo_url || '',
             obligado_contabilidad: e.obligado_contabilidad || 'NO',
             estado: e.estado || 'ACTIVO',
+            es_principal: Number(e.es_principal) === 1 ? 1 : 0,
 
             representante_legal: e.representante_legal || '',
             representante_cedula: e.representante_cedula || '',
             representante_cargo: e.representante_cargo || '',
             representante_telefono: e.representante_telefono || '',
             representante_email: e.representante_email || '',
+
         });
     };
 
@@ -187,7 +192,24 @@ export default function EmpresaPage() {
                     <input className="input" placeholder="Teléfono representante" value={form.representante_telefono} onChange={e => setForm({ ...form, representante_telefono: e.target.value })} />
                     <input className="input" placeholder="Email representante" value={form.representante_email} onChange={e => setForm({ ...form, representante_email: e.target.value })} />
                 </div>
+                <label style={{ marginTop: 8 }} className="flex items-center gap-3 bg-slate-950 border border-cyan-500/20 rounded-xl px-4 py-3 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        checked={Number(form.es_principal) === 1}
+                        onChange={e =>
+                            setForm({
+                                ...form,
+                                es_principal: e.target.checked ? 1 : 0
+                            })
+                        }
+                        className="w-5 h-5 accent-cyan-500"
 
+                    />
+
+                    <span className="font-bold text-cyan-300">
+                        Empresa principal de facturación
+                    </span>
+                </label>
                 <h2 className="text-lg font-bold mt-8 mb-4 text-cyan-400">
                     Logo de la empresa
                 </h2>
@@ -244,6 +266,11 @@ export default function EmpresaPage() {
                                 <span className="text-slate-500">Sin logo</span>
                             )}
                         </div>
+                        {Number(e.es_principal) === 1 && (
+                            <span className="inline-block mt-3 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-3 py-1 rounded-full text-xs font-bold">
+                                Principal de facturación
+                            </span>
+                        )}
 
                         <h2 className="font-bold text-lg">{e.razon_social}</h2>
                         <p className="text-slate-400">{e.nombre_comercial}</p>

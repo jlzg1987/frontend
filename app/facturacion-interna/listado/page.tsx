@@ -10,6 +10,8 @@ type FacturaInterna = {
     facturaId: string;
     numeroFactura: string;
     clienteId: string | null;
+    clienteExternoId?: number | null;
+    tipoCliente?: 'ISP' | 'EXTERNO' | string;
     subtotal: number;
     totalImpuestos: number;
     totalDescuentos: number;
@@ -24,6 +26,11 @@ type FacturaInterna = {
     apellidos?: string;
     cedula?: string;
     celular?: string;
+
+    nombresExterno?: string;
+    apellidosExterno?: string;
+    cedulaExterno?: string;
+    celularExterno?: string;
 };
 
 export default function ListadoFacturasInternasPage() {
@@ -146,13 +153,93 @@ export default function ListadoFacturasInternasPage() {
     }
 
     function nombreCliente(f: FacturaInterna) {
-        const nombre = `${f.nombres || ''} ${f.apellidos || ''}`.trim();
+        if (f.tipoCliente === 'EXTERNO' || f.clienteExternoId) {
+            const nombreExterno = `${f.nombresExterno || f.nombres || ''} ${f.apellidosExterno || f.apellidos || ''}`.trim();
+            return nombreExterno || 'Consumidor final';
+        }
 
-        if (nombre) return nombre;
-
-        return 'Consumidor final';
+        const nombreIsp = `${f.nombres || ''} ${f.apellidos || ''}`.trim();
+        return nombreIsp || 'Consumidor final';
     }
 
+    const enviarFacturaEmailListado = async (factura: FacturaInterna) => {
+
+        try {
+
+            const resp = await fetch(
+                `${API_BASE}/facturacion-interna/${factura.facturaId}/enviar-email`,
+                {
+                    method: 'POST',
+                }
+            );
+
+            const data = await resp.json();
+
+            if (!data.ok) {
+                alert(data.message || 'No se pudo enviar email');
+                return;
+            }
+
+            alert('Factura enviada correctamente al email');
+
+        } catch (error) {
+
+            console.error(error);
+
+            alert('Error enviando email');
+        }
+    };
+
+    const enviarFacturaWhatsappListado = async (factura: FacturaInterna) => {
+
+        const telefono =
+            factura.celularExterno ||
+            factura.celular ||
+            '';
+
+        if (!telefono) {
+            alert('Cliente sin celular');
+            return;
+        }
+
+        const pdfUrl = factura.pdfUrl;
+
+        if (!pdfUrl) {
+            alert('Factura sin PDF');
+            return;
+        }
+
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+
+        const urlCompleta = `${backendUrl}${pdfUrl}`;
+
+        const numeroLimpio = telefono.replace(/\D/g, '');
+
+        const numeroWhatsapp = numeroLimpio.startsWith('593')
+            ? numeroLimpio
+            : `593${numeroLimpio.replace(/^0/, '')}`;
+
+        const nombreCliente =
+            factura.tipoCliente === 'EXTERNO'
+                ? `${factura.nombresExterno || ''} ${factura.apellidosExterno || ''}`.trim()
+                : `${factura.nombres || ''} ${factura.apellidos || ''}`.trim();
+
+        const mensaje = encodeURIComponent(
+            `*NETCOMPRF ISP*\n` +
+            `━━━━━━━━━━━━━━━\n\n` +
+            `Hola ${nombreCliente || 'cliente'},\n\n` +
+            `Su factura ya se encuentra disponible.\n\n` +
+            `*Comprobante:* ${factura.numeroFactura}\n\n` +
+            `*Ver factura PDF:*\n${urlCompleta}\n\n` +
+            `Gracias por preferir nuestros servicios de internet.\n\n` +
+            `NETCOMPRF ISP`
+        );
+
+        window.open(
+            `https://wa.me/${numeroWhatsapp}?text=${mensaje}`,
+            '_blank'
+        );
+    };
     return (
         <main className="min-h-screen bg-slate-950 text-white p-6">
             <div className="max-w-7xl mx-auto">
@@ -288,11 +375,11 @@ export default function ListadoFacturasInternasPage() {
                                         </td>
 
                                         <td className="px-4 py-4 text-slate-300">
-                                            {factura.cedula || '-'}
+                                            {factura.cedulaExterno || factura.cedula || '-'}
                                         </td>
 
                                         <td className="px-4 py-4 text-slate-300">
-                                            {factura.celular || '-'}
+                                            {factura.celularExterno || factura.celular || '-'}
                                         </td>
 
                                         <td className="px-4 py-4 text-slate-300">
@@ -316,6 +403,21 @@ export default function ListadoFacturasInternasPage() {
 
                                         <td className="px-4 py-4">
                                             <div className="flex flex-col md:flex-row gap-2 justify-center">
+
+                                                <button
+                                                    onClick={() => enviarFacturaEmailListado(factura)}
+                                                    className="bg-blue-700 hover:bg-blue-800 text-white px-3 py-2 rounded-lg text-xs font-bold"
+                                                >
+                                                    Email
+                                                </button>
+
+                                                <button
+                                                    onClick={() => enviarFacturaWhatsappListado(factura)}
+                                                    className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-bold"
+                                                >
+                                                    WhatsApp
+                                                </button>
+
                                                 <button
                                                     onClick={() => reimprimirFactura(factura)}
                                                     className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-3 py-2 rounded-lg"

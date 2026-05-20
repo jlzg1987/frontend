@@ -9,6 +9,7 @@ export default function GestionIspPage({
     onAbrirImprimirServicioCliente,
     onAbrirImprimirAutorizacionCliente,
     onAbrirImprimirfichaCliente,
+    onAbrirclientesexternos,
 }: {
     onVolver: () => void;
     onAbrirCliente: () => void;
@@ -16,6 +17,7 @@ export default function GestionIspPage({
     onAbrirImprimirServicioCliente: () => void;
     onAbrirImprimirAutorizacionCliente: () => void;
     onAbrirImprimirfichaCliente: () => void;
+    onAbrirclientesexternos: () => void;
 }) {
     const router = useRouter();
 
@@ -54,6 +56,13 @@ export default function GestionIspPage({
             icon: '📋',
             href: '/fichas-tecnicas',
             color: '#0891B2',
+        },
+        {
+            title: 'Clientes Externos',
+            desc: 'Gestiona clientes externos para facturación interna, recibos y ventas rápidas.',
+            icon: '🧾',
+            href: '/facturacion-interna/clientes-externos',
+            color: '#480ee9',
         },
     ];
 
@@ -94,6 +103,11 @@ export default function GestionIspPage({
                                 onAbrirImprimirfichaCliente();
                                 return;
                             }
+                            if (card.title === 'Clientes Externos') {
+                                onAbrirclientesexternos();
+                                return;
+                            }
+
 
                             router.push(card.href)
                         }}

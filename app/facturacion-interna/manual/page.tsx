@@ -5,12 +5,19 @@ import { useEffect, useState } from 'react';
 
 
 type Detalle = {
+    productoId?: number | null;
     descripcion: string;
     cantidad: number;
     precioUnitario: number;
     impuestoId: string;
     descuentoId: string;
+
+    codigo?: string;
+    codigo_barra?: string;
+    tipo_item?: 'PRODUCTO' | 'SERVICIO';
+    stock?: number;
 };
+
 type FacturaCreada = {
     facturaId: string;
     numeroFactura?: string;
@@ -31,7 +38,7 @@ export default function FacturaManualPage() {
     const [referenciaPago, setReferenciaPago] = useState('');
     const [facturaCreada, setFacturaCreada] = useState<FacturaCreada | null>(null);
 
-    const [busquedaCliente, setBusquedaCliente] = useState('');
+    const [impuestoDefaultId, setImpuestoDefaultId] = useState('');
     const [clienteEncontrado, setClienteEncontrado] = useState<any>(null);
     const [mostrarCrearClienteExterno, setMostrarCrearClienteExterno] = useState(false);
     const [abrirModalClienteExterno, setAbrirModalClienteExterno] = useState(false);
@@ -60,7 +67,9 @@ export default function FacturaManualPage() {
     ]);
 
     const [loading, setLoading] = useState(false);
-
+    const [productosInventario, setProductosInventario] = useState<any[]>([]);
+    const [busquedaProducto, setBusquedaProducto] = useState('');
+    const [mostrarBusquedaProducto, setMostrarBusquedaProducto] = useState(false);
 
 
     useEffect(() => {
@@ -69,37 +78,71 @@ export default function FacturaManualPage() {
 
     async function cargarDatosIniciales() {
         try {
-            const [empRes, impRes, descRes, fpRes] = await Promise.all([
+
+            const [empRes, impRes, descRes, fpRes, invRes] = await Promise.all([
                 fetch(`${API_BASE}/facturacion/config/empresa`),
                 fetch(`${API_BASE}/facturacion/config/impuestos`),
                 fetch(`${API_BASE}/facturacion/config/descuentos`),
-                fetch(`${API_BASE}/facturacion/config/formas-pago`)
+                fetch(`${API_BASE}/facturacion/config/formas-pago`),
+                fetch(`${API_BASE}/inventario/productos`)
             ]);
 
             const emp = await empRes.json();
-
-            setEmpresas(emp.empresas || []);
-
-            if (emp.empresas?.length > 0) {
-                setEmpresaId(String(emp.empresas[0].id));
-            }
             const imp = await impRes.json();
             const desc = await descRes.json();
             const fp = await fpRes.json();
+            const inv = await invRes.json();
+            const inventarioData = inv.data || [];
 
-            setFormasPago(fp.formasPago || []);
+            setProductosInventario(
+                inventarioData.filter((x: any) => x.estado === 'ACTIVO')
+            );
 
-            const efectivo = fp.formasPago?.find(
-                (x: any) => x.nombre?.toUpperCase() === 'EFECTIVO'
+
+            const empresasData = emp.data || emp.empresas || [];
+            const impuestosData = imp.data || imp.impuestos || [];
+            const descuentosData = desc.data || desc.descuentos || [];
+            const formasPagoData = fp.data || fp.formasPago || [];
+
+            setEmpresas(empresasData);
+            setImpuestos(impuestosData);
+            setDescuentos(descuentosData);
+            setFormasPago(formasPagoData);
+
+            // EMPRESA AUTOMÁTICA
+            // EMPRESA PRINCIPAL AUTOMÁTICA
+            if (empresasData.length > 0) {
+                const empresaPrincipal = empresasData.find(
+                    (e: any) => Number(e.es_principal) === 1
+                );
+
+                setEmpresaId(
+                    String(empresaPrincipal?.id || empresasData[0].id)
+                );
+            }
+
+            // FORMA PAGO EFECTIVO AUTOMÁTICA
+            const efectivo = formasPagoData.find(
+                (x: any) =>
+                    x.nombre?.trim().toUpperCase() === 'EFECTIVO'
             );
 
             if (efectivo) {
                 setFormaPagoId(String(efectivo.formaPagoId));
             }
-            setEmpresas(emp.data || emp.empresas || []);
-            setImpuestos(imp.data || imp.impuestos || []);
-            setDescuentos(desc.data || desc.descuentos || []);
-            setFormasPago(fp.data || fp.formasPago || []);
+
+            setImpuestos(impuestosData);
+
+            const iva15 = impuestosData.find(
+                (x: any) =>
+                    x.nombre?.toUpperCase().includes('IVA') &&
+                    Number(x.valor || x.porcentaje) === 15
+            );
+
+            if (iva15) {
+                setImpuestoDefaultId(String(iva15.id));
+            }
+
         } catch (error) {
             console.error('Error cargando datos:', error);
         }
@@ -135,6 +178,47 @@ export default function FacturaManualPage() {
 
         setDetalles(nuevos);
     }
+    function agregarProductoFactura(producto: any) {
+
+        const indexExistente = detalles.findIndex(
+            d => d.productoId === producto.productoId
+        );
+
+        // SI YA EXISTE → AUMENTAR CANTIDAD
+        if (indexExistente >= 0) {
+
+            const nuevos = [...detalles];
+
+            nuevos[indexExistente].cantidad += 1;
+
+            setDetalles(nuevos);
+
+            setBusquedaProducto('');
+            setMostrarBusquedaProducto(false);
+
+            return;
+        }
+
+        // AGREGAR NUEVO
+        setDetalles([
+            ...detalles,
+            {
+                productoId: producto.productoId,
+                descripcion: producto.nombre,
+                cantidad: 1,
+                precioUnitario: Number(producto.precio_venta || 0),
+                impuestoId: impuestoDefaultId,
+                descuentoId: '',
+                codigo: producto.codigo,
+                codigo_barra: producto.codigo_barra,
+                tipo_item: producto.tipo_item,
+                stock: Number(producto.stock || 0)
+            }
+        ]);
+
+        setBusquedaProducto('');
+        setMostrarBusquedaProducto(false);
+    }
 
     function calcularSubtotal() {
         return detalles.reduce((acc, item) => {
@@ -147,6 +231,19 @@ export default function FacturaManualPage() {
             month: 'long'
         });
     };
+
+    const productosFiltrados = productosInventario.filter((p: any) => {
+        const txt = busquedaProducto.toLowerCase();
+
+        return (
+            txt && (
+                p.nombre?.toLowerCase().includes(txt) ||
+                p.codigo?.toLowerCase().includes(txt) ||
+                p.codigo_barra?.toLowerCase().includes(txt)
+            )
+        );
+    });
+
 
     async function crearFactura() {
         try {
@@ -236,7 +333,6 @@ export default function FacturaManualPage() {
             setFacturaParaCobrar(data.factura);
             setAbrirModalCobro(true);
             limpiarFormulario();
-
         } catch (error) {
             console.error('Error creando factura:', error);
             alert('Error creando factura');
@@ -248,8 +344,10 @@ export default function FacturaManualPage() {
     function limpiarFormulario() {
         setClienteId('');
         setObservacion('');
-        setFormaPagoId('');
+        setFormaPagoId('EFECTIVO');
         setReferenciaPago('');
+        // LIMPIAR DETALLES
+
         setDetalles([
             {
                 descripcion: '',
@@ -259,6 +357,12 @@ export default function FacturaManualPage() {
                 descuentoId: ''
             }
         ]);
+
+        setClienteEncontrado(null);
+
+        // LIMPIAR FACTURA CREADA
+        setFacturaCreada(null);
+
     }
 
     const buscarClienteFacturacion = async () => {
@@ -305,7 +409,7 @@ export default function FacturaManualPage() {
                                 descripcion: `Servicio de internet - ${data.cliente.nombrePlan}: mes ${obtenerMesActual()}`,
                                 cantidad: 1,
                                 precioUnitario: Number(data.cliente.valorPlan),
-                                impuestoId: impuestoIVA?.impuestoId || impuestoIVA?.id || '',
+                                impuestoId: impuestoDefaultId,
                                 descuentoId: ''
                             }
                         ]);
@@ -440,6 +544,77 @@ export default function FacturaManualPage() {
             alert('Error cobrando factura');
         }
     }
+
+    const enviarFacturaEmail = async () => {
+        const facturaId =
+            facturaCreada?.facturaId;
+        if (!facturaId) {
+            console.log('facturaCreada actual:', facturaCreada);
+            alert('No existe factura creada');
+            return;
+        }
+
+        const resp = await fetch(
+            `${API_BASE}/facturacion-interna/${facturaId}/enviar-email`,
+            { method: 'POST' }
+        );
+
+        const data = await resp.json();
+
+        if (!data.ok) {
+            alert(data.message || 'No se pudo enviar el correo');
+            return;
+        }
+
+        alert('Factura enviada correctamente');
+    };
+
+    const enviarFacturaWhatsApp = async () => {
+
+        const telefono =
+            clienteEncontrado?.celular ||
+            clienteEncontrado?.telefono ||
+            '';
+
+        if (!telefono) {
+            alert('Cliente sin celular');
+            return;
+        }
+
+        const pdfUrl = facturaCreada?.pdfUrl;
+
+        if (!pdfUrl) {
+            alert('No existe PDF');
+            return;
+        }
+
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || '//localhost:4000';
+
+        const urlCompleta = `${backendUrl}${pdfUrl}`;
+
+        const numeroLimpio = telefono.replace(/\D/g, '');
+
+        const numeroWhatsapp = numeroLimpio.startsWith('593')
+            ? numeroLimpio
+            : `593${numeroLimpio.replace(/^0/, '')}`;
+
+        const mensaje = encodeURIComponent(
+            `*NETCOMPRF ISP*\n` +
+            `━━━━━━━━━━━━━━━\n\n` +
+            `Hola ${clienteEncontrado?.nombres || 'cliente'},\n\n` +
+            `Su factura ya se encuentra disponible.\n\n` +
+            `*Comprobante:* ${facturaCreada.numeroFactura}\n\n` +
+            `*Ver factura PDF:*\n${urlCompleta}\n\n` +
+            `Gracias por preferir nuestros servicios de internet.\n\n` +
+            `NETCOMPRF ISP\n` +
+            `Soporte y atención al cliente`
+        );
+
+        window.open(
+            `https://wa.me/${numeroWhatsapp}?text=${mensaje}`,
+            '_blank'
+        );
+    };
     return (
         <main className="min-h-screen bg-slate-950 text-white p-6">
             <div className="max-w-7xl mx-auto">
@@ -460,6 +635,7 @@ export default function FacturaManualPage() {
                                 {empresas.map((e) => (
                                     <option key={e.id} value={e.id}>
                                         {e.nombre_comercial || e.razon_social}
+                                        {Number(e.es_principal) === 1 ? ' - Principal' : ''}
                                     </option>
                                 ))}
                             </select>
@@ -613,10 +789,102 @@ export default function FacturaManualPage() {
                         </div>
                     )}
                 </div>
+                <div className="bg-slate-900 border border-cyan-500/20 rounded-2xl p-5 mb-5
+relative">
+                    <div className="flex items-center justify-between gap-4 flex-wrap">
+                        <div className="flex-1 min-w-[280px]">
+                            <label className="text-xs text-slate-400">
+                                Escanear producto / buscar inventario
+                            </label>
+                            <input
+
+                                value={busquedaProducto}
+                                onChange={(e) => {
+                                    setBusquedaProducto(e.target.value);
+                                    setMostrarBusquedaProducto(true);
+                                }}
+                                onKeyDown={(e) => {
+                                    // ENTER DESDE PISTOLA
+                                    if (e.key === 'Enter') {
+                                        const exacto = productosInventario.find((p: any) =>
+                                            p.codigo === busquedaProducto ||
+                                            p.codigo_barra === busquedaProducto
+                                        );
+                                        if (exacto) {
+                                            agregarProductoFactura(exacto);
+                                        }
+                                    }
+                                }}
+                                placeholder="Escanee código de barra o escriba nombre"
+                                className="w-full mt-1 bg-slate-950 border border-slate-700
+rounded-xl px-4 py-3 outline-none focus:border-cyan-400"
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setMostrarBusquedaProducto(!
+                                mostrarBusquedaProducto)}
+                            className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 fontblack px-5 py-3 rounded-xl mt-5"
+                        >
+                            Agregar producto
+                        </button>
+                    </div>
+                    {
+                        mostrarBusquedaProducto && productosFiltrados.length > 0 && (
+                            <div className="absolute z-50 left-5 right-5 mt-2 bg-slate-950
+border border-slate-700 rounded-2xl max-h-[350px] overflow-y-auto
+shadow-2xl">
+                                {
+                                    productosFiltrados.slice(0, 15).map((p: any) => {
+                                        const stockBajo =
+                                            p.tipo_item === 'PRODUCTO' &&
+                                            Number(p.stock || 0) <= 0;
+                                        return (
+
+                                            <button
+                                                key={p.productoId}
+                                                type="button"
+                                                onClick={() => agregarProductoFactura(p)}
+                                                className="w-full text-left px-4 py-4 borderb border-slate-800 hover:bg-slate-900 transition"
+                                            >
+                                                <div className="flex justify-between gap-4">
+                                                    <div>
+                                                        <p className="font-black text-white">
+                                                            {p.nombre}
+                                                        </p>
+                                                        <p className="text-xs text-slate-500 mt-1">
+                                                            {p.codigo} | {p.codigo_barra ||
+                                                                'Sin barra'}
+                                                        </p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-cyan-300 fontblack">
+                                                            ${Number(p.precio_venta ||
+                                                                0).toFixed(2)}
+                                                        </p>
+                                                        {
+                                                            p.tipo_item === 'PRODUCTO' && (
+                                                                <p className={`text-xs mt-1 $ { stockBajo ? 'text-red-400': 'text-emerald-400'
+}`}>
+                                                                    Stock: {p.stock}
+                                                                </p>
+                                                            )
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        );
+                                    })
+                                }
+                            </div>
+                        )
+                    }
+                </div>
 
                 <div className="bg-slate-900 border border-cyan-500/20 rounded-2xl p-5 shadow-lg shadow-cyan-500/10">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-bold">Detalle de factura</h2>
+
 
                         <button
                             onClick={agregarDetalle}
@@ -626,12 +894,14 @@ export default function FacturaManualPage() {
                         </button>
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="space-y-6">
+
                         {detalles.map((item, index) => (
                             <div
                                 key={index}
                                 className="grid grid-cols-1 md:grid-cols-7 gap-3 bg-slate-950 border border-slate-700 rounded-xl p-4"
                             >
+
                                 <div className="md:col-span-2">
                                     <label className="text-xs text-slate-400">Descripción</label>
                                     <input
@@ -728,6 +998,18 @@ export default function FacturaManualPage() {
 
                         {facturaCreada && (
                             <div className="flex flex-wrap gap-3">
+                                <button
+                                    onClick={enviarFacturaWhatsApp}
+                                    className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold"
+                                >
+                                    Enviar por WhatsApp
+                                </button>
+                                <button
+                                    onClick={enviarFacturaEmail}
+                                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold"
+                                >
+                                    Enviar por email
+                                </button>
                                 <button
                                     onClick={abrirPdfFacturaCreada}
                                     className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-6 py-3 rounded-xl shadow-lg"

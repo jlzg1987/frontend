@@ -28,6 +28,15 @@ import DashboardFacturacionInternaPage from '../facturacion-interna/page';
 import FacturaManualPage from '../facturacion-interna/manual/page';
 import ListadoFacturasInternasPage from '../facturacion-interna/listado/page';
 import FormasPagoPage from '../configuracion/formas-pago/page';
+import ClientesExternosFacturacionPage from '../facturacion-interna/clientes-externos/page';
+import InventarioPage from '../inventario/page';
+import DashboardInventarioPage from '../inventario/page';
+import ProductosServiciosPage from '../inventario/producto/page';
+import CatalogoInventarioPage from '../inventario/catalogo/page';
+import ImportarInventarioPage from '../inventario/importar/page';
+import CodigosBarraPage from '../inventario/codigos-barra/page';
+import MovimientosInventarioPage from '../inventario/movimiento/page';
+import KitsInstalacionPage from '../inventario/kits/page';
 
 export default function DashboardPage() {
     const router = useRouter();
@@ -39,7 +48,8 @@ export default function DashboardPage() {
         | 'Clientes' | 'ImportarClientes' | 'contratosServicios' | 'infraestructura' | 'torre' | 'sectorial'
         | 'nodofibra' | 'NapSplitter' | 'contratospdf' | 'gestionisp' | 'autorizacionesinstalacion' | 'fichastecnicas'
         | 'confg' | 'descuentos' | 'empresa' | 'impuestos' | 'facturacion' | 'facturasinternas' | 'facturamanual'
-        | 'formaspago'
+        | 'formaspago' | 'clientesexternos' | 'inventario' | 'importarinventario' | 'productoservicio' | 'catalogoinventario'
+        | 'codigoBarra' | 'moviminetoStock' | 'kitsInstalacion'
     >('dashboard');
 
 
@@ -319,6 +329,68 @@ export default function DashboardPage() {
 
         }
 
+        if (vistaActual === 'clientesexternos') {
+            return {
+                titulo: 'Clientes externos de facturación',
+                subtitulo: ' Clientes que no pertenecen al servicio ISP pero pueden recibir facturas internas.',
+            };
+
+        }
+
+        if (vistaActual === 'catalogoinventario') {
+            return {
+                titulo: 'Catálogo e Inventario',
+                subtitulo: 'Consulta, filtra, edita y administra productos y servicios.',
+            };
+
+        }
+
+        if (vistaActual === 'productoservicio') {
+            return {
+                titulo: 'Productos y Servicios',
+                subtitulo: 'Registro base del inventario para facturación interna.',
+            };
+
+        }
+
+        if (vistaActual === 'importarinventario') {
+            return {
+                titulo: ' Importar Inventario',
+                subtitulo: 'Sube productos y servicios desde un archivo Excel.',
+            };
+
+        }
+
+        if (vistaActual === 'inventario') {
+            return {
+                titulo: ' Dashboard Inventario',
+                subtitulo: ' Centro de control para productos, servicios, stock, importaciones y kits.',
+            };
+
+        }
+
+        if (vistaActual === 'codigoBarra') {
+            return {
+                titulo: ' Códigos de Barra',
+                subtitulo: 'Selecciona productos o servicios para imprimir etiquetas.',
+            };
+
+        }
+        if (vistaActual === 'moviminetoStock') {
+            return {
+                titulo: ' Movimientos de Stock',
+                subtitulo: 'Registra entradas, salidas y ajustes de productos del inventario.',
+            };
+
+        }
+        if (vistaActual === 'kitsInstalacion') {
+            return {
+                titulo: 'Kits de Instalación',
+                subtitulo: '   Crea paquetes con equipos, materiales y servicios. Al usar un kit se descuenta stock.',
+            };
+
+        }
+
         return {
             titulo: 'Dashboard principal',
             subtitulo: 'Bienvenido al panel administrativo ISP NetComp RF',
@@ -391,7 +463,8 @@ export default function DashboardPage() {
 
                         <MenuItem
                             label="Inventario"
-                            href="/inventario"
+                            active={vistaActual === 'inventario'}
+                            onClick={() => setVistaActual('inventario')}
                         />
 
                         <MenuItem
@@ -576,9 +649,13 @@ export default function DashboardPage() {
                                 onAbrirImprimirServicioCliente={() => setVistaActual('contratospdf')}
                                 onAbrirImprimirAutorizacionCliente={() => setVistaActual('autorizacionesinstalacion')}
                                 onAbrirImprimirfichaCliente={() => setVistaActual('fichastecnicas')}
+                                onAbrirclientesexternos={() => setVistaActual('clientesexternos')}
 
 
                             />
+                        )}
+                        {vistaActual === 'clientesexternos' && (
+                            <ClientesExternosFacturacionPage />
                         )}
                         {vistaActual === 'autorizacionesinstalacion' && (
                             <AutorizacionesInstalacionPage />
@@ -622,6 +699,37 @@ export default function DashboardPage() {
                         {vistaActual === 'facturasinternas' && (
                             <ListadoFacturasInternasPage />
                         )}
+                        {vistaActual === 'inventario' && (
+                            <DashboardInventarioPage
+                                onVolver={() => setVistaActual('dashboard')}
+                                onAbrirProductoServicio={() => setVistaActual('productoservicio')}
+                                onAbrirCatalogoInventario={() => setVistaActual('catalogoinventario')}
+                                onAbrirImportarInventario={() => setVistaActual('importarinventario')}
+                                onAbrirCodigoBarra={() => setVistaActual('codigoBarra')}
+                                onAbrirMoviminetoStock={() => setVistaActual('moviminetoStock')}
+                                onAbrirKitsInstalacion={() => setVistaActual('kitsInstalacion')}
+
+                            />
+                        )}
+                        {vistaActual === 'kitsInstalacion' && (
+                            <KitsInstalacionPage />
+                        )}
+                        {vistaActual === 'productoservicio' && (
+                            <ProductosServiciosPage />
+                        )}
+                        {vistaActual === 'catalogoinventario' && (
+                            <CatalogoInventarioPage />
+                        )}
+                        {vistaActual === 'importarinventario' && (
+                            <ImportarInventarioPage />
+                        )}
+                        {vistaActual === 'codigoBarra' && (
+                            <CodigosBarraPage />
+                        )}
+                        {vistaActual === 'moviminetoStock' && (
+                            <MovimientosInventarioPage />
+                        )}
+
                     </div>
                 </section>
             </div>
