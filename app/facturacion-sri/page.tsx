@@ -30,6 +30,13 @@ const cards = [
         icon: '📄',
         path: '/facturacion-interna/listado',
         color: 'from-emerald-500/20 to-green-500/10 border-emerald-400/30'
+    },
+    {
+        title: 'Configuración Email SRI',
+        desc: 'Programar hora de envío automático, adjuntar PDF/XML y envío masivo del día.',
+        icon: '📧',
+        path: '/facturacion-interna/configuracion-email',
+        color: '#2563EB',
     }
 ];
 
@@ -38,13 +45,15 @@ export default function DashboardSriPage({
     onAbrirFacturasSRI,
     onAbrirConfiguraciónSRI,
     onAbrirCertificadodigital,
-    onAbrirFacturasinternas
+    onAbrirFacturasinternas,
+    onAbrirConfiguraciónEmailSRI
 }: {
     onVolver: () => void;
     onAbrirFacturasSRI: () => void;
     onAbrirConfiguraciónSRI: () => void;
     onAbrirCertificadodigital: () => void;
     onAbrirFacturasinternas: () => void;
+    onAbrirConfiguraciónEmailSRI: () => void;
 }) {
     const router = useRouter();
 
@@ -75,6 +84,11 @@ export default function DashboardSriPage({
                                 onAbrirFacturasinternas();
                                 return;
                             }
+                            if (card.title === 'Configuración Email SRI') {
+                                onAbrirConfiguraciónEmailSRI();
+                                return;
+                            }
+
 
                             router.push(card.path)
 

@@ -41,6 +41,7 @@ import DashboardSriPage from '../facturacion-sri/page';
 import FacturacionSriPage from '../facturacion-sri/listado-factura/page';
 import ConfiguracionSriPage from '../facturacion-sri/configuracion/page';
 import CertificadoSriPage from '../facturacion-sri/certificado/page';
+import ConfiguracionEmailSriPage from '../facturacion-sri/configuracion-email/page';
 
 export default function DashboardPage() {
     const router = useRouter();
@@ -54,7 +55,7 @@ export default function DashboardPage() {
         | 'confg' | 'descuentos' | 'empresa' | 'impuestos' | 'facturacion' | 'facturasinternas' | 'facturamanual'
         | 'formaspago' | 'clientesexternos' | 'inventario' | 'importarinventario' | 'productoservicio' | 'catalogoinventario'
         | 'codigoBarra' | 'moviminetoStock' | 'kitsInstalacion' | 'configuraciónSRI' | 'FacturasSRI' | 'ConfiguraciónSRI'
-        | 'Certificadodigital'
+        | 'Certificadodigital' | 'ConfiguraciónEmailSRI'
     >('dashboard');
 
 
@@ -177,6 +178,13 @@ export default function DashboardPage() {
     }
 
     function getHeaderInfo() {
+
+        if (vistaActual === 'ConfiguraciónEmailSRI') {
+            return {
+                titulo: '  Configuración de envío email SRI',
+                subtitulo: ' Controla el envío automático de facturas autorizadas del día.',
+            };
+        }
 
         if (vistaActual === 'FacturasSRI') {
             return {
@@ -733,10 +741,12 @@ export default function DashboardPage() {
                                 onAbrirConfiguraciónSRI={() => setVistaActual('ConfiguraciónSRI')}
                                 onAbrirCertificadodigital={() => setVistaActual('Certificadodigital')}
                                 onAbrirFacturasinternas={() => setVistaActual('facturasinternas')}
-
+                                onAbrirConfiguraciónEmailSRI={() => setVistaActual('ConfiguraciónEmailSRI')}
                             />
                         )}
-
+                        {vistaActual === 'ConfiguraciónEmailSRI' && (
+                            <ConfiguracionEmailSriPage />
+                        )}
                         {vistaActual === 'FacturasSRI' && (
                             <FacturacionSriPage />
                         )}
