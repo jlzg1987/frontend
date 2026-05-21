@@ -71,6 +71,9 @@ export default function FacturaManualPage() {
     const [busquedaProducto, setBusquedaProducto] = useState('');
     const [mostrarBusquedaProducto, setMostrarBusquedaProducto] = useState(false);
 
+    const [procesandoSri, setProcesandoSri] = useState(false);
+    const [resultadoSri, setResultadoSri] = useState<any>(null);
+
 
     useEffect(() => {
         cargarDatosIniciales();
@@ -314,23 +317,19 @@ export default function FacturaManualPage() {
                 alert(data.message || 'Error creando factura');
                 return;
             }
-            setFacturaCreada({
-                facturaId: data.factura.facturaId,
-                numeroFactura: data.factura.numeroFactura,
-                pdfUrl: data.factura.pdfUrl || null,
-            });
+            const factura = data.factura;
+            setFacturaCreada(factura);
+            setFacturaParaCobrar(factura);
 
             alert('Factura creada correctamente');
 
-            const pdfResp = await fetch(`${API_BASE}/facturacion-interna/${data.facturaId}/pdf`);
+            const pdfResp = await fetch(`${API_BASE}/facturacion-interna/${factura.facturaId}/pdf`);
             const pdfData = await pdfResp.json();
 
             if (pdfData.ok && pdfData.pdfUrl) {
                 window.open(`${API_BASE.replace('/api', '')}${pdfData.pdfUrl}`, '_blank');
             }
 
-            setFacturaCreada(data.factura);
-            setFacturaParaCobrar(data.factura);
             setAbrirModalCobro(true);
             limpiarFormulario();
         } catch (error) {
@@ -360,8 +359,7 @@ export default function FacturaManualPage() {
 
         setClienteEncontrado(null);
 
-        // LIMPIAR FACTURA CREADA
-        setFacturaCreada(null);
+
 
     }
 
@@ -615,6 +613,54 @@ export default function FacturaManualPage() {
             '_blank'
         );
     };
+
+    async function procesarFacturaSriDesdeInterna() {
+        if (!facturaCreada?.facturaId) {
+            alert('Primero debe existir una factura creada');
+            return;
+        }
+
+        try {
+            setProcesandoSri(true);
+
+            const resp = await fetch(
+                `${API_BASE}/facturacion-sri/${facturaCreada.facturaId}/procesar-completo`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            const data = await resp.json();
+
+            if (!data.ok) {
+                alert(data.message || 'Error procesando factura en SRI');
+                return;
+            }
+
+            setResultadoSri(data.resultado);
+
+            alert('Factura procesada en SRI correctamente');
+
+        } catch (error) {
+            console.error('Error procesando SRI:', error);
+            alert('Error procesando factura en SRI');
+        } finally {
+            setProcesandoSri(false);
+        }
+    }
+
+    function verRideSri() {
+        if (!facturaCreada?.facturaId) return;
+
+        window.open(
+            `${API_BASE}/facturacion-sri/${facturaCreada.facturaId}/ride-pdf`,
+            '_blank'
+        );
+    }
+
     return (
         <main className="min-h-screen bg-slate-950 text-white p-6">
             <div className="max-w-7xl mx-auto">
@@ -1011,6 +1057,20 @@ shadow-2xl">
                                     Enviar por email
                                 </button>
                                 <button
+                                    onClick={procesarFacturaSriDesdeInterna}
+                                    disabled={procesandoSri}
+                                    className="px-4 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-black"
+                                >
+                                    {procesandoSri ? 'Procesando SRI...' : 'Procesar SRI'}
+                                </button>
+
+                                <button
+                                    onClick={verRideSri}
+                                    className="px-4 py-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-black"
+                                >
+                                    Ver RIDE SRI
+                                </button>
+                                <button
                                     onClick={abrirPdfFacturaCreada}
                                     className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-6 py-3 rounded-xl shadow-lg"
                                 >
@@ -1030,6 +1090,25 @@ shadow-2xl">
                             </div>
                         )}
                     </div>
+                    {resultadoSri && (
+                        <div className="mt-4 bg-slate-900 border border-emerald-500/30 rounded-xl p-4">
+                            <p className="text-emerald-300 font-bold">
+                                Estado SRI: {resultadoSri.estadoSri}
+                            </p>
+
+                            {resultadoSri.claveAcceso && (
+                                <p className="text-xs text-slate-400 break-all mt-2">
+                                    Clave acceso: {resultadoSri.claveAcceso}
+                                </p>
+                            )}
+
+                            {resultadoSri.numeroAutorizacion && (
+                                <p className="text-xs text-slate-400 break-all mt-2">
+                                    Autorización: {resultadoSri.numeroAutorizacion}
+                                </p>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
             {abrirModalClienteExterno && (

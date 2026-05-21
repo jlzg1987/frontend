@@ -37,6 +37,10 @@ import ImportarInventarioPage from '../inventario/importar/page';
 import CodigosBarraPage from '../inventario/codigos-barra/page';
 import MovimientosInventarioPage from '../inventario/movimiento/page';
 import KitsInstalacionPage from '../inventario/kits/page';
+import DashboardSriPage from '../facturacion-sri/page';
+import FacturacionSriPage from '../facturacion-sri/listado-factura/page';
+import ConfiguracionSriPage from '../facturacion-sri/configuracion/page';
+import CertificadoSriPage from '../facturacion-sri/certificado/page';
 
 export default function DashboardPage() {
     const router = useRouter();
@@ -49,7 +53,8 @@ export default function DashboardPage() {
         | 'nodofibra' | 'NapSplitter' | 'contratospdf' | 'gestionisp' | 'autorizacionesinstalacion' | 'fichastecnicas'
         | 'confg' | 'descuentos' | 'empresa' | 'impuestos' | 'facturacion' | 'facturasinternas' | 'facturamanual'
         | 'formaspago' | 'clientesexternos' | 'inventario' | 'importarinventario' | 'productoservicio' | 'catalogoinventario'
-        | 'codigoBarra' | 'moviminetoStock' | 'kitsInstalacion'
+        | 'codigoBarra' | 'moviminetoStock' | 'kitsInstalacion' | 'configuraciónSRI' | 'FacturasSRI' | 'ConfiguraciónSRI'
+        | 'Certificadodigital'
     >('dashboard');
 
 
@@ -172,6 +177,33 @@ export default function DashboardPage() {
     }
 
     function getHeaderInfo() {
+
+        if (vistaActual === 'FacturasSRI') {
+            return {
+                titulo: ' Facturación Electrónica SRI',
+                subtitulo: ' Procesa XML, firma, autorización y RIDE de facturas internas.',
+            };
+        }
+        if (vistaActual === 'ConfiguraciónSRI') {
+            return {
+                titulo: '   Configuración SRI',
+                subtitulo: ' Define ambiente, establecimiento, punto de emisión y secuencial de facturación electrónica.',
+            };
+        }
+
+        if (vistaActual === 'Certificadodigital') {
+            return {
+                titulo: ' Certificado Digital SRI',
+                subtitulo: 'Sube el archivo .p12 de la empresa para firmar electrónicamente los XML.',
+            };
+        }
+
+        if (vistaActual === 'configuraciónSRI') {
+            return {
+                titulo: ' Dashboard Facturación Electrónica SRI',
+                subtitulo: ' Centro de control para procesar facturas electrónicas, configurar el ambiente SRI,                    cargar certificado digital y consultar comprobantes autorizados.',
+            };
+        }
         if (vistaActual === 'perfil') {
             return {
                 titulo: 'Perfil de usuario',
@@ -690,8 +722,32 @@ export default function DashboardPage() {
                                 onVolver={() => setVistaActual('dashboard')}
                                 onAbrirFacturamanual={() => setVistaActual('facturamanual')}
                                 onAbrirFacturasinternas={() => setVistaActual('facturasinternas')}
+                                onAbrirConfiguraciónSRI={() => setVistaActual('configuraciónSRI')}
                             />
                         )}
+
+                        {vistaActual === 'configuraciónSRI' && (
+                            <DashboardSriPage
+                                onVolver={() => setVistaActual('dashboard')}
+                                onAbrirFacturasSRI={() => setVistaActual('FacturasSRI')}
+                                onAbrirConfiguraciónSRI={() => setVistaActual('ConfiguraciónSRI')}
+                                onAbrirCertificadodigital={() => setVistaActual('Certificadodigital')}
+                                onAbrirFacturasinternas={() => setVistaActual('facturasinternas')}
+
+                            />
+                        )}
+
+                        {vistaActual === 'FacturasSRI' && (
+                            <FacturacionSriPage />
+                        )}
+                        {vistaActual === 'ConfiguraciónSRI' && (
+                            <ConfiguracionSriPage />
+                        )}
+                        {vistaActual === 'Certificadodigital' && (
+                            <CertificadoSriPage />
+                        )}
+
+
 
                         {vistaActual === 'facturamanual' && (
                             <FacturaManualPage />

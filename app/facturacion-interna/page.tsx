@@ -6,10 +6,12 @@ export default function DashboardFacturacionInternaPage({
     onVolver,
     onAbrirFacturamanual,
     onAbrirFacturasinternas,
+    onAbrirConfiguraciónSRI,
 }: {
     onVolver: () => void;
     onAbrirFacturamanual: () => void;
     onAbrirFacturasinternas: () => void;
+    onAbrirConfiguraciónSRI: () => void;
 }) {
     const router = useRouter();
 
@@ -28,6 +30,13 @@ export default function DashboardFacturacionInternaPage({
             path: '/facturacion-interna/listado',
             color: 'from-emerald-500/20 to-green-500/10 border-emerald-400/30'
         },
+        {
+            title: 'Configuración SRI',
+            desc: 'Ambiente, establecimiento, punto de emisión, secuencial y datos tributarios.',
+            icon: '⚙️',
+            path: '/facturacion-sri/configuracion',
+            color: 'from-purple-500/20 to-violet-500/10 border-purple-400/30'
+        }
 
     ];
 
@@ -49,6 +58,11 @@ export default function DashboardFacturacionInternaPage({
                                     onAbrirFacturasinternas();
                                     return;
                                 }
+                                if (card.title === 'Configuración SRI') {
+                                    onAbrirConfiguraciónSRI();
+                                    return;
+                                }
+
 
                                 router.push(card.path)
                             }}
