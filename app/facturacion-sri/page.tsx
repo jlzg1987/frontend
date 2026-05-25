@@ -36,7 +36,42 @@ const cards = [
         desc: 'Programar hora de envío automático, adjuntar PDF/XML y envío masivo del día.',
         icon: '📧',
         path: '/facturacion-interna/configuracion-email',
-        color: '#2563EB',
+        color: 'from-emerald-500/20 to-blue-500/10 border-emerald-400/30'
+    },
+    {
+        title: 'Historial emails SRI',
+        desc: 'Ver correos enviados, errores, reenvíos y envíos automáticos.',
+        icon: '📨',
+        path: '/facturacion-sri/emails',
+        color: 'from-turquesa-500/20 to-blue-500/10 border-emerald-400/30'
+    },
+    {
+        title: 'Anulaciones Interna',
+        desc: 'Gestionar solicitudes de anulación, confirmaciones y rechazos de comprobantes electrónicos.',
+        icon: '🧾',
+        path: '/facturacion-sri/anulaciones',
+        color: 'from-red-500/20 to-orange-500/10 border-red-400/30'
+    },
+    {
+        title: 'Anulaciones SRI',
+        desc: 'Solicitudes, paquetes, confirmaciones y estados de anulación.',
+        icon: '🧾',
+        path: '//acturacion-sri/anulacionesSri',
+        color: 'from-orange-500/20 to-orange-500/10 border-orange-400/30'
+    },
+    {
+        title: 'Notas Crédito SRI',
+        desc: 'Devoluciones parciales, reversos, correcciones y estados SRI.',
+        icon: '💳',
+        path: '/facturacion-sri/notasCreditoSri',
+        color: 'from-rose-500/20 to-pink-500/10 border-rose-400/30'
+    },
+    {
+        title: 'Anulación Notas Crédito',
+        desc: 'Historial, filtros, seguimiento y estados de anulaciones SRI.',
+        icon: '💳',
+        path: '/sri/notas-credito/anulaciones',
+        color: 'from-red-500/20 to-pink-500/10 border-rose-400/30'
     }
 ];
 
@@ -46,7 +81,12 @@ export default function DashboardSriPage({
     onAbrirConfiguraciónSRI,
     onAbrirCertificadodigital,
     onAbrirFacturasinternas,
-    onAbrirConfiguraciónEmailSRI
+    onAbrirConfiguraciónEmailSRI,
+    onAbrirHistorialemailsSRI,
+    onAbrirAnulacionesSRI,
+    onAbrirAnulacionesInterna,
+    onAbrirNotasCreditoSRI,
+    onAbrirAnulaciónNotasCrédito
 }: {
     onVolver: () => void;
     onAbrirFacturasSRI: () => void;
@@ -54,6 +94,11 @@ export default function DashboardSriPage({
     onAbrirCertificadodigital: () => void;
     onAbrirFacturasinternas: () => void;
     onAbrirConfiguraciónEmailSRI: () => void;
+    onAbrirHistorialemailsSRI: () => void;
+    onAbrirAnulacionesSRI: () => void;
+    onAbrirAnulacionesInterna: () => void;
+    onAbrirNotasCreditoSRI: () => void;
+    onAbrirAnulaciónNotasCrédito: () => void;
 }) {
     const router = useRouter();
 
@@ -88,7 +133,26 @@ export default function DashboardSriPage({
                                 onAbrirConfiguraciónEmailSRI();
                                 return;
                             }
-
+                            if (card.title === 'Historial emails SRI') {
+                                onAbrirHistorialemailsSRI();
+                                return;
+                            }
+                            if (card.title === 'Anulaciones Interna') {
+                                onAbrirAnulacionesInterna();
+                                return;
+                            }
+                            if (card.title === 'Anulaciones SRI') {
+                                onAbrirAnulacionesSRI();
+                                return;
+                            }
+                            if (card.title === 'Notas Crédito SRI') {
+                                onAbrirNotasCreditoSRI();
+                                return;
+                            }
+                            if (card.title === 'Anulación Notas Crédito') {
+                                onAbrirAnulaciónNotasCrédito();
+                                return;
+                            }
 
                             router.push(card.path)
 

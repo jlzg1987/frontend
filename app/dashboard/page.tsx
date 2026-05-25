@@ -42,6 +42,11 @@ import FacturacionSriPage from '../facturacion-sri/listado-factura/page';
 import ConfiguracionSriPage from '../facturacion-sri/configuracion/page';
 import CertificadoSriPage from '../facturacion-sri/certificado/page';
 import ConfiguracionEmailSriPage from '../facturacion-sri/configuracion-email/page';
+import HistorialEmailsSriPage from '../facturacion-sri/emails/page';
+import AnulacionesSriPage from '../facturacion-sri/anulacionesSri/page';
+import AnulacionesInternatPage from '../facturacion-sri/anulaciones/page';
+import NotasCreditoPage from '../facturacion-sri/notaCredito/page';
+import HistorialAnulacionesNotasCreditoPage from '../facturacion-sri/anulaciones-historial/page';
 
 export default function DashboardPage() {
     const router = useRouter();
@@ -55,7 +60,8 @@ export default function DashboardPage() {
         | 'confg' | 'descuentos' | 'empresa' | 'impuestos' | 'facturacion' | 'facturasinternas' | 'facturamanual'
         | 'formaspago' | 'clientesexternos' | 'inventario' | 'importarinventario' | 'productoservicio' | 'catalogoinventario'
         | 'codigoBarra' | 'moviminetoStock' | 'kitsInstalacion' | 'configuraciónSRI' | 'FacturasSRI' | 'ConfiguraciónSRI'
-        | 'Certificadodigital' | 'ConfiguraciónEmailSRI'
+        | 'Certificadodigital' | 'ConfiguraciónEmailSRI' | 'HistorialemailsSRI' | 'AnulacionesSRI' | 'AnulacionesInterna'
+        | 'NotasCreditoSRI' | 'AnulaciónNotasCrédito'
     >('dashboard');
 
 
@@ -178,6 +184,40 @@ export default function DashboardPage() {
     }
 
     function getHeaderInfo() {
+
+
+        if (vistaActual === 'AnulaciónNotasCrédito') {
+            return {
+                titulo: 'Historial de Anulación de Notas de Crédito',
+                subtitulo: 'Consulta solicitudes, estados, fechas, clientes y claves de acceso.',
+            };
+        }
+
+        if (vistaActual === 'NotasCreditoSRI') {
+            return {
+                titulo: 'Notas de Crédito SRI',
+                subtitulo: 'Devoluciones parciales o totales relacionadas a facturas autorizadas.',
+            };
+        }
+        if (vistaActual === 'AnulacionesSRI') {
+            return {
+                titulo: ' Anulaciones SRI',
+                subtitulo: 'Control de solicitudes, paquetes y confirmaciones de anulación.',
+            };
+        }
+
+        if (vistaActual === 'AnulacionesInterna') {
+            return {
+                titulo: ' Anulaciones Interna',
+                subtitulo: 'Control interno de solicitudes, confirmación y rechazo de anulaciones',
+            };
+        }
+        if (vistaActual === 'HistorialemailsSRI') {
+            return {
+                titulo: ' Historial de emails SRI',
+                subtitulo: '  Consulta correos enviados, errores, reenvíos y envíos automáticos.',
+            };
+        }
 
         if (vistaActual === 'ConfiguraciónEmailSRI') {
             return {
@@ -599,7 +639,10 @@ export default function DashboardPage() {
                                                     setVistaActual('contratospdf');
                                                     return;
                                                 }
-
+                                                if (item.title === 'Facturación') {
+                                                    setVistaActual('facturamanual');
+                                                    return;
+                                                }
 
 
 
@@ -742,7 +785,27 @@ export default function DashboardPage() {
                                 onAbrirCertificadodigital={() => setVistaActual('Certificadodigital')}
                                 onAbrirFacturasinternas={() => setVistaActual('facturasinternas')}
                                 onAbrirConfiguraciónEmailSRI={() => setVistaActual('ConfiguraciónEmailSRI')}
+                                onAbrirHistorialemailsSRI={() => setVistaActual('HistorialemailsSRI')}
+                                onAbrirAnulacionesSRI={() => setVistaActual('AnulacionesSRI')}
+                                onAbrirAnulacionesInterna={() => setVistaActual('AnulacionesInterna')}
+                                onAbrirNotasCreditoSRI={() => setVistaActual('NotasCreditoSRI')}
+                                onAbrirAnulaciónNotasCrédito={() => setVistaActual('AnulaciónNotasCrédito')}
                             />
+                        )}
+                        {vistaActual === 'AnulaciónNotasCrédito' && (
+                            <HistorialAnulacionesNotasCreditoPage />
+                        )}
+                        {vistaActual === 'NotasCreditoSRI' && (
+                            <NotasCreditoPage />
+                        )}
+                        {vistaActual === 'AnulacionesSRI' && (
+                            <AnulacionesSriPage />
+                        )}
+                        {vistaActual === 'AnulacionesInterna' && (
+                            <AnulacionesInternatPage />
+                        )}
+                        {vistaActual === 'HistorialemailsSRI' && (
+                            <HistorialEmailsSriPage />
                         )}
                         {vistaActual === 'ConfiguraciónEmailSRI' && (
                             <ConfiguracionEmailSriPage />

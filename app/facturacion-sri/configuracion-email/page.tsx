@@ -19,6 +19,7 @@ export default function ConfiguracionEmailSriPage() {
     const [enviando, setEnviando] = useState(false);
     const [mensaje, setMensaje] = useState('');
     const [pendientes, setPendientes] = useState<any[]>([]);
+    const [reenviandoId, setReenviandoId] = useState<number | null>(null);
 
     function getToken() {
         if (typeof window === 'undefined') return '';
@@ -151,6 +152,43 @@ export default function ConfiguracionEmailSriPage() {
         cargarConfig();
         cargarPendientesEmail();
     }, []);
+
+
+
+    const reenviarEmailSri = async (sriComprobanteId: number) => {
+        try {
+            setReenviandoId(sriComprobanteId);
+
+            const token = localStorage.getItem('token');
+
+            const resp = await fetch(
+                `${API_BASE}/api/facturacion-sri/comprobantes/${sriComprobanteId}/reenviar-email`,
+                {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                }
+            );
+
+            const data = await resp.json();
+
+            if (!resp.ok || !data.ok) {
+                alert(data.message || 'No se pudo reenviar el email');
+                return;
+            }
+
+            alert('Email reenviado correctamente');
+
+            await cargarPendientesEmail();
+
+        } catch (error) {
+            console.error('Error reenviando email SRI:', error);
+            alert('Error reenviando email SRI');
+        } finally {
+            setReenviandoId(null);
+        }
+    };
 
     if (loading) {
         return (
@@ -512,9 +550,11 @@ export default function ConfiguracionEmailSriPage() {
                                 <tr className="text-left text-slate-400 border-b border-slate-800">
                                     <th className="py-3 px-3">Factura</th>
                                     <th className="py-3 px-3">Cliente</th>
-                                    <th className="py-3 px-3">Email</th>
                                     <th className="py-3 px-3">Estado</th>
+                                    <th className="py-3 px-3">Email</th>
                                     <th className="py-3 px-3">Fecha</th>
+                                    <th className="py-3 px-3">Factura Creada</th>
+                                    <th className="py-3 px-3">Reenvio Email</th>
                                 </tr>
                             </thead>
 
@@ -556,6 +596,15 @@ export default function ConfiguracionEmailSriPage() {
 
                                         <td className="py-3 px-3 text-slate-400">
                                             {new Date(item.createdAt).toLocaleString()}
+                                        </td>
+                                        <td className="py-3 px-3 text-slate-400">
+                                            <button
+                                                onClick={() => reenviarEmailSri(item.sriComprobanteId)}
+                                                disabled={reenviandoId === item.sriComprobanteId}
+                                                className="px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-bold disabled:opacity-50"
+                                            >
+                                                {reenviandoId === item.sriComprobanteId ? 'Enviando...' : '📧 Reenviar email'}
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}
