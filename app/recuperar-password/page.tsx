@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { API_BASE } from '@/src/lib/api';
 
-export default function RecuperarPasswordPage() {
+function RecuperarPasswordContent() {
     const router = useRouter();
     const params = useSearchParams();
 
@@ -27,8 +27,8 @@ export default function RecuperarPasswordPage() {
         setForm({ ...form, [e.target.name]: e.target.value });
     }
 
-    async function solicitarCodigo(e: React.FormEvent) {
-        e.preventDefault();
+    async function solicitarCodigo(e?: React.FormEvent) {
+        e?.preventDefault();
         setError('');
         setMensaje('');
         setLoading(true);
@@ -189,7 +189,7 @@ export default function RecuperarPasswordPage() {
                     {step === 'RESET' && (
                         <button
                             type="button"
-                            onClick={solicitarCodigo as any}
+                            onClick={() => solicitarCodigo()}
                             disabled={loading}
                             className="w-full rounded-xl border border-blue-200 py-3 font-bold text-blue-700 hover:bg-blue-50"
                         >
@@ -207,6 +207,14 @@ export default function RecuperarPasswordPage() {
                 </form>
             </div>
         </main>
+    );
+}
+
+export default function RecuperarPasswordPage() {
+    return (
+        <Suspense fallback={<div>Cargando...</div>}>
+            <RecuperarPasswordContent />
+        </Suspense>
     );
 }
 
