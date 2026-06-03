@@ -1,5 +1,5 @@
 export const API_BASE =
-    process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api';
+    process.env.NEXT_PUBLIC_API_URL + "/api" || 'http://localhost:4000/api';
 
 export function saveToken(token: string) {
     localStorage.setItem('isp_token', token);
