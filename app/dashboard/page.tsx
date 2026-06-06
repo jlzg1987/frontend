@@ -47,12 +47,27 @@ import AnulacionesSriPage from '../facturacion-sri/anulacionesSri/page';
 import AnulacionesInternatPage from '../facturacion-sri/anulaciones/page';
 import NotasCreditoPage from '../facturacion-sri/notaCredito/page';
 import HistorialAnulacionesNotasCreditoPage from '../facturacion-sri/anulaciones-historial/page';
+import TicketsPage from '../tickets/page';
+import DashboardTecnicosPage from '../dashboard-tecnicos/page';
+import SoporteTecnicoPage from '../soporte-tecnico/page';
+import DetalleTecnicoPage from '../dashboard-tecnicos/[tecnicoId]/page';
+import ListadoTicketsPage from '../soporte-tecnico/Listado-tickets/page';
+import DetalleFichaTecnicaClientePage from '../soporte-tecnico/ficha-tecnica-clientes/[servicioId]/page';
+import FichaTecnicaClientesPage from '../soporte-tecnico/ficha-tecnica-clientes/page';
+import AtencionCampoPage from '../soporte-tecnico/atencion-campo/page';
+import FichaTecnicaClientePage from '../soporte-tecnico/atencion-campo/[ticketId]/page';
+import MapaNeuronalMantenimientos from '../soporte-tecnico/mantenimineto/page';
+import MisReportesTecnicoPage from '../soporte-tecnico/mis-reportes/page';
+import ReportesTecnicosAdminPage from '../dashboard-tecnicos/reportes-admin/page';
 
 export default function DashboardPage() {
     const router = useRouter();
     const [usuario, setUsuario] = useState<any>(null);
+    const [extra, setExtra] = useState<any>({});
     const [clientesActivos, setClientesActivos] = useState(0);
-
+    const [tecnicoSeleccionadoId, setTecnicoSeleccionadoId] = useState<string | null>(null);
+    const [DetalleClienteId, setDetalleClienteId] = useState<string | null>(null);
+    const [ticketsIdSeleccionadoId, setticketsIdSeleccionadoId] = useState<string | null>(null);
     const [vistaActual, setVistaActual] = useState<
         'dashboard' | 'perfil' | 'mikrotik' | 'mikrotikRouters' | 'administracion' | 'PlanInternet'
         | 'Clientes' | 'ImportarClientes' | 'contratosServicios' | 'infraestructura' | 'torre' | 'sectorial'
@@ -61,7 +76,9 @@ export default function DashboardPage() {
         | 'formaspago' | 'clientesexternos' | 'inventario' | 'importarinventario' | 'productoservicio' | 'catalogoinventario'
         | 'codigoBarra' | 'moviminetoStock' | 'kitsInstalacion' | 'configuraciónSRI' | 'FacturasSRI' | 'ConfiguraciónSRI'
         | 'Certificadodigital' | 'ConfiguraciónEmailSRI' | 'HistorialemailsSRI' | 'AnulacionesSRI' | 'AnulacionesInterna'
-        | 'NotasCreditoSRI' | 'AnulaciónNotasCrédito'
+        | 'NotasCreditoSRI' | 'AnulaciónNotasCrédito' | 'tickets' | 'tecnico' | 'soporteTecnico' | 'fichatecnico'
+        | 'ListadoTickets' | 'fichaCliente' | 'talleCliente' | 'detalletickets' | 'AtencionCampo' | 'AbrirMantenimiento'
+        | 'AbrirReportes' | 'AbrirReporteAdmin'
     >('dashboard');
 
 
@@ -94,32 +111,30 @@ export default function DashboardPage() {
 
         if (usuarioStorage) {
             try {
-                setUsuario(JSON.parse(usuarioStorage));
+                const usuarioParseado = JSON.parse(usuarioStorage);
+
+                console.log('USUARIO PARSEADO:', usuarioParseado);
+                console.log('USUARIO ID:', usuarioParseado.usuarioId);
+
+                setUsuario(usuarioParseado)
             } catch {
                 setUsuario(null);
             }
         }
+
         cargarResumenClientes();
     }, []);
 
+    useEffect(() => {
+        console.log('USUARIO STATE YA ACTUALIZADO:', usuario);
+        console.log('USUARIO ID STATE:', usuario?.usuarioId);
+    }, [usuario]);
 
+    const nombreUsuario = usuario?.nombreCompleto || `${usuario?.nombres || ''} ${usuario?.apellidos || ''}`.trim() || usuario?.nombre || 'Usuario';
 
-    const nombreUsuario =
-        usuario?.nombreCompleto ||
-        `${usuario?.nombres || ''} ${usuario?.apellidos || ''}`.trim() ||
-        usuario?.nombre ||
-        'Usuario';
+    const emailUsuario = usuario?.email || usuario?.correo || '';
 
-    const emailUsuario =
-        usuario?.email ||
-        usuario?.correo ||
-        '';
-
-    const fotoUsuario =
-        usuario?.fotoPerfil ||
-        usuario?.foto ||
-        usuario?.avatar ||
-        usuario?.imagen ||
+    const fotoUsuario = usuario?.fotoPerfil || usuario?.foto || usuario?.avatar || usuario?.imagen ||
         `https://ui-avatars.com/api/?name=${encodeURIComponent(nombreUsuario)}&background=2563eb&color=fff`;
 
 
@@ -186,13 +201,61 @@ export default function DashboardPage() {
     function getHeaderInfo() {
 
 
+        if (vistaActual === 'AbrirMantenimiento') {
+            return {
+                titulo: ' 🧠 Mapa neuronal de mantenimientos',
+                subtitulo: 'Cada punto representa un mantenimiento asignado, en proceso o terminado.',
+            };
+        }
+        if (vistaActual === 'detalletickets') {
+            return {
+                titulo: '  Ficha técnica de atención',
+                subtitulo: 'Registro de mantenimiento, evidencia y cierre técnico.',
+            };
+        }
+
+        if (vistaActual === 'AtencionCampo') {
+            return {
+                titulo: ' Atención en campo',
+                subtitulo: '  Mantenimientos, tickets técnicos y ficha técnica del cliente.',
+            };
+        }
+        if (vistaActual === 'fichaCliente') {
+            return {
+                titulo: 'Fichas técnicas de clientes',
+                subtitulo: 'Clientes con instalación, mantenimiento o atención técnica asignada.',
+            };
+        }
+        if (vistaActual === 'ListadoTickets') {
+            return {
+                titulo: '  Tickets disponibles',
+                subtitulo: ' Tickets registrados que aún no han sido asignados a un técnico.',
+            };
+        }
+        if (vistaActual === 'soporteTecnico') {
+            return {
+                titulo: ' 📞 Soporte Técnico',
+                subtitulo: 'Centro de control para tickets, técnicos, atención en campo, mantenimientos y reportes del área técnica.',
+            };
+        }
+        if (vistaActual === 'tecnico') {
+            return {
+                titulo: ' Dashboard Técnicos',
+                subtitulo: 'Monitoreo general del departamento técnico',
+            };
+        }
+        if (vistaActual === 'tickets') {
+            return {
+                titulo: 'Tickets de Soporte',
+                subtitulo: 'Gestión de soporte técnico para clientes ISP y externos.',
+            };
+        }
         if (vistaActual === 'AnulaciónNotasCrédito') {
             return {
                 titulo: 'Historial de Anulación de Notas de Crédito',
                 subtitulo: 'Consulta solicitudes, estados, fechas, clientes y claves de acceso.',
             };
         }
-
         if (vistaActual === 'NotasCreditoSRI') {
             return {
                 titulo: 'Notas de Crédito SRI',
@@ -205,7 +268,6 @@ export default function DashboardPage() {
                 subtitulo: 'Control de solicitudes, paquetes y confirmaciones de anulación.',
             };
         }
-
         if (vistaActual === 'AnulacionesInterna') {
             return {
                 titulo: ' Anulaciones Interna',
@@ -218,14 +280,12 @@ export default function DashboardPage() {
                 subtitulo: '  Consulta correos enviados, errores, reenvíos y envíos automáticos.',
             };
         }
-
         if (vistaActual === 'ConfiguraciónEmailSRI') {
             return {
                 titulo: '  Configuración de envío email SRI',
                 subtitulo: ' Controla el envío automático de facturas autorizadas del día.',
             };
         }
-
         if (vistaActual === 'FacturasSRI') {
             return {
                 titulo: ' Facturación Electrónica SRI',
@@ -238,14 +298,12 @@ export default function DashboardPage() {
                 subtitulo: ' Define ambiente, establecimiento, punto de emisión y secuencial de facturación electrónica.',
             };
         }
-
         if (vistaActual === 'Certificadodigital') {
             return {
                 titulo: ' Certificado Digital SRI',
                 subtitulo: 'Sube el archivo .p12 de la empresa para firmar electrónicamente los XML.',
             };
         }
-
         if (vistaActual === 'configuraciónSRI') {
             return {
                 titulo: ' Dashboard Facturación Electrónica SRI',
@@ -258,7 +316,6 @@ export default function DashboardPage() {
                 subtitulo: 'Administra tu información personal, foto y datos del sistema',
             };
         }
-
         if (vistaActual === 'mikrotik') {
             return {
                 titulo: 'Dashboard MikroTik',
@@ -295,7 +352,6 @@ export default function DashboardPage() {
                 subtitulo: 'Descarga el formato Excel oficial e importa clientes masivamente.',
             };
         }
-
         if (vistaActual === 'contratosServicios') {
             return {
                 titulo: 'Contratos de Servicios',
@@ -330,7 +386,6 @@ export default function DashboardPage() {
             };
 
         }
-
         if (vistaActual === 'NapSplitter') {
             return {
                 titulo: 'NAP / Splitter',
@@ -338,7 +393,6 @@ export default function DashboardPage() {
             };
 
         }
-
         if (vistaActual === 'contratospdf') {
             return {
                 titulo: 'Historial de Contratos PDF',
@@ -346,7 +400,6 @@ export default function DashboardPage() {
             };
 
         }
-
         if (vistaActual === 'gestionisp') {
             return {
                 titulo: 'Centro de Gestión ISP',
@@ -354,7 +407,6 @@ export default function DashboardPage() {
             };
 
         }
-
         if (vistaActual === 'empresa') {
             return {
                 titulo: 'Datos de empresa',
@@ -376,7 +428,6 @@ export default function DashboardPage() {
             };
 
         }
-
         if (vistaActual === 'facturasinternas') {
             return {
                 titulo: 'Facturas Internas',
@@ -384,7 +435,6 @@ export default function DashboardPage() {
             };
 
         }
-
         if (vistaActual === 'facturamanual') {
             return {
                 titulo: ' Factura Manual Interna',
@@ -392,7 +442,6 @@ export default function DashboardPage() {
             };
 
         }
-
         if (vistaActual === 'facturacion') {
             return {
                 titulo: ' Dashboard de Facturación Interna',
@@ -400,7 +449,6 @@ export default function DashboardPage() {
             };
 
         }
-
         if (vistaActual === 'formaspago') {
             return {
                 titulo: 'Formas de Pago',
@@ -408,7 +456,6 @@ export default function DashboardPage() {
             };
 
         }
-
         if (vistaActual === 'clientesexternos') {
             return {
                 titulo: 'Clientes externos de facturación',
@@ -416,7 +463,6 @@ export default function DashboardPage() {
             };
 
         }
-
         if (vistaActual === 'catalogoinventario') {
             return {
                 titulo: 'Catálogo e Inventario',
@@ -424,7 +470,6 @@ export default function DashboardPage() {
             };
 
         }
-
         if (vistaActual === 'productoservicio') {
             return {
                 titulo: 'Productos y Servicios',
@@ -432,7 +477,6 @@ export default function DashboardPage() {
             };
 
         }
-
         if (vistaActual === 'importarinventario') {
             return {
                 titulo: ' Importar Inventario',
@@ -440,7 +484,6 @@ export default function DashboardPage() {
             };
 
         }
-
         if (vistaActual === 'inventario') {
             return {
                 titulo: ' Dashboard Inventario',
@@ -448,7 +491,6 @@ export default function DashboardPage() {
             };
 
         }
-
         if (vistaActual === 'codigoBarra') {
             return {
                 titulo: ' Códigos de Barra',
@@ -508,6 +550,17 @@ export default function DashboardPage() {
                             label="Pagos"
                             href="/pagos"
                         />
+                        <MenuItem
+                            label="Aréa Técnica"
+                            active={vistaActual === 'tecnico'}
+                            onClick={() => setVistaActual('tecnico')}
+                        />
+                        <MenuItem
+                            label="Soporte Técnica"
+                            active={vistaActual === 'soporteTecnico'}
+                            onClick={() => setVistaActual('soporteTecnico')}
+                        />
+
 
                         <MenuItem
                             label="Facturación"
@@ -528,10 +581,11 @@ export default function DashboardPage() {
                         />
                         <MenuItem
                             label="Tickets"
-                            href="/tickets"
+                            active={vistaActual === 'tickets'}
+                            onClick={() => setVistaActual('tickets')}
                         />
                         <MenuItem
-                            label="Administracion"
+                            label="Administración"
                             active={vistaActual === 'administracion'}
                             onClick={() => setVistaActual('administracion')}
                         />
@@ -643,7 +697,10 @@ export default function DashboardPage() {
                                                     setVistaActual('facturamanual');
                                                     return;
                                                 }
-
+                                                if (item.title === 'Tickets') {
+                                                    setVistaActual('tickets');
+                                                    return;
+                                                }
 
 
                                                 router.push(item.href);
@@ -667,6 +724,88 @@ export default function DashboardPage() {
                             </>
                         )}
 
+                        {vistaActual === 'AtencionCampo' && (
+                            <AtencionCampoPage
+                                onVolver={() => setVistaActual('dashboard')}
+                                onAbrirdetalletickets={(ticketId) => {
+                                    setticketsIdSeleccionadoId(ticketId);
+                                    setVistaActual('detalletickets');
+                                }}
+                            />
+                        )}
+
+                        {vistaActual === 'detalletickets' && ticketsIdSeleccionadoId && (
+                            <FichaTecnicaClientePage
+                                ticketsId={ticketsIdSeleccionadoId}
+                                onVolver={() => setVistaActual('AtencionCampo')}
+                            />
+                        )}
+                        {vistaActual === 'soporteTecnico' && (
+                            <SoporteTecnicoPage
+                                onVolver={() => setVistaActual('dashboard')}
+                                OpenListadoTickets={() => setVistaActual('ListadoTickets')}
+                                onAbrirfichatecnico={(usuarioId) => {
+                                    setTecnicoSeleccionadoId(usuarioId);
+                                    setVistaActual('fichatecnico');
+
+                                }}
+                                onAbrirfichaCliente={() => setVistaActual('fichaCliente')}
+                                onAbrirAtencionCampo={(usuarioId) => {
+                                    setTecnicoSeleccionadoId(usuarioId);
+                                    setVistaActual('AtencionCampo');
+                                }}
+                                onAbrirMantenimiento={(usuarioId) => {
+                                    setTecnicoSeleccionadoId(usuarioId);
+                                    setVistaActual('AbrirMantenimiento');
+                                }}
+                                onAbrirReportes={(usuarioId) => {
+                                    setTecnicoSeleccionadoId(usuarioId);
+                                    setVistaActual('AbrirReportes');
+                                }}
+
+                            />
+                        )}
+                        {vistaActual === 'AbrirReportes' && tecnicoSeleccionadoId && (
+                            <MisReportesTecnicoPage tecnicoId={tecnicoSeleccionadoId} />
+                        )}
+                        {vistaActual === 'fichaCliente' && (
+                            <FichaTecnicaClientesPage
+                                onVolver={() => setVistaActual('dashboard')}
+                                onAbrirdetalleCliente={(servicioId) => {
+                                    setDetalleClienteId(servicioId);
+                                    setVistaActual('talleCliente');
+                                }}
+
+                            />
+                        )}
+                        {vistaActual === 'AbrirMantenimiento' && tecnicoSeleccionadoId && (
+                            <MapaNeuronalMantenimientos tecnicoId={tecnicoSeleccionadoId} />
+                        )}
+                        {vistaActual === 'talleCliente' && (
+                            <DetalleFichaTecnicaClientePage servicioId={DetalleClienteId} />
+                        )}
+                        {vistaActual === 'ListadoTickets' && (
+                            <ListadoTicketsPage />
+                        )}
+                        {vistaActual === 'tecnico' && (
+                            <DashboardTecnicosPage
+                                onVolver={() => setVistaActual('dashboard')}
+                                onAbrirfichatecnico={(tecnicoId) => {
+                                    setTecnicoSeleccionadoId(tecnicoId);
+                                    setVistaActual('fichatecnico');
+                                }}
+                            />
+                        )}
+                        {vistaActual === 'fichatecnico' && tecnicoSeleccionadoId && (
+                            <DetalleTecnicoPage
+                                tecnicoId={tecnicoSeleccionadoId}
+                                onVolver={() => setVistaActual('dashboard')}
+                                onAbrirReporteAdmin={() => setVistaActual('AbrirReporteAdmin')}
+                            />
+                        )}
+                        {vistaActual === 'AbrirReporteAdmin' && (
+                            <ReportesTecnicosAdminPage />
+                        )}
                         {vistaActual === 'perfil' && (
                             <PerfilInterno onVolver={() => setVistaActual('dashboard')} />
                         )}
@@ -857,6 +996,9 @@ export default function DashboardPage() {
                         )}
                         {vistaActual === 'moviminetoStock' && (
                             <MovimientosInventarioPage />
+                        )}
+                        {vistaActual === 'tickets' && (
+                            <TicketsPage />
                         )}
 
                     </div>

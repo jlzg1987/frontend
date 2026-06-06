@@ -41,7 +41,7 @@ function VerifyEmailContent() {
         try {
             setLoading(true);
 
-            const res = await fetch(`${API_BASE}/api/auth/verify-email-code`, {
+            const res = await fetch(`${API_BASE}/auth/verify-email-code`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, codigo }),
@@ -71,7 +71,7 @@ function VerifyEmailContent() {
             setReenviando(true);
             setExpired(false);
 
-            const res = await fetch(`${API_BASE}/api/auth/resend-email-code`, {
+            const res = await fetch(`${API_BASE}/auth/resend-email-code`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email }),
