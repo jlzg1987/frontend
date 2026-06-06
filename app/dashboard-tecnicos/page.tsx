@@ -21,10 +21,13 @@ type DashboardResponse = {
 
 export default function DashboardTecnicosPage({
     onVolver,
-    onAbrirfichatecnico
+    onAbrirfichatecnico,
+    onAbrirReporteAdmin
 }: {
     onVolver: () => void;
     onAbrirfichatecnico: (tecnicoId: string) => void;
+
+    onAbrirReporteAdmin: () => void;
 }) {
     const router = useRouter();
     const [dashboard, setDashboard] =
@@ -84,6 +87,20 @@ export default function DashboardTecnicosPage({
                 >
                     Actualizar
                 </button>
+                <div
+                    onClick={() => { onAbrirReporteAdmin(); }}
+                    className="cursor-pointer bg-white rounded-3xl shadow-lg p-6 hover:shadow-2xl transition"
+                >
+                    <div className="text-4xl mb-3">📋</div>
+
+                    <h3 className="text-xl font-bold text-slate-900">
+                        Reportes Técnicos
+                    </h3>
+
+                    <p className="text-slate-500 mt-2">
+                        Crear reportes de pagos, atención y desempeño para técnicos.
+                    </p>
+                </div>
 
             </div>
 

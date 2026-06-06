@@ -201,6 +201,12 @@ export default function DashboardPage() {
     function getHeaderInfo() {
 
 
+        if (vistaActual === 'AbrirReportes') {
+            return {
+                titulo: '  📋 Mis reportes',
+                subtitulo: 'Reportes enviados por administración.',
+            };
+        }
         if (vistaActual === 'AbrirMantenimiento') {
             return {
                 titulo: ' 🧠 Mapa neuronal de mantenimientos',
@@ -794,13 +800,14 @@ export default function DashboardPage() {
                                     setTecnicoSeleccionadoId(tecnicoId);
                                     setVistaActual('fichatecnico');
                                 }}
+
+                                onAbrirReporteAdmin={() => setVistaActual('AbrirReporteAdmin')}
                             />
                         )}
                         {vistaActual === 'fichatecnico' && tecnicoSeleccionadoId && (
                             <DetalleTecnicoPage
                                 tecnicoId={tecnicoSeleccionadoId}
                                 onVolver={() => setVistaActual('dashboard')}
-                                onAbrirReporteAdmin={() => setVistaActual('AbrirReporteAdmin')}
                             />
                         )}
                         {vistaActual === 'AbrirReporteAdmin' && (

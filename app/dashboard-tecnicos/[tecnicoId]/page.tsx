@@ -7,11 +7,9 @@ import { Router } from 'next/router';
 export default function DetalleTecnicoPage({
     tecnicoId,
     onVolver,
-    onAbrirReporteAdmin
 }: {
     tecnicoId: string;
     onVolver: () => void;
-    onAbrirReporteAdmin: () => void;
 }) {
 
     const [data, setData] = useState<any>(null);
@@ -140,20 +138,7 @@ export default function DetalleTecnicoPage({
                             </a>
                         )}
                     </div>
-                    <div
-                        onClick={() => { onAbrirReporteAdmin(); }}
-                        className="cursor-pointer bg-white rounded-3xl shadow-lg p-6 hover:shadow-2xl transition"
-                    >
-                        <div className="text-4xl mb-3">📋</div>
 
-                        <h3 className="text-xl font-bold text-slate-900">
-                            Reportes Técnicos
-                        </h3>
-
-                        <p className="text-slate-500 mt-2">
-                            Crear reportes de pagos, atención y desempeño para técnicos.
-                        </p>
-                    </div>
 
                 </div>
 
