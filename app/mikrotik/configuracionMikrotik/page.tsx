@@ -47,6 +47,58 @@ export default function ConfiguracionMikrotikPage() {
     const [toPortNat, setToPortNat] = useState('80');
     const [commentNat, setCommentNat] = useState('');
 
+    const [proxyInfo, setProxyInfo] = useState<any>(null);
+    const [proxyAccess, setProxyAccess] = useState<any[]>([]);
+    const [proxyPort, setProxyPort] = useState('8080');
+    const [cargandoProxy, setCargandoProxy] = useState(false);
+    const [modalProxyAccess, setModalProxyAccess] = useState(false);
+
+    const [proxySrcAddress, setProxySrcAddress] = useState('');
+    const [proxyDstHost, setProxyDstHost] = useState('');
+    const [proxyPath, setProxyPath] = useState('');
+    const [proxyAction, setProxyAction] = useState('deny');
+    const [proxyRedirectTo, setProxyRedirectTo] = useState('');
+    const [proxyComment, setProxyComment] = useState('');
+
+    const [ipPools, setIpPools] = useState<any[]>([]);
+    const [cargandoIpPool, setCargandoIpPool] = useState(false);
+    const [modalIpPool, setModalIpPool] = useState(false);
+
+    const [poolName, setPoolName] = useState('');
+    const [poolRanges, setPoolRanges] = useState('');
+    const [poolComment, setPoolComment] = useState('');
+
+    const [ipRoutes, setIpRoutes] = useState<any[]>([]);
+    const [cargandoIpRoutes, setCargandoIpRoutes] = useState(false);
+    const [modalIpRoute, setModalIpRoute] = useState(false);
+
+    const [routeDstAddress, setRouteDstAddress] = useState('');
+    const [routeGateway, setRouteGateway] = useState('');
+    const [routeDistance, setRouteDistance] = useState('1');
+    const [routeComment, setRouteComment] = useState('');
+
+    const [interfacesMk, setInterfacesMk] = useState<any[]>([]);
+    const [interfaceSeleccionada, setInterfaceSeleccionada] = useState('');
+    const [traficoInterfaces, setTraficoInterfaces] = useState<any[]>([]);
+    const [monitoreandoInterface, setMonitoreandoInterface] = useState(false);
+    const [cargandoInterfaces, setCargandoInterfaces] = useState(false);
+
+    const [backupsMk, setBackupsMk] = useState<any[]>([]);
+    const [cargandoBackups, setCargandoBackups] = useState(false);
+    const [creandoBackup, setCreandoBackup] = useState(false);
+    const [restaurandoBackup, setRestaurandoBackup] = useState(false);
+
+    const [backupNombre, setBackupNombre] = useState('');
+    const [backupTipo, setBackupTipo] = useState<'backup' | 'rsc'>('backup');
+
+    const [systemUsers, setSystemUsers] = useState<any[]>([]);
+    const [cargandoSystemUsers, setCargandoSystemUsers] = useState(false);
+
+    const [userNameMk, setUserNameMk] = useState('');
+    const [userPasswordMk, setUserPasswordMk] = useState('');
+    const [userGroupMk, setUserGroupMk] = useState('read');
+    const [userCommentMk, setUserCommentMk] = useState('');
+
     const token = () => getToken();
 
     async function cargarRouters() {
@@ -601,6 +653,697 @@ export default function ConfiguracionMikrotikPage() {
         }
     }
 
+    async function cargarProxy() {
+        if (!routerId) return;
+
+        setCargandoProxy(true);
+
+        try {
+            const [resStatus, resAccess] = await Promise.all([
+                fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/proxy/status`, {
+                    headers: { Authorization: `Bearer ${getToken()}` },
+                }),
+                fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/proxy/access`, {
+                    headers: { Authorization: `Bearer ${getToken()}` },
+                }),
+            ]);
+
+            const status = await resStatus.json();
+            const access = await resAccess.json();
+
+            if (status.ok) {
+                setProxyInfo(status.proxy || null);
+                setProxyPort(status.proxy?.port || '8080');
+            }
+
+            if (access.ok) {
+                setProxyAccess(access.datos || []);
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Error cargando proxy');
+        } finally {
+            setCargandoProxy(false);
+        }
+    }
+
+    async function configurarProxy(enabled?: boolean) {
+        if (!routerId) return;
+
+        try {
+            const body: any = {};
+
+            if (typeof enabled === 'boolean') {
+                body.enabled = enabled;
+            }
+
+            if (proxyPort) {
+                body.port = proxyPort;
+            }
+
+            const res = await fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/proxy/config`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getToken()}`,
+                },
+                body: JSON.stringify(body),
+            });
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.message || 'Error configurando proxy');
+                return;
+            }
+
+            await cargarProxy();
+        } catch (error) {
+            console.error(error);
+            alert('Error configurando proxy');
+        }
+    }
+
+    async function agregarProxyAccess() {
+        if (!routerId) return;
+
+        try {
+            const res = await fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/proxy/access`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getToken()}`,
+                },
+                body: JSON.stringify({
+                    srcAddress: proxySrcAddress,
+                    dstHost: proxyDstHost,
+                    path: proxyPath,
+                    action: proxyAction,
+                    redirectTo: proxyRedirectTo,
+                    comment: proxyComment,
+                }),
+            });
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.message || 'Error agregando proxy access');
+                return;
+            }
+
+            setModalProxyAccess(false);
+            setProxySrcAddress('');
+            setProxyDstHost('');
+            setProxyPath('');
+            setProxyAction('deny');
+            setProxyRedirectTo('');
+            setProxyComment('');
+
+            await cargarProxy();
+        } catch (error) {
+            console.error(error);
+            alert('Error agregando proxy access');
+        }
+    }
+
+    async function eliminarProxyAccess(id: string) {
+        if (!confirm('¿Eliminar esta regla Proxy Access?')) return;
+
+        try {
+            const res = await fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/proxy/access/remove`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getToken()}`,
+                },
+                body: JSON.stringify({ id }),
+            });
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.message || 'Error eliminando regla');
+                return;
+            }
+
+            await cargarProxy();
+        } catch (error) {
+            console.error(error);
+            alert('Error eliminando proxy access');
+        }
+    }
+
+    async function cargarIpPools() {
+        if (!routerId) return;
+
+        setCargandoIpPool(true);
+
+        try {
+            const res = await fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/ip-pool`, {
+                headers: {
+                    Authorization: `Bearer ${getToken()}`,
+                },
+            });
+
+            const data = await res.json();
+
+            if (data.ok) {
+                setIpPools(data.datos || []);
+            } else {
+                alert(data.message || 'Error listando IP Pool');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Error conectando con backend');
+        } finally {
+            setCargandoIpPool(false);
+        }
+    }
+
+    async function guardarIpPool() {
+        if (!routerId) return alert('Seleccione un router');
+        if (!poolName.trim()) return alert('Ingrese el nombre del pool');
+        if (!poolRanges.trim()) return alert('Ingrese el rango del pool');
+
+        try {
+            const res = await fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/ip-pool`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getToken()}`,
+                },
+                body: JSON.stringify({
+                    name: poolName.trim(),
+                    ranges: poolRanges.trim(),
+                    comment: poolComment.trim(),
+                }),
+            });
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.message || 'Error creando IP Pool');
+                return;
+            }
+
+            setModalIpPool(false);
+            setPoolName('');
+            setPoolRanges('');
+            setPoolComment('');
+
+            await cargarIpPools();
+        } catch (error) {
+            console.error(error);
+            alert('Error creando IP Pool');
+        }
+    }
+
+    async function eliminarIpPool(id: string) {
+        if (!confirm('¿Eliminar este IP Pool?')) return;
+
+        try {
+            const res = await fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/ip-pool/remove`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getToken()}`,
+                },
+                body: JSON.stringify({ id }),
+            });
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.message || 'Error eliminando IP Pool');
+                return;
+            }
+
+            await cargarIpPools();
+        } catch (error) {
+            console.error(error);
+            alert('Error eliminando IP Pool');
+        }
+    }
+
+    async function cargarIpRoutes() {
+        if (!routerId) return;
+
+        setCargandoIpRoutes(true);
+
+        try {
+            const res = await fetch(
+                `${API_BASE}/mikrotik-conf/routers/${routerId}/ip-routes`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${getToken()}`,
+                    },
+                }
+            );
+
+            const data = await res.json();
+
+            if (data.ok) {
+                setIpRoutes(data.datos || []);
+            } else {
+                alert(data.message || 'Error listando rutas');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Error cargando rutas');
+        } finally {
+            setCargandoIpRoutes(false);
+        }
+    }
+
+    async function guardarIpRoute() {
+        if (!routerId) return;
+
+        if (!routeDstAddress.trim()) {
+            return alert('Ingrese destino');
+        }
+
+        if (!routeGateway.trim()) {
+            return alert('Ingrese gateway');
+        }
+
+        try {
+            const res = await fetch(
+                `${API_BASE}/mikrotik-conf/routers/${routerId}/ip-routes`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${getToken()}`,
+                    },
+                    body: JSON.stringify({
+                        dstAddress: routeDstAddress,
+                        gateway: routeGateway,
+                        distance: routeDistance,
+                        comment: routeComment,
+                    }),
+                }
+            );
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.message || 'Error creando ruta');
+                return;
+            }
+
+            setModalIpRoute(false);
+
+            setRouteDstAddress('');
+            setRouteGateway('');
+            setRouteDistance('1');
+            setRouteComment('');
+
+            await cargarIpRoutes();
+
+        } catch (error) {
+            console.error(error);
+            alert('Error creando ruta');
+        }
+    }
+
+    async function eliminarIpRoute(id: string) {
+        if (!confirm('¿Eliminar esta ruta?')) return;
+
+        try {
+            const res = await fetch(
+                `${API_BASE}/mikrotik-conf/routers/${routerId}/ip-routes/remove`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${getToken()}`,
+                    },
+                    body: JSON.stringify({ id }),
+                }
+            );
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.message || 'Error eliminando ruta');
+                return;
+            }
+
+            await cargarIpRoutes();
+
+        } catch (error) {
+            console.error(error);
+            alert('Error eliminando ruta');
+        }
+    }
+
+    async function cambiarEstadoIpRoute(
+        id: string,
+        disabledActual: string
+    ) {
+        const estaDeshabilitada = disabledActual === 'true';
+
+        try {
+            const res = await fetch(
+                `${API_BASE}/mikrotik-conf/routers/${routerId}/ip-routes/disabled`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${getToken()}`,
+                    },
+                    body: JSON.stringify({
+                        id,
+                        disabled: !estaDeshabilitada,
+                    }),
+                }
+            );
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.message || 'Error cambiando estado');
+                return;
+            }
+
+            await cargarIpRoutes();
+
+        } catch (error) {
+            console.error(error);
+            alert('Error cambiando estado');
+        }
+    }
+
+    async function cargarInterfaces() {
+        if (!routerId) return alert('Seleccione un router');
+
+        setCargandoInterfaces(true);
+
+        try {
+            const res = await fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/interfaces`, {
+                headers: {
+                    Authorization: `Bearer ${getToken()}`,
+                },
+            });
+
+            const data = await res.json();
+
+            if (data.ok) {
+                setInterfacesMk(data.datos || []);
+            } else {
+                alert(data.message || 'Error cargando interfaces');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Error conectando con backend');
+        } finally {
+            setCargandoInterfaces(false);
+        }
+    }
+
+    async function consultarTraficoInterface() {
+        if (!routerId || !interfaceSeleccionada) return;
+
+        try {
+            const res = await fetch(
+                `${API_BASE}/mikrotik-conf/routers/${routerId}/interfaces/traffic`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${getToken()}`,
+                    },
+                    body: JSON.stringify({
+                        interfaceName: interfaceSeleccionada,
+                    }),
+                }
+            );
+
+            const data = await res.json();
+
+            if (!data.ok) return;
+
+            const hora = new Date().toLocaleTimeString();
+
+            setTraficoInterfaces((prev) => {
+                const nuevo = [
+                    ...prev,
+                    {
+                        hora,
+                        rxMbps: Number(data.rxMbps || 0),
+                        txMbps: Number(data.txMbps || 0),
+                    },
+                ];
+
+                return nuevo.slice(-20);
+            });
+
+        } catch (error) {
+            console.error('Error consultando tráfico:', error);
+        }
+    }
+
+    async function cargarBackups() {
+        if (!routerId) return alert('Seleccione un router');
+
+        setCargandoBackups(true);
+
+        try {
+            const res = await fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/backup/files`, {
+                headers: {
+                    Authorization: `Bearer ${getToken()}`,
+                },
+            });
+
+            const data = await res.json();
+
+            if (data.ok) {
+                setBackupsMk(data.datos || []);
+            } else {
+                alert(data.message || 'Error cargando backups');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Error conectando con backend');
+        } finally {
+            setCargandoBackups(false);
+        }
+    }
+
+    async function crearBackup() {
+        if (!routerId) return alert('Seleccione un router');
+
+        const nombreFinal =
+            backupNombre.trim() ||
+            `backup-router-${routerId}-${new Date().toISOString().slice(0, 10)}`;
+
+        if (!confirm(`¿Crear respaldo ${backupTipo.toUpperCase()} llamado ${nombreFinal}?`)) {
+            return;
+        }
+
+        setCreandoBackup(true);
+
+        try {
+            const res = await fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/backup/create`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getToken()}`,
+                },
+                body: JSON.stringify({
+                    nombre: nombreFinal,
+                    tipo: backupTipo,
+                }),
+            });
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.message || 'Error creando backup');
+                return;
+            }
+
+            setBackupNombre('');
+            await cargarBackups();
+
+            alert(data.message || 'Backup creado correctamente');
+        } catch (error) {
+            console.error(error);
+            alert('Error creando backup');
+        } finally {
+            setCreandoBackup(false);
+        }
+    }
+
+    async function restaurarBackup(fileName: string) {
+        if (!routerId) return alert('Seleccione un router');
+
+        if (!fileName.toLowerCase().endsWith('.backup')) {
+            alert('Solo se puede restaurar archivos .backup');
+            return;
+        }
+
+        const confirmar = confirm(
+            `ADVERTENCIA:\n\nVas a restaurar el backup:\n${fileName}\n\nEl MikroTik puede reiniciarse y perder conexión temporalmente.\n\n¿Deseas continuar?`
+        );
+
+        if (!confirmar) return;
+
+        setRestaurandoBackup(true);
+
+        try {
+            const res = await fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/backup/restore`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getToken()}`,
+                },
+                body: JSON.stringify({
+                    fileName,
+                }),
+            });
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.message || 'Error restaurando backup');
+                return;
+            }
+
+            alert(data.message || 'Restauración enviada al MikroTik');
+        } catch (error) {
+            console.error(error);
+            alert('Error restaurando backup');
+        } finally {
+            setRestaurandoBackup(false);
+        }
+    }
+
+    async function cargarSystemUsers() {
+        if (!routerId) return alert('Seleccione un router');
+
+        setCargandoSystemUsers(true);
+
+        try {
+            const res = await fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/system-users`, {
+                headers: {
+                    Authorization: `Bearer ${getToken()}`,
+                },
+            });
+
+            const data = await res.json();
+
+            if (data.ok) {
+                setSystemUsers(data.datos || []);
+            } else {
+                alert(data.message || 'Error cargando usuarios');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Error conectando con backend');
+        } finally {
+            setCargandoSystemUsers(false);
+        }
+    }
+
+    async function agregarSystemUser() {
+        if (!routerId) return alert('Seleccione un router');
+        if (!userNameMk.trim()) return alert('Ingrese usuario');
+        if (!userPasswordMk.trim()) return alert('Ingrese contraseña');
+
+        try {
+            const res = await fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/system-users`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getToken()}`,
+                },
+                body: JSON.stringify({
+                    name: userNameMk.trim(),
+                    password: userPasswordMk.trim(),
+                    group: userGroupMk,
+                    comment: userCommentMk.trim(),
+                }),
+            });
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.message || 'Error creando usuario');
+                return;
+            }
+
+            setUserNameMk('');
+            setUserPasswordMk('');
+            setUserGroupMk('read');
+            setUserCommentMk('');
+
+            await cargarSystemUsers();
+
+            alert(data.message || 'Usuario creado correctamente');
+        } catch (error) {
+            console.error(error);
+            alert('Error creando usuario');
+        }
+    }
+
+    async function eliminarSystemUser(id: string, name: string) {
+        if (!confirm(`¿Eliminar el usuario ${name}?`)) return;
+
+        try {
+            const res = await fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/system-users/remove`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getToken()}`,
+                },
+                body: JSON.stringify({ id }),
+            });
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.message || 'Error eliminando usuario');
+                return;
+            }
+
+            await cargarSystemUsers();
+        } catch (error) {
+            console.error(error);
+            alert('Error eliminando usuario');
+        }
+    }
+
+    async function cambiarEstadoSystemUser(id: string, disabledActual: string) {
+        const estaDesactivado = disabledActual === 'true';
+
+        try {
+            const res = await fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/system-users/disabled`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getToken()}`,
+                },
+                body: JSON.stringify({
+                    id,
+                    disabled: !estaDesactivado,
+                }),
+            });
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.message || 'Error cambiando estado');
+                return;
+            }
+
+            await cargarSystemUsers();
+        } catch (error) {
+            console.error(error);
+            alert('Error cambiando estado del usuario');
+        }
+    }
+
     useEffect(() => {
         cargarRouters();
     }, []);
@@ -613,6 +1356,19 @@ export default function ConfiguracionMikrotikPage() {
             console.log("STATUS FIREWALL:", statusFirewall);
         }
     }, [routerId]);
+
+    useEffect(() => {
+        if (!monitoreandoInterface) return;
+        if (!routerId || !interfaceSeleccionada) return;
+
+        consultarTraficoInterface();
+
+        const intervalo = setInterval(() => {
+            consultarTraficoInterface();
+        }, 3000);
+
+        return () => clearInterval(intervalo);
+    }, [monitoreandoInterface, routerId, interfaceSeleccionada]);
 
     return (
         <main className="min-h-screen bg-slate-950 text-white p-6">
@@ -773,7 +1529,7 @@ export default function ConfiguracionMikrotikPage() {
                 </div>
 
 
-                <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
+                <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex items-center justify-between mb-4">
                         <div>
                             <h2 className="text-lg font-bold">IP Address</h2>
@@ -892,7 +1648,7 @@ export default function ConfiguracionMikrotikPage() {
                     </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
+                <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex items-center justify-between mb-4">
                         <div>
                             <h2 className="text-lg font-bold">NAT</h2>
@@ -1075,11 +1831,911 @@ export default function ConfiguracionMikrotikPage() {
                     )}
                 </div>
 
-                <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
-                    <h2 className="text-lg font-bold mb-2">Backup</h2>
-                    <p className="text-sm text-slate-400">
-                        Aquí luego agregamos export, backup y respaldo automático.
-                    </p>
+                <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <h2 className="text-lg font-bold">Web Proxy Corte</h2>
+                            <p className="text-sm text-slate-400">
+                                Configuración del proxy usado para redirección de clientes cortados.
+                            </p>
+                        </div>
+
+                        <button
+                            onClick={cargarProxy}
+                            disabled={!routerId || cargandoProxy}
+                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                        >
+                            {cargandoProxy ? 'Cargando...' : 'Cargar'}
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5">
+                        <div className="rounded-xl bg-slate-800 border border-slate-700 p-3">
+                            <p className="text-xs text-slate-400">Estado</p>
+                            <p className={proxyInfo?.enabled === 'true' ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
+                                {proxyInfo?.enabled === 'true' ? 'Activo' : 'Inactivo'}
+                            </p>
+                        </div>
+
+                        <input
+                            value={proxyPort}
+                            onChange={(e) => setProxyPort(e.target.value)}
+                            placeholder="Puerto proxy Ej: 8080"
+                            className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                        />
+
+                        <button
+                            onClick={() => configurarProxy(true)}
+                            disabled={!routerId}
+                            className="bg-green-600 hover:bg-green-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                        >
+                            Activar / Guardar puerto
+                        </button>
+
+                        <button
+                            onClick={() => configurarProxy(false)}
+                            disabled={!routerId}
+                            className="bg-red-600 hover:bg-red-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                        >
+                            Desactivar Proxy
+                        </button>
+                    </div>
+
+                    <div className="flex justify-between items-center mb-3">
+                        <h3 className="font-semibold">Reglas Proxy Access</h3>
+
+                        <button
+                            onClick={() => setModalProxyAccess(true)}
+                            disabled={!routerId}
+                            className="bg-green-600 hover:bg-green-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                        >
+                            Agregar Access
+                        </button>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b border-slate-700 text-slate-400">
+                                    <th className="text-left py-2">Src Address</th>
+                                    <th className="text-left py-2">Dst Host</th>
+                                    <th className="text-left py-2">Path</th>
+                                    <th className="text-left py-2">Action</th>
+                                    <th className="text-left py-2">Redirect To</th>
+                                    <th className="text-left py-2">Comentario</th>
+                                    <th className="text-right py-2">Acciones</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {proxyAccess.length === 0 && (
+                                    <tr>
+                                        <td colSpan={7} className="py-4 text-center text-slate-500">
+                                            No hay reglas proxy access cargadas
+                                        </td>
+                                    </tr>
+                                )}
+
+                                {proxyAccess.map((item) => {
+                                    const id = item['.id'];
+
+                                    return (
+                                        <tr key={id} className="border-b border-slate-800">
+                                            <td className="py-2">{item['src-address'] || '-'}</td>
+                                            <td className="py-2">{item['dst-host'] || '-'}</td>
+                                            <td className="py-2">{item.path || '-'}</td>
+                                            <td className="py-2">{item.action || '-'}</td>
+                                            <td className="py-2">{item['redirect-to'] || '-'}</td>
+                                            <td className="py-2">{item.comment || '-'}</td>
+                                            <td className="py-2 text-right">
+                                                <button
+                                                    onClick={() => eliminarProxyAccess(id)}
+                                                    className="bg-red-600 hover:bg-red-700 rounded-lg px-3 py-1 text-xs font-semibold"
+                                                >
+                                                    Eliminar
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {modalProxyAccess && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+                            <div className="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 p-6">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-lg font-bold">Agregar Proxy Access</h3>
+
+                                    <button
+                                        onClick={() => setModalProxyAccess(false)}
+                                        className="text-slate-400 hover:text-white"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <input
+                                        value={proxySrcAddress}
+                                        onChange={(e) => setProxySrcAddress(e.target.value)}
+                                        placeholder="Src Address Ej: 192.168.80.0/24"
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                                    />
+
+                                    <input
+                                        value={proxyDstHost}
+                                        onChange={(e) => setProxyDstHost(e.target.value)}
+                                        placeholder="Dst Host Ej: *"
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                                    />
+
+                                    <input
+                                        value={proxyPath}
+                                        onChange={(e) => setProxyPath(e.target.value)}
+                                        placeholder="Path Ej: *"
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                                    />
+
+                                    <select
+                                        value={proxyAction}
+                                        onChange={(e) => setProxyAction(e.target.value)}
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                                    >
+                                        <option value="deny">deny</option>
+                                        <option value="allow">allow</option>
+                                    </select>
+
+                                    <input
+                                        value={proxyRedirectTo}
+                                        onChange={(e) => setProxyRedirectTo(e.target.value)}
+                                        placeholder="Redirect To Ej: http://192.168.1.2/corte"
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                                    />
+
+                                    <input
+                                        value={proxyComment}
+                                        onChange={(e) => setProxyComment(e.target.value)}
+                                        placeholder="Comentario"
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                                    />
+                                </div>
+
+                                <div className="flex justify-end gap-2 mt-5">
+                                    <button
+                                        onClick={() => setModalProxyAccess(false)}
+                                        className="bg-slate-700 hover:bg-slate-600 rounded-xl px-4 py-2 text-sm font-semibold"
+                                    >
+                                        Cancelar
+                                    </button>
+
+                                    <button
+                                        onClick={agregarProxyAccess}
+                                        className="bg-green-600 hover:bg-green-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                                    >
+                                        Guardar Access
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <h2 className="text-lg font-bold">IP Pool</h2>
+                            <p className="text-sm text-slate-400">
+                                Administra los rangos de IP usados por DHCP, PPPoE u otros servicios.
+                            </p>
+                        </div>
+
+                        <div className="flex gap-2">
+                            <button
+                                onClick={cargarIpPools}
+                                disabled={!routerId || cargandoIpPool}
+                                className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                {cargandoIpPool ? 'Cargando...' : 'Cargar'}
+                            </button>
+
+                            <button
+                                onClick={() => setModalIpPool(true)}
+                                disabled={!routerId}
+                                className="bg-green-600 hover:bg-green-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                Agregar Pool
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b border-slate-700 text-slate-400">
+                                    <th className="text-left py-2">Nombre</th>
+                                    <th className="text-left py-2">Rangos</th>
+                                    <th className="text-left py-2">Next Pool</th>
+                                    <th className="text-left py-2">Comentario</th>
+                                    <th className="text-right py-2">Acciones</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {ipPools.length === 0 && (
+                                    <tr>
+                                        <td colSpan={5} className="py-4 text-center text-slate-500">
+                                            No hay IP Pool cargados
+                                        </td>
+                                    </tr>
+                                )}
+
+                                {ipPools.map((item) => {
+                                    const id = item['.id'];
+
+                                    return (
+                                        <tr key={id} className="border-b border-slate-800">
+                                            <td className="py-2 font-semibold">{item.name || '-'}</td>
+                                            <td className="py-2">{item.ranges || '-'}</td>
+                                            <td className="py-2">{item['next-pool'] || '-'}</td>
+                                            <td className="py-2">{item.comment || '-'}</td>
+                                            <td className="py-2 text-right">
+                                                <button
+                                                    onClick={() => eliminarIpPool(id)}
+                                                    className="bg-red-600 hover:bg-red-700 rounded-lg px-3 py-1 text-xs font-semibold"
+                                                >
+                                                    Eliminar
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {modalIpPool && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+                            <div className="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 p-6">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-lg font-bold">Agregar IP Pool</h3>
+
+                                    <button
+                                        onClick={() => setModalIpPool(false)}
+                                        className="text-slate-400 hover:text-white"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <input
+                                        value={poolName}
+                                        onChange={(e) => setPoolName(e.target.value)}
+                                        placeholder="Nombre Ej: pool-clientes"
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                                    />
+
+                                    <input
+                                        value={poolRanges}
+                                        onChange={(e) => setPoolRanges(e.target.value)}
+                                        placeholder="Rango Ej: 192.168.80.10-192.168.80.250"
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                                    />
+
+                                    <input
+                                        value={poolComment}
+                                        onChange={(e) => setPoolComment(e.target.value)}
+                                        placeholder="Comentario"
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                                    />
+                                </div>
+
+                                <div className="flex justify-end gap-2 mt-5">
+                                    <button
+                                        onClick={() => setModalIpPool(false)}
+                                        className="bg-slate-700 hover:bg-slate-600 rounded-xl px-4 py-2 text-sm font-semibold"
+                                    >
+                                        Cancelar
+                                    </button>
+
+                                    <button
+                                        onClick={guardarIpPool}
+                                        className="bg-green-600 hover:bg-green-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                                    >
+                                        Guardar Pool
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <h2 className="text-lg font-bold">IP Routes</h2>
+                            <p className="text-sm text-slate-400">
+                                Administración de rutas estáticas.
+                            </p>
+                        </div>
+
+                        <div className="flex gap-2">
+                            <button
+                                onClick={cargarIpRoutes}
+                                className="bg-blue-600 hover:bg-blue-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                Cargar
+                            </button>
+
+                            <button
+                                onClick={() => setModalIpRoute(true)}
+                                className="bg-green-600 hover:bg-green-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                Agregar Ruta
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b border-slate-700 text-slate-400">
+                                    <th className="text-left py-2">Destino</th>
+                                    <th className="text-left py-2">Gateway</th>
+                                    <th className="text-left py-2">Distance</th>
+                                    <th className="text-left py-2">Comentario</th>
+                                    <th className="text-left py-2">Estado</th>
+                                    <th className="text-right py-2">Acciones</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {ipRoutes.map((item) => {
+                                    const id = item['.id'];
+                                    const deshabilitada = item.disabled === 'true';
+
+                                    return (
+                                        <tr
+                                            key={id}
+                                            className="border-b border-slate-800"
+                                        >
+                                            <td className="py-2">
+                                                {item['dst-address']}
+                                            </td>
+
+                                            <td className="py-2">
+                                                {item.gateway}
+                                            </td>
+
+                                            <td className="py-2">
+                                                {item.distance}
+                                            </td>
+
+                                            <td className="py-2">
+                                                {item.comment || '-'}
+                                            </td>
+
+                                            <td className="py-2">
+                                                <span
+                                                    className={
+                                                        deshabilitada
+                                                            ? 'text-red-400'
+                                                            : 'text-green-400'
+                                                    }
+                                                >
+                                                    {deshabilitada
+                                                        ? 'Desactivada'
+                                                        : 'Activa'}
+                                                </span>
+                                            </td>
+
+                                            <td className="py-2 text-right space-x-2">
+                                                <button
+                                                    onClick={() =>
+                                                        cambiarEstadoIpRoute(
+                                                            id,
+                                                            item.disabled
+                                                        )
+                                                    }
+                                                    className={
+                                                        deshabilitada
+                                                            ? 'bg-green-600 hover:bg-green-700 rounded-lg px-3 py-1 text-xs'
+                                                            : 'bg-yellow-600 hover:bg-yellow-700 rounded-lg px-3 py-1 text-xs'
+                                                    }
+                                                >
+                                                    {deshabilitada
+                                                        ? 'Activar'
+                                                        : 'Desactivar'}
+                                                </button>
+
+                                                <button
+                                                    onClick={() =>
+                                                        eliminarIpRoute(id)
+                                                    }
+                                                    className="bg-red-600 hover:bg-red-700 rounded-lg px-3 py-1 text-xs"
+                                                >
+                                                    Eliminar
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                    {modalIpRoute && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+                            <div className="w-full max-w-xl rounded-2xl border border-slate-700 bg-slate-900 p-6">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-lg font-bold">
+                                        Agregar Ruta
+                                    </h3>
+
+                                    <button
+                                        onClick={() => setModalIpRoute(false)}
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+
+                                <div className="space-y-3">
+                                    <input
+                                        value={routeDstAddress}
+                                        onChange={(e) =>
+                                            setRouteDstAddress(e.target.value)
+                                        }
+                                        placeholder="Destino Ej: 0.0.0.0/0"
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                                    />
+
+                                    <input
+                                        value={routeGateway}
+                                        onChange={(e) =>
+                                            setRouteGateway(e.target.value)
+                                        }
+                                        placeholder="Gateway Ej: 192.168.1.1"
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                                    />
+
+                                    <input
+                                        value={routeDistance}
+                                        onChange={(e) =>
+                                            setRouteDistance(e.target.value)
+                                        }
+                                        placeholder="Distance"
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                                    />
+
+                                    <input
+                                        value={routeComment}
+                                        onChange={(e) =>
+                                            setRouteComment(e.target.value)
+                                        }
+                                        placeholder="Comentario"
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                                    />
+                                </div>
+
+                                <div className="flex justify-end gap-2 mt-5">
+                                    <button
+                                        onClick={() => setModalIpRoute(false)}
+                                        className="bg-slate-700 hover:bg-slate-600 rounded-xl px-4 py-2"
+                                    >
+                                        Cancelar
+                                    </button>
+
+                                    <button
+                                        onClick={guardarIpRoute}
+                                        className="bg-green-600 hover:bg-green-700 rounded-xl px-4 py-2"
+                                    >
+                                        Guardar Ruta
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
+                        <div>
+                            <h2 className="text-lg font-bold">Backup MikroTik</h2>
+                            <p className="text-sm text-slate-400">
+                                Lista archivos de respaldo, crea backup/export y permite restaurar archivos .backup.
+                            </p>
+                        </div>
+
+                        <button
+                            onClick={cargarBackups}
+                            disabled={!routerId || cargandoBackups}
+                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                        >
+                            {cargandoBackups ? 'Cargando...' : 'Cargar backups'}
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5">
+                        <input
+                            value={backupNombre}
+                            onChange={(e) => setBackupNombre(e.target.value)}
+                            placeholder="Nombre respaldo Ej: respaldo-core"
+                            className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                        />
+
+                        <select
+                            value={backupTipo}
+                            onChange={(e) => setBackupTipo(e.target.value as 'backup' | 'rsc')}
+                            className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                        >
+                            <option value="backup">Backup .backup</option>
+                            <option value="rsc">Export .rsc</option>
+                        </select>
+
+                        <button
+                            onClick={crearBackup}
+                            disabled={!routerId || creandoBackup}
+                            className="bg-green-600 hover:bg-green-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                        >
+                            {creandoBackup ? 'Creando...' : 'Crear respaldo'}
+                        </button>
+
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 px-4 py-2 text-sm">
+                            <p className="text-slate-400 text-xs">Total archivos</p>
+                            <p className="font-bold">{backupsMk.length}</p>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b border-slate-700 text-slate-400">
+                                    <th className="text-left py-2">Archivo</th>
+                                    <th className="text-left py-2">Tipo</th>
+                                    <th className="text-left py-2">Tamaño</th>
+                                    <th className="text-left py-2">Fecha</th>
+                                    <th className="text-right py-2">Acciones</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {backupsMk.length === 0 && (
+                                    <tr>
+                                        <td colSpan={5} className="py-4 text-center text-slate-500">
+                                            No hay backups cargados
+                                        </td>
+                                    </tr>
+                                )}
+
+                                {backupsMk.map((item) => {
+                                    const name = item.name || '-';
+                                    const esBackup = String(name).toLowerCase().endsWith('.backup');
+                                    const esRsc = String(name).toLowerCase().endsWith('.rsc');
+
+                                    return (
+                                        <tr key={item['.id'] || name} className="border-b border-slate-800">
+                                            <td className="py-2 font-semibold">{name}</td>
+
+                                            <td className="py-2">
+                                                <span
+                                                    className={
+                                                        esBackup
+                                                            ? 'text-green-400 font-semibold'
+                                                            : esRsc
+                                                                ? 'text-cyan-400 font-semibold'
+                                                                : 'text-slate-400'
+                                                    }
+                                                >
+                                                    {esBackup ? '.backup' : esRsc ? '.rsc' : 'otro'}
+                                                </span>
+                                            </td>
+
+                                            <td className="py-2">
+                                                {item.size || item['size'] || '-'}
+                                            </td>
+
+                                            <td className="py-2">
+                                                {item['creation-time'] || '-'}
+                                            </td>
+
+                                            <td className="py-2 text-right">
+                                                {esBackup ? (
+                                                    <button
+                                                        onClick={() => restaurarBackup(name)}
+                                                        disabled={restaurandoBackup}
+                                                        className="bg-red-600 hover:bg-red-700 disabled:bg-slate-700 rounded-lg px-3 py-1 text-xs font-semibold"
+                                                    >
+                                                        {restaurandoBackup ? 'Restaurando...' : 'Restaurar'}
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-xs text-slate-500">
+                                                        Solo lectura
+                                                    </span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="mt-4 rounded-xl border border-yellow-700 bg-yellow-950/40 p-3 text-sm text-yellow-200">
+                        Importante: restaurar un archivo .backup puede reiniciar el MikroTik y cortar la conexión temporalmente.
+                        Los archivos .rsc son exportaciones de configuración y por ahora solo se crean/listan.
+                    </div>
+                </div>
+                <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
+                        <div>
+                            <h2 className="text-lg font-bold">Usuarios del Sistema MikroTik</h2>
+                            <p className="text-sm text-slate-400">
+                                Administra usuarios internos del MikroTik: listar, crear, activar, desactivar y eliminar.
+                            </p>
+                        </div>
+
+                        <button
+                            onClick={cargarSystemUsers}
+                            disabled={!routerId || cargandoSystemUsers}
+                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                        >
+                            {cargandoSystemUsers ? 'Cargando...' : 'Cargar usuarios'}
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-5">
+                        <input
+                            value={userNameMk}
+                            onChange={(e) => setUserNameMk(e.target.value)}
+                            placeholder="Usuario"
+                            className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                        />
+
+                        <input
+                            value={userPasswordMk}
+                            onChange={(e) => setUserPasswordMk(e.target.value)}
+                            type="password"
+                            placeholder="Contraseña"
+                            className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                        />
+
+                        <select
+                            value={userGroupMk}
+                            onChange={(e) => setUserGroupMk(e.target.value)}
+                            className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                        >
+                            <option value="read">read</option>
+                            <option value="write">write</option>
+                            <option value="full">full</option>
+                        </select>
+
+                        <input
+                            value={userCommentMk}
+                            onChange={(e) => setUserCommentMk(e.target.value)}
+                            placeholder="Comentario"
+                            className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                        />
+
+                        <button
+                            onClick={agregarSystemUser}
+                            disabled={!routerId}
+                            className="bg-green-600 hover:bg-green-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                        >
+                            Agregar usuario
+                        </button>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead>
+                                <tr className="border-b border-slate-700 text-slate-400">
+                                    <th className="text-left py-2">Usuario</th>
+                                    <th className="text-left py-2">Grupo</th>
+                                    <th className="text-left py-2">Comentario</th>
+                                    <th className="text-left py-2">Último login</th>
+                                    <th className="text-left py-2">Estado</th>
+                                    <th className="text-right py-2">Acciones</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {systemUsers.length === 0 && (
+                                    <tr>
+                                        <td colSpan={6} className="py-4 text-center text-slate-500">
+                                            No hay usuarios cargados
+                                        </td>
+                                    </tr>
+                                )}
+
+                                {systemUsers.map((item) => {
+                                    const id = item['.id'];
+                                    const desactivado = item.disabled === 'true';
+
+                                    return (
+                                        <tr key={id} className="border-b border-slate-800">
+                                            <td className="py-2 font-semibold">{item.name || '-'}</td>
+                                            <td className="py-2">{item.group || '-'}</td>
+                                            <td className="py-2">{item.comment || '-'}</td>
+                                            <td className="py-2">{item['last-logged-in'] || '-'}</td>
+
+                                            <td className="py-2">
+                                                <span
+                                                    className={
+                                                        desactivado
+                                                            ? 'text-red-400 font-semibold'
+                                                            : 'text-green-400 font-semibold'
+                                                    }
+                                                >
+                                                    {desactivado ? 'Desactivado' : 'Activo'}
+                                                </span>
+                                            </td>
+
+                                            <td className="py-2 text-right space-x-2">
+                                                <button
+                                                    onClick={() => cambiarEstadoSystemUser(id, item.disabled)}
+                                                    className={
+                                                        desactivado
+                                                            ? 'bg-green-600 hover:bg-green-700 rounded-lg px-3 py-1 text-xs font-semibold'
+                                                            : 'bg-yellow-600 hover:bg-yellow-700 rounded-lg px-3 py-1 text-xs font-semibold'
+                                                    }
+                                                >
+                                                    {desactivado ? 'Activar' : 'Desactivar'}
+                                                </button>
+
+                                                <button
+                                                    onClick={() => eliminarSystemUser(id, item.name)}
+                                                    className="bg-red-600 hover:bg-red-700 rounded-lg px-3 py-1 text-xs font-semibold"
+                                                >
+                                                    Eliminar
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
+                        <div>
+                            <h2 className="text-lg font-bold">Tráfico de Interfaces</h2>
+                            <p className="text-sm text-slate-400">
+                                Monitoreo en vivo de consumo RX/TX por interface principal del MikroTik.
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col md:flex-row gap-2">
+                            <button
+                                onClick={cargarInterfaces}
+                                disabled={!routerId || cargandoInterfaces}
+                                className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                {cargandoInterfaces ? 'Cargando...' : 'Cargar interfaces'}
+                            </button>
+
+                            <select
+                                value={interfaceSeleccionada}
+                                onChange={(e) => {
+                                    setInterfaceSeleccionada(e.target.value);
+                                    setTraficoInterfaces([]);
+                                    setMonitoreandoInterface(false);
+                                }}
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                            >
+                                <option value="">Seleccione interface</option>
+                                {interfacesMk.map((item) => (
+                                    <option key={item['.id']} value={item.name}>
+                                        {item.name} - {item.type || 'interface'}
+                                    </option>
+                                ))}
+                            </select>
+
+                            <button
+                                onClick={() => {
+                                    if (!interfaceSeleccionada) {
+                                        alert('Seleccione una interface');
+                                        return;
+                                    }
+
+                                    setMonitoreandoInterface(!monitoreandoInterface);
+                                }}
+                                disabled={!routerId || !interfaceSeleccionada}
+                                className={
+                                    monitoreandoInterface
+                                        ? 'bg-red-600 hover:bg-red-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold'
+                                        : 'bg-green-600 hover:bg-green-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold'
+                                }
+                            >
+                                {monitoreandoInterface ? 'Detener monitoreo' : 'Iniciar monitoreo'}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 p-4">
+                            <p className="text-xs text-slate-400">Interface</p>
+                            <p className="font-bold">{interfaceSeleccionada || 'Ninguna'}</p>
+                        </div>
+
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 p-4">
+                            <p className="text-xs text-slate-400">Bajada RX</p>
+                            <p className="text-green-400 font-bold text-xl">
+                                {traficoInterfaces.at(-1)?.rxMbps ?? 0} Mbps
+                            </p>
+                        </div>
+
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 p-4">
+                            <p className="text-xs text-slate-400">Subida TX</p>
+                            <p className="text-cyan-400 font-bold text-xl">
+                                {traficoInterfaces.at(-1)?.txMbps ?? 0} Mbps
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="w-full h-80 rounded-xl bg-slate-950 border border-slate-700 p-4 overflow-hidden">
+                        {traficoInterfaces.length === 0 ? (
+                            <div className="h-full flex items-center justify-center text-slate-500">
+                                Sin datos. Inicie el monitoreo para ver el gráfico.
+                            </div>
+                        ) : (
+                            <svg width="100%" height="100%" viewBox="0 0 1000 300" preserveAspectRatio="none">
+                                {(() => {
+                                    const maxValor = Math.max(
+                                        ...traficoInterfaces.map((x) => Math.max(x.rxMbps, x.txMbps)),
+                                        1
+                                    );
+
+                                    const puntosRx = traficoInterfaces.map((item, index) => {
+                                        const x = (index / Math.max(traficoInterfaces.length - 1, 1)) * 1000;
+                                        const y = 280 - (item.rxMbps / maxValor) * 250;
+                                        return `${x},${y}`;
+                                    }).join(' ');
+
+                                    const puntosTx = traficoInterfaces.map((item, index) => {
+                                        const x = (index / Math.max(traficoInterfaces.length - 1, 1)) * 1000;
+                                        const y = 280 - (item.txMbps / maxValor) * 250;
+                                        return `${x},${y}`;
+                                    }).join(' ');
+
+                                    return (
+                                        <>
+                                            <line x1="0" y1="280" x2="1000" y2="280" stroke="#334155" strokeWidth="2" />
+                                            <line x1="0" y1="30" x2="1000" y2="30" stroke="#1e293b" strokeWidth="1" />
+                                            <line x1="0" y1="155" x2="1000" y2="155" stroke="#1e293b" strokeWidth="1" />
+
+                                            <polyline
+                                                points={puntosRx}
+                                                fill="none"
+                                                stroke="#22c55e"
+                                                strokeWidth="4"
+                                            />
+
+                                            <polyline
+                                                points={puntosTx}
+                                                fill="none"
+                                                stroke="#06b6d4"
+                                                strokeWidth="4"
+                                            />
+
+                                            <text x="10" y="25" fill="#94a3b8" fontSize="18">
+                                                Máx: {maxValor.toFixed(2)} Mbps
+                                            </text>
+
+                                            <text x="10" y="298" fill="#22c55e" fontSize="16">
+                                                RX Bajada
+                                            </text>
+
+                                            <text x="140" y="298" fill="#06b6d4" fontSize="16">
+                                                TX Subida
+                                            </text>
+                                        </>
+                                    );
+                                })()}
+                            </svg>
+                        )}
+                    </div>
                 </div>
             </section>
         </main>

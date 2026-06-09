@@ -61,6 +61,24 @@ import MisReportesTecnicoPage from '../soporte-tecnico/mis-reportes/page';
 import ReportesTecnicosAdminPage from '../dashboard-tecnicos/reportes-admin/page';
 import MikrotikCortesPage from '../mikrotik/mikrotik-cortes/page';
 import ConfiguracionMikrotikPage from '../mikrotik/configuracionMikrotik/page';
+import MensualidadesPage from '../pagos-mensuales/page';
+
+
+type DashboardResponse = {
+    ok: boolean;
+    resumen: {
+        tecnicosActivos: number;
+        ticketsAsignados: number;
+        abiertos: number;
+        enProceso: number;
+        resueltos: number;
+        cerrados: number;
+        criticosPendientes: number;
+    };
+    tecnicos: any[];
+    ultimosTickets: any[];
+};
+
 
 export default function DashboardPage() {
     const router = useRouter();
@@ -70,6 +88,9 @@ export default function DashboardPage() {
     const [tecnicoSeleccionadoId, setTecnicoSeleccionadoId] = useState<string | null>(null);
     const [DetalleClienteId, setDetalleClienteId] = useState<string | null>(null);
     const [ticketsIdSeleccionadoId, setticketsIdSeleccionadoId] = useState<string | null>(null);
+
+    const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
+
     const [vistaActual, setVistaActual] = useState<
         'dashboard' | 'perfil' | 'mikrotik' | 'mikrotikRouters' | 'administracion' | 'PlanInternet'
         | 'Clientes' | 'ImportarClientes' | 'contratosServicios' | 'infraestructura' | 'torre' | 'sectorial'
@@ -80,7 +101,7 @@ export default function DashboardPage() {
         | 'Certificadodigital' | 'ConfiguraciónEmailSRI' | 'HistorialemailsSRI' | 'AnulacionesSRI' | 'AnulacionesInterna'
         | 'NotasCreditoSRI' | 'AnulaciónNotasCrédito' | 'tickets' | 'tecnico' | 'soporteTecnico' | 'fichatecnico'
         | 'ListadoTickets' | 'fichaCliente' | 'talleCliente' | 'detalletickets' | 'AtencionCampo' | 'AbrirMantenimiento'
-        | 'AbrirReportes' | 'AbrirReporteAdmin' | 'mikrotikCortes' | 'mikroikconfiguracion'
+        | 'AbrirReportes' | 'AbrirReporteAdmin' | 'mikrotikCortes' | 'mikroikconfiguracion' | 'pagos'
     >('dashboard');
 
 
@@ -107,6 +128,69 @@ export default function DashboardPage() {
             console.error('Error cargando resumen clientes:', error);
         }
     };
+
+    const [dashboardMensualidades, setDashboardMensualidades] = useState({
+        pendientes: 0,
+        pagadas: 0,
+        vencidas: 0,
+        cortadas: 0,
+        totalPorCobrar: 0,
+        totalCobrado: 0,
+        proximasVencer: 0,
+    });
+
+    async function cargarDashboardMensualidades() {
+        try {
+            const token = getToken();
+
+            const res = await fetch(
+                `${API_BASE}/mensualidades/dashboard`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                }
+            );
+
+            const data = await res.json();
+
+            if (data.ok) {
+                setDashboardMensualidades(data.dashboard);
+            }
+
+        } catch (error) {
+            console.error(
+                'Error cargando dashboard mensualidades:',
+                error
+            );
+        }
+    }
+
+    const cargarDashboard = async () => {
+        try {
+            const token = getToken();
+
+            const res = await fetch(
+                `${API_BASE}/tickets/dashboard/tecnicos`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                }
+            );
+
+            const data = await res.json();
+            console.log("tickes: ", data)
+            setDashboard(data);
+        } catch (error) {
+            console.error('Error cargando dashboard:', error);
+        } finally {
+        }
+    };
+    useEffect(() => {
+        cargarDashboardMensualidades();
+        cargarDashboard();
+    }, []);
 
     useEffect(() => {
         const usuarioStorage = localStorage.getItem('isp_usuario');
@@ -568,7 +652,8 @@ export default function DashboardPage() {
 
                         <MenuItem
                             label="Pagos"
-                            href="/pagos"
+                            active={vistaActual === 'pagos'}
+                            onClick={() => setVistaActual('pagos')}
                         />
                         <MenuItem
                             label="Aréa Técnica"
@@ -685,10 +770,16 @@ export default function DashboardPage() {
                     <div className="p-5 md:p-8">
                         {vistaActual === 'dashboard' && (
                             <>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 mb-8">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-5 mb-8">
                                     <StatCard title="Clientes activos" value={String(clientesActivos)} />
-                                    <StatCard title="Pagos pendientes" value="0" />
-                                    <StatCard title="Tickets abiertos" value="0" />
+                                    <StatCard title="Pagos pendientes" value={String(dashboardMensualidades.pendientes)} />
+                                    <StatCard title="Pagadas" value={String(dashboardMensualidades.pagadas)} />
+                                    <StatCard title="Vencidas" value={String(dashboardMensualidades.vencidas)} />
+                                    <StatCard title="Cortadas" value={String(dashboardMensualidades.cortadas)} />
+                                    <StatCard title="Por cobrar" value={`$${String(dashboardMensualidades.totalPorCobrar.toFixed(2))}`} />
+                                    <StatCard title="Cobrado" value={`$${String(dashboardMensualidades.totalCobrado.toFixed(2))}`} />
+                                    <StatCard title="Tickets abiertos" value={String(dashboard?.resumen?.tecnicosActivos)} />
+
                                     <StatCard title="Equipos online" value="0" />
                                 </div>
 
@@ -721,6 +812,10 @@ export default function DashboardPage() {
                                                     setVistaActual('tickets');
                                                     return;
                                                 }
+                                                if (item.title === 'Pagos') {
+                                                    setVistaActual('pagos');
+                                                    return;
+                                                }
 
 
                                                 router.push(item.href);
@@ -742,6 +837,9 @@ export default function DashboardPage() {
                                     ))}
                                 </div>
                             </>
+                        )}
+                        {vistaActual === 'pagos' && (
+                            <MensualidadesPage />
                         )}
 
                         {vistaActual === 'AtencionCampo' && (
