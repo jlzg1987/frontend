@@ -1,11 +1,23 @@
 'use client';
 
 import { API_BASE, getToken } from '@/src/lib/api';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-
+type DashboardResponse = {
+    ok: boolean;
+    resumen: {
+        tecnicosActivos: number;
+        ticketsAsignados: number;
+        abiertos: number;
+        enProceso: number;
+        resueltos: number;
+        cerrados: number;
+        criticosPendientes: number;
+    };
+    tecnicos: any[];
+    ultimosTickets: any[];
+};
 const opciones = [
     {
         titulo: 'Tickets',
@@ -70,6 +82,7 @@ export default function SoporteTecnicoPage({
     onAbrirReportes: (usuarioId: string) => void;
 }) {
     const [usuario, setUsuario] = useState<any>(null);
+    const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
     const [resumen, setResumen] = useState({
         ticketsAbiertos: 0,
         enProceso: 0,
@@ -100,8 +113,30 @@ export default function SoporteTecnicoPage({
         }
     };
 
+    const cargarDashboard = async () => {
+        try {
+            const token = getToken();
+
+            const res = await fetch(
+                `${API_BASE}/tickets/dashboard/tecnicos`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                }
+            );
+
+            const data = await res.json();
+            console.log("tickes: ", data)
+            setDashboard(data);
+        } catch (error) {
+            console.error('Error cargando dashboard:', error);
+        } finally {
+        }
+    };
     useEffect(() => {
         cargarResumen();
+        cargarDashboard();
     }, []);
     useEffect(() => {
         const usuarioStorage = localStorage.getItem('isp_usuario');
@@ -128,10 +163,10 @@ export default function SoporteTecnicoPage({
         <div className="space-y-6">
 
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <Resumen titulo="Tickets abiertos" valor={resumen.ticketsAbiertos} color="text-blue-600" />
-                <Resumen titulo="En proceso" valor={resumen.enProceso} color="text-yellow-600" />
-                <Resumen titulo="Resueltos hoy" valor={resumen.resueltosHoy} color="text-emerald-600" />
-                <Resumen titulo="Críticos" valor={resumen.criticos} color="text-red-600" />
+                <Resumen titulo="Tickets abiertos" valor={dashboard?.resumen?.tecnicosActivos} color="text-blue-600" />
+                <Resumen titulo="En proceso" valor={dashboard?.resumen?.enProceso} color="text-yellow-600" />
+                <Resumen titulo="Resueltos hoy" valor={dashboard?.resumen?.resueltos} color="text-emerald-600" />
+                <Resumen titulo="Críticos" valor={dashboard?.resumen?.criticosPendientes} color="text-red-600" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

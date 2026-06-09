@@ -36,6 +36,48 @@ const modules: ModuleItem[] = [
         color: 'bg-cyan-600',
     },
     {
+        title: 'Equipos Wireless',
+        desc: 'Administrar equipos Ubiquiti, TP-Link, enlaces y CPE.',
+        icon: '📡',
+        href: '/wireless/equipos',
+        color: 'bg-sky-600',
+    },
+    {
+        title: 'Enlaces Wireless',
+        desc: 'Monitorear enlaces punto a punto y backbone.',
+        icon: '🔗',
+        href: '/wireless/enlaces',
+        color: 'bg-violet-600',
+    },
+    {
+        title: 'CPE Clientes',
+        desc: 'Gestionar LiteBeam, NanoBeam y equipos de abonados.',
+        icon: '🏠',
+        href: '/wireless/cpe-clientes',
+        color: 'bg-blue-600',
+    },
+    {
+        title: 'Monitoreo Wireless',
+        desc: 'Ver señal, CCQ, tráfico y estado de los equipos.',
+        icon: '📊',
+        href: '/wireless/monitoreo',
+        color: 'bg-green-600',
+    },
+    {
+        title: 'Equipos Offline',
+        desc: 'Visualizar equipos sin respuesta o fuera de línea.',
+        icon: '🔴',
+        href: '/wireless/offline',
+        color: 'bg-red-600',
+    },
+    {
+        title: 'Alertas Wireless',
+        desc: 'Gestionar alertas de señal, CCQ y disponibilidad.',
+        icon: '🚨',
+        href: '/wireless/alertas',
+        color: 'bg-pink-600',
+    },
+    {
         title: 'Nodos Fibra',
         desc: 'Administrar nodos principales de fibra óptica.',
         icon: '🔌',
@@ -58,12 +100,14 @@ export default function InfraestructuraPage({
     onAbrirsectorial,
     onAbrirnodofibra,
     onAbrirNapSplitter,
+    onAbrirEquiposWireless,
 }: {
     onVolver: () => void;
     onAbrirtorre: () => void;
     onAbrirsectorial: () => void;
     onAbrirnodofibra: () => void;
     onAbrirNapSplitter: () => void;
+    onAbrirEquiposWireless: () => void;
 }) {
     const router = useRouter();
 
@@ -125,6 +169,12 @@ export default function InfraestructuraPage({
             title: 'Total sectoriales',
             value: String(totalSectoriales),
             icon: '📶',
+            color: '#06b6d4',
+        },
+        {
+            title: 'Equipos Wireless',
+            value: String(),
+            icon: '📡',
             color: '#06b6d4',
         },
         {
@@ -204,6 +254,11 @@ export default function InfraestructuraPage({
                                 onAbrirNapSplitter();
                                 return;
                             }
+                            if (mod.title === 'Equipos Wireless') {
+                                onAbrirEquiposWireless();
+                                return;
+                            }
+
 
                             router.push(mod.href)
                         }}

@@ -62,6 +62,7 @@ import ReportesTecnicosAdminPage from '../dashboard-tecnicos/reportes-admin/page
 import MikrotikCortesPage from '../mikrotik/mikrotik-cortes/page';
 import ConfiguracionMikrotikPage from '../mikrotik/configuracionMikrotik/page';
 import MensualidadesPage from '../pagos-mensuales/page';
+import EquiposWirelessPage from '../infraestructura/wireless-equipos/page';
 
 
 type DashboardResponse = {
@@ -101,7 +102,7 @@ export default function DashboardPage() {
         | 'Certificadodigital' | 'ConfiguraciónEmailSRI' | 'HistorialemailsSRI' | 'AnulacionesSRI' | 'AnulacionesInterna'
         | 'NotasCreditoSRI' | 'AnulaciónNotasCrédito' | 'tickets' | 'tecnico' | 'soporteTecnico' | 'fichatecnico'
         | 'ListadoTickets' | 'fichaCliente' | 'talleCliente' | 'detalletickets' | 'AtencionCampo' | 'AbrirMantenimiento'
-        | 'AbrirReportes' | 'AbrirReporteAdmin' | 'mikrotikCortes' | 'mikroikconfiguracion' | 'pagos'
+        | 'AbrirReportes' | 'AbrirReporteAdmin' | 'mikrotikCortes' | 'mikroikconfiguracion' | 'pagos' | 'EquiposWireless'
     >('dashboard');
 
 
@@ -973,7 +974,11 @@ export default function DashboardPage() {
                                 onAbrirsectorial={() => setVistaActual('sectorial')}
                                 onAbrirnodofibra={() => setVistaActual('nodofibra')}
                                 onAbrirNapSplitter={() => setVistaActual('NapSplitter')}
+                                onAbrirEquiposWireless={() => setVistaActual('EquiposWireless')}
                             />
+                        )}
+                        {vistaActual === 'EquiposWireless' && (
+                            <EquiposWirelessPage />
                         )}
                         {vistaActual === 'torre' && (
                             <TorresWispPage />

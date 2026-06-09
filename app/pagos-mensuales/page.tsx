@@ -31,12 +31,23 @@ export default function MensualidadesPage() {
     const [mensaje, setMensaje] = useState('');
     const [pagoSeleccionado, setPagoSeleccionado] = useState<Mensualidad | null>(null);
     const [valorPagado, setValorPagado] = useState('');
+    const [formaPago, setFormaPago] = useState('EFECTIVO');
     const [referenciaPago, setReferenciaPago] = useState('');
 
     const [modalManual, setModalManual] = useState(false);
     const [servicioIdManual, setServicioIdManual] = useState('');
     const [anioManual, setAnioManual] = useState(new Date().getFullYear());
     const [mesManual, setMesManual] = useState(new Date().getMonth() + 1);
+
+    function cambiarFormaPago(valor: string) {
+        setFormaPago(valor);
+
+        if (valor === 'EFECTIVO') {
+            setReferenciaPago('PAGO EN EFECTIVO');
+        } else {
+            setReferenciaPago('');
+        }
+    }
 
     useEffect(() => {
         cargarMensualidades();
@@ -141,13 +152,15 @@ export default function MensualidadesPage() {
                     mensualidadId: pagoSeleccionado.mensualidadId,
                     valorPagado: Number(valorPagado || pagoSeleccionado.valorMensual),
                     referenciaPago,
-                    observacion: 'Pago registrado desde mensualidades',
+                    observacion: `Forma de pago: ${formaPago}`,
                 }),
+
             });
 
             setMensaje('Pago registrado correctamente');
             setPagoSeleccionado(null);
             setValorPagado('');
+            setFormaPago('EFECTIVO');
             setReferenciaPago('');
             await cargarMensualidades();
         } catch (error: any) {
@@ -359,12 +372,29 @@ export default function MensualidadesPage() {
                             onChange={(e) => setValorPagado(e.target.value)}
                             className="w-full mb-4 rounded-xl bg-slate-800 border border-slate-700 px-4 py-2 outline-none"
                         />
-
+                        <label className="block text-sm mb-1">Forma de pago</label>
+                        <select
+                            value={formaPago}
+                            onChange={(e) => cambiarFormaPago(e.target.value)}
+                            className="w-full mb-4 rounded-xl bg-slate-800 border border-slate-700 px-4 py-2 outline-none"
+                        >
+                            <option value="EFECTIVO">Efectivo</option>
+                            <option value="TRANSFERENCIA">Transferencia</option>
+                            <option value="DEPOSITO">Depósito</option>
+                            <option value="CHEQUE">Cheque</option>
+                            <option value="DATAFAST">Datafast</option>
+                            <option value="LINK_PAGO_SEGURO">Link Pago Seguro</option>
+                        </select>
                         <label className="block text-sm mb-1">Referencia / comprobante</label>
                         <input
                             value={referenciaPago}
                             onChange={(e) => setReferenciaPago(e.target.value)}
-                            placeholder="Transferencia, efectivo, comprobante..."
+                            placeholder={
+                                formaPago === 'EFECTIVO'
+                                    ? 'Pago en efectivo'
+                                    : 'Número de comprobante, banco, autorización...'
+                            }
+
                             className="w-full mb-4 rounded-xl bg-slate-800 border border-slate-700 px-4 py-2 outline-none"
                         />
 
