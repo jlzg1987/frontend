@@ -59,6 +59,8 @@ import FichaTecnicaClientePage from '../soporte-tecnico/atencion-campo/[ticketId
 import MapaNeuronalMantenimientos from '../soporte-tecnico/mantenimineto/page';
 import MisReportesTecnicoPage from '../soporte-tecnico/mis-reportes/page';
 import ReportesTecnicosAdminPage from '../dashboard-tecnicos/reportes-admin/page';
+import MikrotikCortesPage from '../mikrotik/mikrotik-cortes/page';
+import ConfiguracionMikrotikPage from '../mikrotik/configuracionMikrotik/page';
 
 export default function DashboardPage() {
     const router = useRouter();
@@ -78,7 +80,7 @@ export default function DashboardPage() {
         | 'Certificadodigital' | 'ConfiguraciónEmailSRI' | 'HistorialemailsSRI' | 'AnulacionesSRI' | 'AnulacionesInterna'
         | 'NotasCreditoSRI' | 'AnulaciónNotasCrédito' | 'tickets' | 'tecnico' | 'soporteTecnico' | 'fichatecnico'
         | 'ListadoTickets' | 'fichaCliente' | 'talleCliente' | 'detalletickets' | 'AtencionCampo' | 'AbrirMantenimiento'
-        | 'AbrirReportes' | 'AbrirReporteAdmin'
+        | 'AbrirReportes' | 'AbrirReporteAdmin' | 'mikrotikCortes' | 'mikroikconfiguracion'
     >('dashboard');
 
 
@@ -201,6 +203,18 @@ export default function DashboardPage() {
     function getHeaderInfo() {
 
 
+        if (vistaActual === 'mikroikconfiguracion') {
+            return {
+                titulo: 'Configuración MikroTik',
+                subtitulo: '  Servicios, firewall, NAT, listas, rutas y herramientas generales.',
+            };
+        }
+        if (vistaActual === 'mikrotikCortes') {
+            return {
+                titulo: 'Cortes MikroTik',
+                subtitulo: ' Gestión manual de cortes y activaciones por Address List MOROSOS.',
+            };
+        }
         if (vistaActual === 'AbrirReportes') {
             return {
                 titulo: '  📋 Mis reportes',
@@ -820,7 +834,16 @@ export default function DashboardPage() {
                             <MikroTikDashboardPageInterno
                                 onVolver={() => setVistaActual('dashboard')}
                                 onAbrirRouters={() => setVistaActual('mikrotikRouters')}
+                                onAbrirmikroikCortes={() => setVistaActual('mikrotikCortes')}
+                                onAbrirmikroikconfiguracion={() => setVistaActual('mikroikconfiguracion')}
+
                             />
+                        )}
+                        {vistaActual === 'mikroikconfiguracion' && (
+                            <ConfiguracionMikrotikPage />
+                        )}
+                        {vistaActual === 'mikrotikCortes' && (
+                            <MikrotikCortesPage />
                         )}
                         {vistaActual === 'mikrotikRouters' && (
                             <MikrotikPageInterno />

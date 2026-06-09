@@ -26,9 +26,13 @@ async function fetchConTimeout(url: string, options: any = {}, ms = 4000) {
 export default function MikroTikDashboardPageInterno({
     onVolver,
     onAbrirRouters,
+    onAbrirmikroikCortes,
+    onAbrirmikroikconfiguracion,
 }: {
     onVolver: () => void;
     onAbrirRouters: () => void;
+    onAbrirmikroikCortes: () => void;
+    onAbrirmikroikconfiguracion: () => void;
 }) {
     const router = useRouter();
     const [loadingStats, setLoadingStats] = useState(true);
@@ -212,7 +216,7 @@ export default function MikroTikDashboardPageInterno({
             ruta: '/mikrotik/monitoreo',
         },
         {
-            titulo: 'Firewall / MOROSOS',
+            titulo: 'IP / Firewall',
             descripcion: 'Listas, reglas y bloqueo automático',
             icono: '🧱',
             ruta: '/mikrotik/firewall',
@@ -264,7 +268,15 @@ export default function MikroTikDashboardPageInterno({
                                     onAbrirRouters();
                                     return;
                                 }
+                                if (item.titulo === 'Cortes de clientes') {
+                                    onAbrirmikroikCortes();
+                                    return;
+                                }
 
+                                if (item.titulo === 'IP / Firewall') {
+                                    onAbrirmikroikconfiguracion();
+                                    return;
+                                }
                                 router.push(item.ruta);
                             }}
                         >
