@@ -63,6 +63,12 @@ import MikrotikCortesPage from '../mikrotik/mikrotik-cortes/page';
 import ConfiguracionMikrotikPage from '../mikrotik/configuracionMikrotik/page';
 import MensualidadesPage from '../pagos-mensuales/page';
 import EquiposWirelessPage from '../infraestructura/wireless-equipos/page';
+import SectorialesWirelessPage from '../infraestructura/wireless/sectoriales/page';
+import EnlacesWirelessPage from '../infraestructura/wireless/enlaces/page';
+import CpeClientesPage from '../infraestructura/wireless/cpe-clientes/page';
+import AlertasWirelessPage from '../infraestructura/wireless/alertas/page';
+import WirelessMonitoreoProPage from '../infraestructura/wireless/monitoreo/page';
+import BotNotificaciones from './notificaciones/page';
 
 
 type DashboardResponse = {
@@ -103,6 +109,7 @@ export default function DashboardPage() {
         | 'NotasCreditoSRI' | 'AnulaciónNotasCrédito' | 'tickets' | 'tecnico' | 'soporteTecnico' | 'fichatecnico'
         | 'ListadoTickets' | 'fichaCliente' | 'talleCliente' | 'detalletickets' | 'AtencionCampo' | 'AbrirMantenimiento'
         | 'AbrirReportes' | 'AbrirReporteAdmin' | 'mikrotikCortes' | 'mikroikconfiguracion' | 'pagos' | 'EquiposWireless'
+        | 'enlaces' | 'CPEClientes' | 'AlertasWireless' | 'MonitoreoWireless'
     >('dashboard');
 
 
@@ -287,6 +294,18 @@ export default function DashboardPage() {
 
     function getHeaderInfo() {
 
+        if (vistaActual === 'MonitoreoWireless') {
+            return {
+                titulo: ' Monitoreo Wireless Pro+',
+                subtitulo: 'Revisión automática de CPE, sectoriales, enlaces y generación de alertas.',
+            };
+        }
+        if (vistaActual === 'AlertasWireless') {
+            return {
+                titulo: 'Alertas Wireless',
+                subtitulo: 'Monitoreo de CPE, sectoriales, enlaces y nodos.',
+            };
+        }
 
         if (vistaActual === 'mikroikconfiguracion') {
             return {
@@ -628,6 +647,9 @@ export default function DashboardPage() {
 
     return (
         <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-950 to-blue-950">
+            <BotNotificaciones
+                onAbrirAlertas={() => setVistaActual('AlertasWireless')}
+            />
             <div className="flex min-h-screen">
                 <aside className="hidden md:flex w-72 bg-slate-900 border-r border-slate-800 p-6 flex-col">
                     <div className="mb-10">
@@ -975,7 +997,23 @@ export default function DashboardPage() {
                                 onAbrirnodofibra={() => setVistaActual('nodofibra')}
                                 onAbrirNapSplitter={() => setVistaActual('NapSplitter')}
                                 onAbrirEquiposWireless={() => setVistaActual('EquiposWireless')}
+                                onAbrirEnlaces={() => setVistaActual('enlaces')}
+                                onAbrirCPEClientes={() => setVistaActual('CPEClientes')}
+                                onAbrirAlertasWireless={() => setVistaActual('AlertasWireless')}
+                                onAbrirMonitoreoWireless={() => setVistaActual('MonitoreoWireless')}
                             />
+                        )}
+                        {vistaActual === 'MonitoreoWireless' && (
+                            <WirelessMonitoreoProPage />
+                        )}
+                        {vistaActual === 'AlertasWireless' && (
+                            <AlertasWirelessPage />
+                        )}
+                        {vistaActual === 'CPEClientes' && (
+                            <CpeClientesPage />
+                        )}
+                        {vistaActual === 'enlaces' && (
+                            <EnlacesWirelessPage />
                         )}
                         {vistaActual === 'EquiposWireless' && (
                             <EquiposWirelessPage />
@@ -984,7 +1022,7 @@ export default function DashboardPage() {
                             <TorresWispPage />
                         )}
                         {vistaActual === 'sectorial' && (
-                            <SectorialesWispPage />
+                            <SectorialesWirelessPage />
                         )}
                         {vistaActual === 'nodofibra' && (
                             <NodosFibraPage />

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { API_BASE } from '@/src/lib/api';
+import { API_BASE, getToken } from '@/src/lib/api';
 
 
 type StatItem = {
@@ -28,19 +28,20 @@ const modules: ModuleItem[] = [
         href: '/infraestructura/torres-wisp',
         color: 'bg-orange-600',
     },
-    {
-        title: 'Sectoriales WISP',
-        desc: 'Gestionar sectoriales, SSID, frecuencia e IP.',
-        icon: '📶',
-        href: '/infraestructura/sectoriales-wisp',
-        color: 'bg-cyan-600',
-    },
+
     {
         title: 'Equipos Wireless',
         desc: 'Administrar equipos Ubiquiti, TP-Link, enlaces y CPE.',
         icon: '📡',
         href: '/wireless/equipos',
         color: 'bg-sky-600',
+    },
+    {
+        title: 'Sectoriales WISP',
+        desc: 'Gestionar sectoriales, SSID, frecuencia e IP.',
+        icon: '📶',
+        href: '/wireless/sectoriales',
+        color: 'bg-cyan-600',
     },
     {
         title: 'Enlaces Wireless',
@@ -101,6 +102,10 @@ export default function InfraestructuraPage({
     onAbrirnodofibra,
     onAbrirNapSplitter,
     onAbrirEquiposWireless,
+    onAbrirEnlaces,
+    onAbrirCPEClientes,
+    onAbrirAlertasWireless,
+    onAbrirMonitoreoWireless,
 }: {
     onVolver: () => void;
     onAbrirtorre: () => void;
@@ -108,6 +113,10 @@ export default function InfraestructuraPage({
     onAbrirnodofibra: () => void;
     onAbrirNapSplitter: () => void;
     onAbrirEquiposWireless: () => void;
+    onAbrirEnlaces: () => void;
+    onAbrirCPEClientes: () => void;
+    onAbrirAlertasWireless: () => void;
+    onAbrirMonitoreoWireless: () => void;
 }) {
     const router = useRouter();
 
@@ -153,6 +162,8 @@ export default function InfraestructuraPage({
             setLoading(false);
         }
     };
+    const token = getToken();
+
 
     useEffect(() => {
         cargarResumenInfraestructura();
@@ -246,6 +257,10 @@ export default function InfraestructuraPage({
                                 onAbrirsectorial();
                                 return;
                             }
+                            if (mod.title === 'Enlaces Wireless') {
+                                onAbrirEnlaces();
+                                return;
+                            }
                             if (mod.title === 'Nodos Fibra') {
                                 onAbrirnodofibra();
                                 return;
@@ -258,7 +273,18 @@ export default function InfraestructuraPage({
                                 onAbrirEquiposWireless();
                                 return;
                             }
-
+                            if (mod.title === 'CPE Clientes') {
+                                onAbrirCPEClientes();
+                                return;
+                            }
+                            if (mod.title === 'Alertas Wireless') {
+                                onAbrirAlertasWireless();
+                                return;
+                            }
+                            if (mod.title === 'Monitoreo Wireless') {
+                                onAbrirMonitoreoWireless();
+                                return;
+                            }
 
                             router.push(mod.href)
                         }}

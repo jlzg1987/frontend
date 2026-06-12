@@ -92,6 +92,9 @@ export default function EquiposWirelessPage() {
     const [escaneandoSectoriales, setEscaneandoSectoriales] = useState(false);
     const [sectorialesScan, setSectorialesScan] = useState<any[]>([]);
 
+    const [ordenCampo, setOrdenCampo] = useState<'ipGestion' | 'ultimoPingMs' | null>(null);
+    const [ordenAsc, setOrdenAsc] = useState(true);
+
     const [credencialesCliente, setCredencialesCliente] = useState({
         usuarioCliente: '',
         claveCliente: '',
@@ -100,6 +103,36 @@ export default function EquiposWirelessPage() {
 
     const token = getToken();
 
+    function ipToNumber(ip?: string) {
+        return String(ip || "")
+            .split(".")
+            .reduce((acc, octeto) => (acc * 256) + Number(octeto || 0), 0);
+    }
+
+    function ordenarPor(campo: 'ipGestion' | 'ultimoPingMs') {
+        if (ordenCampo === campo) {
+            setOrdenAsc(!ordenAsc);
+        } else {
+            setOrdenCampo(campo);
+            setOrdenAsc(true);
+        }
+    }
+
+    const equiposOrdenados = [...equipos].sort((a, b) => {
+        if (ordenCampo === "ipGestion") {
+            const valorA = ipToNumber(a.ipGestion);
+            const valorB = ipToNumber(b.ipGestion);
+            return ordenAsc ? valorA - valorB : valorB - valorA;
+        }
+
+        if (ordenCampo === "ultimoPingMs") {
+            const valorA = Number(a.ultimoPingMs ?? 999999);
+            const valorB = Number(b.ultimoPingMs ?? 999999);
+            return ordenAsc ? valorA - valorB : valorB - valorA;
+        }
+
+        return 0;
+    });
 
     function parseStations(salida: string) {
         const bloque =
@@ -942,26 +975,61 @@ export default function EquiposWirelessPage() {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="border-b border-slate-700 text-slate-300">
-                                    <th className="text-left py-2">Nodo-Servidor</th>
+                                    <th className="w-[180px]">
+                                        Nodo Servidor
+                                    </th>
                                     <th className="text-left py-2">Nombre</th>
-                                    <th className="text-left py-2">Marca</th>
-                                    <th className="text-left py-2">Tipo</th>
-                                    <th className="text-left py-2">IP</th>
-                                    <th className="text-left py-2">Estado</th>
-                                    <th className="text-left py-2">Ping</th>
-                                    <th className="text-right py-2">Acciones</th>
+                                    <th className="w-[90px]">Marca</th>
+                                    <th className="w-[100px]">Tipo</th>
+                                    <th
+                                        onClick={() => ordenarPor("ipGestion")}
+                                        className="text-left py-2 cursor-pointer hover:text-cyan-400"
+                                    >
+                                        IP {ordenCampo === "ipGestion" ? (ordenAsc ? "↑" : "↓") : ""}
+                                    </th>
+                                    <th className="w-[80px]">Estado</th>
+                                    <th className="w-[100px]">Ping</th>
+                                    <th className="w-[220px]">Acciones</th>
                                 </tr>
                             </thead>
 
                             <tbody>
-                                {equipos.map((eq) => (
-                                    <tr key={eq.equipoId} className="border-b border-slate-800">
-                                        <td className="py-3 font-semibold">{eq.routerNombre || 'Sin router'}
-                                            {eq.routerSector ? ` - ${eq.routerSector}` : ''}</td>
-                                        <td>{eq.nombre}</td>
-                                        <td>{eq.marca}</td>
-                                        <td>{eq.tipoEquipo}</td>
-                                        <td>{eq.ipGestion}</td>
+                                {equiposOrdenados.map((eq) => (
+                                    <tr key={eq.equipoId} className="border-b border-slate-800" >
+                                        <td className="w-[180px]">
+                                            <div
+
+                                                title={`${eq.routerNombre || 'Sin router'}${eq.routerSector ? ` - ${eq.routerSector}` : ''}`}
+                                            >
+                                                {eq.routerNombre || 'Sin router'}
+                                                {eq.routerSector ? ` - ${eq.routerSector}` : ''}
+                                            </div>
+                                        </td>
+                                        <td className="w-[120px]">{eq.nombre}</td>
+                                        <td className="px-3">
+                                            <span className="
+        px-2 py-1 rounded-lg
+        bg-cyan-900/40
+        text-cyan-300
+        text-xs
+        font-bold
+    ">
+                                                {eq.marca}
+                                            </span>
+                                        </td>
+
+                                        <td className="px-3">
+                                            <span className="
+        px-2 py-1 rounded-lg
+        bg-yellow-900/40
+        text-yellow-300
+        text-xs
+        font-bold
+    ">
+                                                {eq.tipoEquipo}
+                                            </span>
+                                        </td>
+                                        <td className="w-[110px]">{eq.ipGestion}</td>
                                         <td>
                                             <span className={
                                                 eq.ultimoEstado === 'ONLINE'
@@ -971,13 +1039,13 @@ export default function EquiposWirelessPage() {
                                                         : 'text-slate-400'
                                             }>
                                                 {verificandoIds.includes(eq.equipoId || '') ? (
-                                                    <span className="text-yellow-400 font-bold">
+                                                    <span className="text-yellow-300 font-bold">
                                                         Verificando...
                                                     </span>
                                                 ) : (
                                                     <span className={
                                                         eq.ultimoEstado?.startsWith("ONLINE")
-                                                            ? "text-green-400 font-bold"
+                                                            ? "text-green-400 font-screen"
                                                             : eq.ultimoEstado === "OFFLINE"
                                                                 ? "text-red-400 font-bold"
                                                                 : "text-slate-400"
@@ -987,10 +1055,12 @@ export default function EquiposWirelessPage() {
                                                 )}
                                             </span>
                                         </td>
-                                        <td>
-                                            {eq.ultimoPingMs ? `${eq.ultimoPingMs} ms` : '-'}
+                                        <td className="w-[80px]">
+                                            {eq.ultimoPingMs !== undefined && eq.ultimoPingMs !== null
+                                                ? `${Number(eq.ultimoPingMs).toFixed(2)} ms`
+                                                : "-"}
                                         </td>
-                                        <td className="text-right">
+                                        <td className="w-[300px]">
                                             <button
                                                 onClick={() => probarSsh(eq.equipoId)}
                                                 className="bg-green-600 hover:bg-green-700 rounded-lg px-3 py-1 mr-2"

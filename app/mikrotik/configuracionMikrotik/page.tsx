@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { API_BASE, getToken } from '@/src/lib/api';
+import * as XLSX from "xlsx";
 
 type RouterMikrotik = {
     id: number;
@@ -98,8 +99,124 @@ export default function ConfiguracionMikrotikPage() {
     const [userPasswordMk, setUserPasswordMk] = useState('');
     const [userGroupMk, setUserGroupMk] = useState('read');
     const [userCommentMk, setUserCommentMk] = useState('');
+    const [ipArp, setIpArp] = useState<any[]>([]);
+    const [cargandoIpArp, setCargandoIpArp] = useState(false);
+
+    const [ipNeighbors, setIpNeighbors] = useState<any[]>([]);
+    const [cargandoNeighbors, setCargandoNeighbors] = useState(false);
+
+    const [ordenArpAsc, setOrdenArpAsc] = useState(true);
+    const [ordenNeighborAsc, setOrdenNeighborAsc] = useState(true);
 
     const token = () => getToken();
+
+    const arpOrdenado = [...ipArp].sort((a, b) => {
+        const ipA = a.address || "";
+        const ipB = b.address || "";
+
+        const pa = ipA.split(".").map(Number);
+        const pb = ipB.split(".").map(Number);
+
+        for (let i = 0; i < 4; i++) {
+            if (pa[i] !== pb[i]) {
+                return ordenArpAsc
+                    ? pa[i] - pb[i]
+                    : pb[i] - pa[i];
+            }
+        }
+
+        return 0;
+    });
+    const neighborOrdenado = [...ipNeighbors].sort((a, b) => {
+        const ipA = a.address || a.address4 || "";
+        const ipB = b.address || b.address4 || "";
+
+        const pa = ipA.split(".").map(Number);
+        const pb = ipB.split(".").map(Number);
+
+        for (let i = 0; i < 4; i++) {
+            if (pa[i] !== pb[i]) {
+                return ordenNeighborAsc
+                    ? pa[i] - pb[i]
+                    : pb[i] - pa[i];
+            }
+        }
+
+        return 0;
+    });
+    const dispositivosWireless = [
+        "mikrotik",
+        "litebeam",
+        "nanostation",
+        "nanobeam",
+        "powerbeam",
+        "rocket",
+        "airgrid",
+        "cpe610",
+        "cpe605",
+        "tp-link",
+        "ubiquiti",
+        "airmax",
+        "loco m5",
+        "litebeam m5",
+        "powerbeam m5",
+        "rocket m5",
+    ];
+
+    const totalWireless = ipNeighbors.filter((item) => {
+        const texto = `
+        ${item.platform || ""}
+        ${item.identity || ""}
+        ${item.board || ""}
+        ${item.version || ""}
+    `.toLowerCase();
+
+        return dispositivosWireless.some((equipo) =>
+            texto.includes(equipo)
+        );
+    }).length;
+
+    const totalMikrotik = ipNeighbors.filter((x) => {
+        const texto = JSON.stringify(x).toLowerCase();
+        return texto.includes("mikrotik");
+    }).length;
+
+    const totalUbiquiti = ipNeighbors.filter((x) => {
+        const texto = JSON.stringify(x).toLowerCase();
+
+        return (
+            texto.includes("ubiquiti") ||
+            texto.includes("litebeam") ||
+            texto.includes("nanostation") ||
+            texto.includes("nanobeam") ||
+            texto.includes("powerbeam") ||
+            texto.includes("rocket")
+        );
+    }).length;
+
+    const totalTplink = ipNeighbors.filter((x) => {
+        const texto = JSON.stringify(x).toLowerCase();
+
+        return (
+            texto.includes("tp-link") ||
+            texto.includes("cpe610") ||
+            texto.includes("cpe605")
+        );
+    }).length;
+
+    function exportarExcel(nombreArchivo: string, filas: any[]) {
+        if (!filas || filas.length === 0) {
+            alert("No hay datos para exportar");
+            return;
+        }
+
+        const worksheet = XLSX.utils.json_to_sheet(filas);
+        const workbook = XLSX.utils.book_new();
+
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Datos");
+
+        XLSX.writeFile(workbook, `${nombreArchivo}.xlsx`);
+    }
 
     async function cargarRouters() {
         try {
@@ -1343,7 +1460,59 @@ export default function ConfiguracionMikrotikPage() {
             alert('Error cambiando estado del usuario');
         }
     }
+    async function cargarIpArp() {
+        if (!routerId) return alert("Seleccione un router");
 
+        setCargandoIpArp(true);
+
+        try {
+            const res = await fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/ip-arp`, {
+                headers: {
+                    Authorization: `Bearer ${getToken()}`,
+                },
+            });
+
+            const data = await res.json();
+
+            if (data.ok) {
+                setIpArp(data.datos || []);
+            } else {
+                alert(data.message || "Error cargando ARP");
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Error conectando con backend");
+        } finally {
+            setCargandoIpArp(false);
+        }
+    }
+
+    async function cargarIpNeighbors() {
+        if (!routerId) return alert("Seleccione un router");
+
+        setCargandoNeighbors(true);
+
+        try {
+            const res = await fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/ip-neighbor`, {
+                headers: {
+                    Authorization: `Bearer ${getToken()}`,
+                },
+            });
+
+            const data = await res.json();
+
+            if (data.ok) {
+                setIpNeighbors(data.datos || []);
+            } else {
+                alert(data.message || "Error cargando Neighbor");
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Error conectando con backend");
+        } finally {
+            setCargandoNeighbors(false);
+        }
+    }
     useEffect(() => {
         cargarRouters();
     }, []);
@@ -2527,74 +2696,261 @@ export default function ConfiguracionMikrotikPage() {
                     </div>
 
                     <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-slate-700 text-slate-400">
-                                    <th className="text-left py-2">Usuario</th>
-                                    <th className="text-left py-2">Grupo</th>
-                                    <th className="text-left py-2">Comentario</th>
-                                    <th className="text-left py-2">Último login</th>
-                                    <th className="text-left py-2">Estado</th>
-                                    <th className="text-right py-2">Acciones</th>
-                                </tr>
-                            </thead>
-
-                            <tbody>
-                                {systemUsers.length === 0 && (
-                                    <tr>
-                                        <td colSpan={6} className="py-4 text-center text-slate-500">
-                                            No hay usuarios cargados
-                                        </td>
+                        <div className="max-h-[450px] overflow-y-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-slate-700 text-slate-400">
+                                        <th className="text-left py-2">Usuario</th>
+                                        <th className="text-left py-2">Grupo</th>
+                                        <th className="text-left py-2">Comentario</th>
+                                        <th className="text-left py-2">Último login</th>
+                                        <th className="text-left py-2">Estado</th>
+                                        <th className="text-right py-2">Acciones</th>
                                     </tr>
-                                )}
+                                </thead>
 
-                                {systemUsers.map((item) => {
-                                    const id = item['.id'];
-                                    const desactivado = item.disabled === 'true';
-
-                                    return (
-                                        <tr key={id} className="border-b border-slate-800">
-                                            <td className="py-2 font-semibold">{item.name || '-'}</td>
-                                            <td className="py-2">{item.group || '-'}</td>
-                                            <td className="py-2">{item.comment || '-'}</td>
-                                            <td className="py-2">{item['last-logged-in'] || '-'}</td>
-
-                                            <td className="py-2">
-                                                <span
-                                                    className={
-                                                        desactivado
-                                                            ? 'text-red-400 font-semibold'
-                                                            : 'text-green-400 font-semibold'
-                                                    }
-                                                >
-                                                    {desactivado ? 'Desactivado' : 'Activo'}
-                                                </span>
-                                            </td>
-
-                                            <td className="py-2 text-right space-x-2">
-                                                <button
-                                                    onClick={() => cambiarEstadoSystemUser(id, item.disabled)}
-                                                    className={
-                                                        desactivado
-                                                            ? 'bg-green-600 hover:bg-green-700 rounded-lg px-3 py-1 text-xs font-semibold'
-                                                            : 'bg-yellow-600 hover:bg-yellow-700 rounded-lg px-3 py-1 text-xs font-semibold'
-                                                    }
-                                                >
-                                                    {desactivado ? 'Activar' : 'Desactivar'}
-                                                </button>
-
-                                                <button
-                                                    onClick={() => eliminarSystemUser(id, item.name)}
-                                                    className="bg-red-600 hover:bg-red-700 rounded-lg px-3 py-1 text-xs font-semibold"
-                                                >
-                                                    Eliminar
-                                                </button>
+                                <tbody>
+                                    {systemUsers.length === 0 && (
+                                        <tr>
+                                            <td colSpan={6} className="py-4 text-center text-slate-500">
+                                                No hay usuarios cargados
                                             </td>
                                         </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                                    )}
+
+                                    {systemUsers.map((item) => {
+                                        const id = item['.id'];
+                                        const desactivado = item.disabled === 'true';
+
+                                        return (
+                                            <tr key={id} className="border-b border-slate-800">
+                                                <td className="py-2 font-semibold">{item.name || '-'}</td>
+                                                <td className="py-2">{item.group || '-'}</td>
+                                                <td className="py-2">{item.comment || '-'}</td>
+                                                <td className="py-2">{item['last-logged-in'] || '-'}</td>
+
+                                                <td className="py-2">
+                                                    <span
+                                                        className={
+                                                            desactivado
+                                                                ? 'text-red-400 font-semibold'
+                                                                : 'text-green-400 font-semibold'
+                                                        }
+                                                    >
+                                                        {desactivado ? 'Desactivado' : 'Activo'}
+                                                    </span>
+                                                </td>
+
+                                                <td className="py-2 text-right space-x-2">
+                                                    <button
+                                                        onClick={() => cambiarEstadoSystemUser(id, item.disabled)}
+                                                        className={
+                                                            desactivado
+                                                                ? 'bg-green-600 hover:bg-green-700 rounded-lg px-3 py-1 text-xs font-semibold'
+                                                                : 'bg-yellow-600 hover:bg-yellow-700 rounded-lg px-3 py-1 text-xs font-semibold'
+                                                        }
+                                                    >
+                                                        {desactivado ? 'Activar' : 'Desactivar'}
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() => eliminarSystemUser(id, item.name)}
+                                                        className="bg-red-600 hover:bg-red-700 rounded-lg px-3 py-1 text-xs font-semibold"
+                                                    >
+                                                        Eliminar
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <h2 className="text-lg font-bold">IP ARP</h2>
+                            <p className="text-sm text-slate-400">
+                                Tabla ARP del MikroTik: IP, MAC, interface y estado.
+                            </p>
+                        </div>
+
+                        <button
+                            onClick={cargarIpArp}
+                            disabled={!routerId || cargandoIpArp}
+                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                        >
+                            {cargandoIpArp ? "Cargando..." : "Cargar ARP"}
+                        </button>
+                        <button
+                            onClick={() => exportarExcel("ip-arp-mikrotik", arpOrdenado)}
+                            disabled={ipArp.length === 0}
+                            className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                        >
+                            Exportar Excel
+                        </button>
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 px-4 py-2">
+                            <p className="text-xs text-slate-400">Total ARP</p>
+                            <p className="text-xl font-bold text-cyan-400">
+                                {ipArp.length}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <div className="max-h-[450px] overflow-y-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-slate-700 text-slate-400">
+                                        <th
+                                            onClick={() => setOrdenArpAsc(!ordenArpAsc)}
+                                            className="text-left py-2 cursor-pointer select-none"
+                                        >
+                                            IP {ordenArpAsc ? "▲" : "▼"}
+                                        </th>
+                                        <th className="text-left py-2">MAC</th>
+                                        <th className="text-left py-2">Interface</th>
+                                        <th className="text-left py-2">Tipo</th>
+                                        <th className="text-left py-2">Estado</th>
+                                        <th className="text-left py-2">Comentario</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    {arpOrdenado.length === 0 && (
+                                        <tr>
+                                            <td colSpan={6} className="py-4 text-center text-slate-500">
+                                                No hay registros ARP cargados
+                                            </td>
+                                        </tr>
+                                    )}
+
+                                    {arpOrdenado.map((item) => {
+                                        const id = item[".id"];
+                                        const dynamic = item.dynamic === "true";
+                                        const complete = item.complete === "true";
+                                        const disabled = item.disabled === "true";
+
+                                        return (
+                                            <tr key={id} className="border-b border-slate-800">
+                                                <td className="py-2 font-semibold">{item.address || "-"}</td>
+                                                <td className="py-2">{item["mac-address"] || "-"}</td>
+                                                <td className="py-2">{item.interface || "-"}</td>
+                                                <td className="py-2">{dynamic ? "Dinámico" : "Estático"}</td>
+                                                <td className="py-2">
+                                                    <span className={disabled ? "text-red-400 font-semibold" : complete ? "text-green-400 font-semibold" : "text-yellow-400 font-semibold"}>
+                                                        {disabled ? "Desactivado" : complete ? "Completo" : "Pendiente"}
+                                                    </span>
+                                                </td>
+                                                <td className="py-2">{item.comment || "-"}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <h2 className="text-lg font-bold">IP Neighbor List</h2>
+                            <p className="text-sm text-slate-400">
+                                Equipos descubiertos cerca del MikroTik: routers, switches, antenas y CPE.
+                            </p>
+                        </div>
+
+                        <button
+                            onClick={cargarIpNeighbors}
+                            disabled={!routerId || cargandoNeighbors}
+                            className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                        >
+                            {cargandoNeighbors ? "Cargando..." : "Cargar Neighbor"}
+                        </button>
+                        <button
+                            onClick={() => exportarExcel("ip-neighbor-mikrotik", neighborOrdenado)}
+                            disabled={ipNeighbors.length === 0}
+                            className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                        >
+                            Exportar Excel
+                        </button>
+
+                    </div>
+                    <div className="grid grid-cols-4 gap-3 mb-4">
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 p-3">
+                            <p className="text-xs text-slate-400">Total Neighbor</p>
+                            <p className="text-xl font-bold text-white">
+                                {ipNeighbors.length}
+                            </p>
+                        </div>
+
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 p-3">
+                            <p className="text-xs text-slate-400">MikroTik</p>
+                            <p className="text-xl font-bold text-cyan-400">
+                                {totalMikrotik}
+                            </p>
+                        </div>
+
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 p-3">
+                            <p className="text-xs text-slate-400">Ubiquiti</p>
+                            <p className="text-xl font-bold text-green-400">
+                                {totalUbiquiti}
+                            </p>
+                        </div>
+
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 p-3">
+                            <p className="text-xs text-slate-400">TP-Link</p>
+                            <p className="text-xl font-bold text-yellow-400">
+                                {totalTplink}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <div className="max-h-[450px] overflow-y-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-slate-700 text-slate-400">
+                                        <th className="text-left py-2">Identity</th>
+                                        <th
+                                            onClick={() => setOrdenNeighborAsc(!ordenNeighborAsc)}
+                                            className="text-left py-2 cursor-pointer select-none"
+                                        >
+                                            IP {ordenNeighborAsc ? "▲" : "▼"}
+                                        </th>
+                                        <th className="text-left py-2">MAC</th>
+                                        <th className="text-left py-2">Interface</th>
+                                        <th className="text-left py-2">Plataforma</th>
+                                        <th className="text-left py-2">Versión</th>
+                                        <th className="text-left py-2">Uptime</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    {neighborOrdenado.length === 0 && (
+                                        <tr>
+                                            <td colSpan={7} className="py-4 text-center text-slate-500">
+                                                No hay neighbors cargados
+                                            </td>
+                                        </tr>
+                                    )}
+
+                                    {neighborOrdenado.map((item, index) => (
+                                        <tr key={item[".id"] || index} className="border-b border-slate-800">
+                                            <td className="py-2 font-semibold">{item.identity || "-"}</td>
+                                            <td className="py-2">{item.address || item["address4"] || "-"}</td>
+                                            <td className="py-2">{item["mac-address"] || "-"}</td>
+                                            <td className="py-2">{item.interface || "-"}</td>
+                                            <td className="py-2">{item.platform || item.board || "-"}</td>
+                                            <td className="py-2">{item.version || "-"}</td>
+                                            <td className="py-2">{item.uptime || "-"}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
