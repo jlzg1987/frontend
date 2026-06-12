@@ -40,6 +40,17 @@ export default function ListadoFacturasInternasPage() {
     const [fechaHasta, setFechaHasta] = useState('');
     const [estado, setEstado] = useState('');
     const [loading, setLoading] = useState(false);
+    const [ordenFecha, setOrdenFecha] = useState<'ASC' | 'DESC'>('DESC');
+    const [procesandoSriId, setProcesandoSriId] = useState<string | null>(null);
+
+    const facturasOrdenadas = [...facturas].sort((a, b) => {
+        const fechaA = new Date(a.fechaFactura).getTime();
+        const fechaB = new Date(b.fechaFactura).getTime();
+
+        return ordenFecha === 'ASC'
+            ? fechaA - fechaB
+            : fechaB - fechaA;
+    });
 
     useEffect(() => {
         cargarFacturas();
@@ -240,6 +251,44 @@ export default function ListadoFacturasInternasPage() {
             '_blank'
         );
     };
+
+    async function procesarFacturaSriDesdeInterna(factura: FacturaInterna) {
+        if (!factura.facturaId) {
+            alert('Factura inválida');
+            return;
+        }
+
+        try {
+            setProcesandoSriId(factura.facturaId);
+
+            const resp = await fetch(
+                `${API_BASE}/facturacion-sri/${factura.facturaId}/procesar-completo`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+
+            const data = await resp.json();
+
+            if (!data.ok) {
+                alert(data.message || 'Error procesando factura en SRI');
+                return;
+            }
+
+            alert('Factura procesada en SRI correctamente');
+            cargarFacturas();
+
+        } catch (error) {
+            console.error('Error procesando SRI:', error);
+            alert('Error procesando factura en SRI');
+        } finally {
+            setProcesandoSriId(null);
+        }
+    }
+
     return (
         <main className="min-h-screen bg-slate-950 text-white p-6">
             <div className="max-w-7xl mx-auto">
@@ -335,7 +384,12 @@ export default function ListadoFacturasInternasPage() {
                                     <th className="px-4 py-3 text-left">Cliente</th>
                                     <th className="px-4 py-3 text-left">Cédula</th>
                                     <th className="px-4 py-3 text-left">Celular</th>
-                                    <th className="px-4 py-3 text-left">Fecha</th>
+                                    <th
+                                        onClick={() => setOrdenFecha(prev => prev === 'ASC' ? 'DESC' : 'ASC')}
+                                        className="px-4 py-3 text-left cursor-pointer select-none hover:text-cyan-300"
+                                    >
+                                        Fecha {ordenFecha === 'ASC' ? '↑' : '↓'}
+                                    </th>
                                     <th className="px-4 py-3 text-right">Total</th>
                                     <th className="px-4 py-3 text-center">Estado</th>
                                     <th className="px-4 py-3 text-center">Acciones</th>
@@ -343,7 +397,7 @@ export default function ListadoFacturasInternasPage() {
                             </thead>
 
                             <tbody>
-                                {facturas.length === 0 && (
+                                {facturasOrdenadas.length === 0 && (
                                     <tr>
                                         <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
                                             No hay facturas internas registradas.
@@ -351,7 +405,7 @@ export default function ListadoFacturasInternasPage() {
                                     </tr>
                                 )}
 
-                                {facturas.map((factura) => (
+                                {facturasOrdenadas.map((factura) => (
                                     <tr
                                         key={factura.facturaId}
                                         className="border-t border-slate-800 hover:bg-slate-800/40"
@@ -403,7 +457,13 @@ export default function ListadoFacturasInternasPage() {
 
                                         <td className="px-4 py-4">
                                             <div className="flex flex-col md:flex-row gap-2 justify-center">
-
+                                                <button
+                                                    onClick={() => procesarFacturaSriDesdeInterna(factura)}
+                                                    disabled={procesandoSriId === factura.facturaId || factura.estado === 'ANULADA'}
+                                                    className="bg-orange-500 hover:bg-orange-400 disabled:bg-slate-700 disabled:text-slate-400 text-white font-bold px-3 py-2 rounded-lg text-xs"
+                                                >
+                                                    {procesandoSriId === factura.facturaId ? 'SRI...' : 'SRI'}
+                                                </button>
                                                 <button
                                                     onClick={() => enviarFacturaEmailListado(factura)}
                                                     className="bg-blue-700 hover:bg-blue-800 text-white px-3 py-2 rounded-lg text-xs font-bold"

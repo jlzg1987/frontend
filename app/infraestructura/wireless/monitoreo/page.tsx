@@ -2,6 +2,7 @@
 
 import { API_BASE, getToken } from "@/src/lib/api";
 import { useEffect, useMemo, useState } from "react";
+import RedNeuronalWireless from "./neuronal/RedNeuronalWireless";
 
 
 
@@ -33,6 +34,9 @@ export default function WirelessMonitoreoProPage() {
     const [auto, setAuto] = useState(false);
     const [ultimaRevision, setUltimaRevision] = useState<string | null>(null);
     const [error, setError] = useState("");
+    const [mostrarRed, setMostrarRed] = useState(false);
+    const [redKey, setRedKey] = useState(0);
+
 
     const token = getToken();
 
@@ -59,6 +63,8 @@ export default function WirelessMonitoreoProPage() {
 
             setResultados(data.resultados || []);
             setUltimaRevision(new Date().toLocaleString());
+            setMostrarRed(true);
+            setRedKey((prev) => prev + 1);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -192,6 +198,50 @@ export default function WirelessMonitoreoProPage() {
                         <span className="text-xs text-blue-400">
                             Consultando agent...
                         </span>
+                    )}
+                </div>
+
+                <div className="mt-6 rounded-2xl border border-cyan-500/30 bg-slate-950 p-4">
+                    <div className="mb-4 flex items-center justify-between">
+                        <div>
+                            <h2 className="text-lg font-bold text-cyan-300">
+                                Red neuronal wireless
+                            </h2>
+                            <p className="text-xs text-slate-400">
+                                Se genera usando los resultados actuales del monitoreo
+                            </p>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setMostrarRed(false);
+
+                                setTimeout(() => {
+                                    setMostrarRed(true);
+                                    setRedKey((prev) => prev + 1);
+                                }, 100);
+                            }}
+                            disabled={resultados.length === 0}
+                            className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-bold text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                            Actualizar red
+                        </button>
+                    </div>
+
+                    {resultados.length === 0 ? (
+                        <div className="flex h-[300px] items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-slate-400">
+                            Ejecuta el monitoreo para generar la red neuronal.
+                        </div>
+                    ) : mostrarRed ? (
+                        <RedNeuronalWireless
+                            key={redKey}
+                            resultados={resultados}
+                        />
+                    ) : (
+                        <div className="flex h-[300px] items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-cyan-300">
+                            Preparando red neuronal...
+                        </div>
                     )}
                 </div>
 

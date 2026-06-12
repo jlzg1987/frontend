@@ -70,6 +70,7 @@ import AlertasWirelessPage from '../infraestructura/wireless/alertas/page';
 import WirelessMonitoreoProPage from '../infraestructura/wireless/monitoreo/page';
 import BotNotificaciones from './notificaciones/page';
 import AlertasCriticasWirelessPage from '../infraestructura/wireless/alertas-criticas/page';
+import TodasNotificacionesPage from './lista-notificaciones/page';
 
 
 type DashboardResponse = {
@@ -110,7 +111,7 @@ export default function DashboardPage() {
         | 'NotasCreditoSRI' | 'AnulaciónNotasCrédito' | 'tickets' | 'tecnico' | 'soporteTecnico' | 'fichatecnico'
         | 'ListadoTickets' | 'fichaCliente' | 'talleCliente' | 'detalletickets' | 'AtencionCampo' | 'AbrirMantenimiento'
         | 'AbrirReportes' | 'AbrirReporteAdmin' | 'mikrotikCortes' | 'mikroikconfiguracion' | 'pagos' | 'EquiposWireless'
-        | 'enlaces' | 'CPEClientes' | 'AlertasWireless' | 'MonitoreoWireless' | 'EquiposOffline'
+        | 'enlaces' | 'CPEClientes' | 'AlertasWireless' | 'MonitoreoWireless' | 'EquiposOffline' | 'listaNotificacion'
     >('dashboard');
 
 
@@ -295,7 +296,12 @@ export default function DashboardPage() {
 
     function getHeaderInfo() {
 
-
+        if (vistaActual === 'listaNotificacion') {
+            return {
+                titulo: 'Todas las notificaciones',
+                subtitulo: 'Listado completo de notificaciones del sistema',
+            };
+        }
         if (vistaActual === 'CPEClientes') {
             return {
                 titulo: ' CPE Clientes',
@@ -764,6 +770,12 @@ export default function DashboardPage() {
                             active={vistaActual === 'confg'}
                             onClick={() => setVistaActual('confg')}
                         />
+                        <MenuItem
+                            label="Notificaciones"
+                            active={vistaActual === 'listaNotificacion'}
+                            onClick={() => setVistaActual('listaNotificacion')}
+
+                        />
 
                     </nav>
 
@@ -886,6 +898,11 @@ export default function DashboardPage() {
                                     ))}
                                 </div>
                             </>
+                        )}
+
+
+                        {vistaActual === 'listaNotificacion' && (
+                            <TodasNotificacionesPage />
                         )}
                         {vistaActual === 'pagos' && (
                             <MensualidadesPage />

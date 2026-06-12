@@ -124,16 +124,6 @@ export default function AlertasWirelessPage() {
         try {
             const token = getToken();
 
-            const empresaId =
-                localStorage.getItem("empresaId") ||
-                localStorage.getItem("empresa_id") ||
-                "";
-
-            if (!empresaId) {
-                alert("No se encontró empresaId");
-                return;
-            }
-
             const prioridad =
                 n.nivel === "CRITICA"
                     ? "ALTA"
@@ -148,13 +138,19 @@ export default function AlertasWirelessPage() {
                     Authorization: `Bearer ${token}`,
                 },
                 body: JSON.stringify({
-                    empresaId,
-                    clienteTipo: "ISP",
-                    clienteId: null,
-                    titulo: `[${n.modulo}] ${n.titulo}`,
-                    descripcion: `${n.mensaje}\n\nOrigen: ${n.tipo}\nNotificación: ${n.notificacionId}`,
+                    clienteTipo: "WIRELESS_ALERTA",
+                    clienteId: n.alertaId,
+                    titulo: `Alerta crítica Wireless: ${n.tipo}`,
+                    descripcion: `${n.mensaje || "Sin descripción"}s
+Origen: WIRELESS_ALERTA
+AlertaId: ${n.alertaId || ""}
+EquipoId: ${n.equipoId || ""}
+Tipo alerta: ${n.tipo || ""}
+Nivel: ${n.nivel || ""}
+Estado alerta: ${n.estado || ""}`,
                     categoria: "INTERNET",
                     prioridad,
+
                 }),
             });
 
