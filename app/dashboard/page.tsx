@@ -69,6 +69,7 @@ import CpeClientesPage from '../infraestructura/wireless/cpe-clientes/page';
 import AlertasWirelessPage from '../infraestructura/wireless/alertas/page';
 import WirelessMonitoreoProPage from '../infraestructura/wireless/monitoreo/page';
 import BotNotificaciones from './notificaciones/page';
+import AlertasCriticasWirelessPage from '../infraestructura/wireless/alertas-criticas/page';
 
 
 type DashboardResponse = {
@@ -109,7 +110,7 @@ export default function DashboardPage() {
         | 'NotasCreditoSRI' | 'AnulaciónNotasCrédito' | 'tickets' | 'tecnico' | 'soporteTecnico' | 'fichatecnico'
         | 'ListadoTickets' | 'fichaCliente' | 'talleCliente' | 'detalletickets' | 'AtencionCampo' | 'AbrirMantenimiento'
         | 'AbrirReportes' | 'AbrirReporteAdmin' | 'mikrotikCortes' | 'mikroikconfiguracion' | 'pagos' | 'EquiposWireless'
-        | 'enlaces' | 'CPEClientes' | 'AlertasWireless' | 'MonitoreoWireless'
+        | 'enlaces' | 'CPEClientes' | 'AlertasWireless' | 'MonitoreoWireless' | 'EquiposOffline'
     >('dashboard');
 
 
@@ -294,6 +295,32 @@ export default function DashboardPage() {
 
     function getHeaderInfo() {
 
+
+        if (vistaActual === 'CPEClientes') {
+            return {
+                titulo: ' CPE Clientes',
+                subtitulo: 'Clientes guardados y clientes detectados desde sectoriales.',
+            };
+        }
+        if (vistaActual === 'enlaces') {
+            return {
+                titulo: 'Enlaces Wireless',
+                subtitulo: 'Monitoreo de enlaces inalámbricos que conectan torres, nodos y sitios de la red principal.',
+            };
+        }
+        if (vistaActual === 'EquiposWireless') {
+            return {
+                titulo: ' Equipos Wireless',
+                subtitulo: 'Administración y monitoreo de todos los equipos inalámbricos de la red.',
+            };
+        }
+
+        if (vistaActual === 'EquiposOffline') {
+            return {
+                titulo: ' Alertas críticas Wireless ',
+                subtitulo: ' Solo se muestran alertas con severidad crítica.',
+            };
+        }
         if (vistaActual === 'MonitoreoWireless') {
             return {
                 titulo: ' Monitoreo Wireless Pro+',
@@ -306,7 +333,6 @@ export default function DashboardPage() {
                 subtitulo: 'Monitoreo de CPE, sectoriales, enlaces y nodos.',
             };
         }
-
         if (vistaActual === 'mikroikconfiguracion') {
             return {
                 titulo: 'Configuración MikroTik',
@@ -1001,7 +1027,11 @@ export default function DashboardPage() {
                                 onAbrirCPEClientes={() => setVistaActual('CPEClientes')}
                                 onAbrirAlertasWireless={() => setVistaActual('AlertasWireless')}
                                 onAbrirMonitoreoWireless={() => setVistaActual('MonitoreoWireless')}
+                                onAbrirEquiposOffline={() => setVistaActual('EquiposOffline')}
                             />
+                        )}
+                        {vistaActual === 'EquiposOffline' && (
+                            <AlertasCriticasWirelessPage />
                         )}
                         {vistaActual === 'MonitoreoWireless' && (
                             <WirelessMonitoreoProPage />

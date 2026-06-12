@@ -41,7 +41,6 @@ export default function WirelessListadoPage({ titulo, endpoint }: Props) {
     return (
         <div className="p-6 text-white">
             <div className="flex items-center justify-between mb-5">
-                <h1 className="text-2xl font-bold">{titulo}</h1>
 
                 <button
                     onClick={cargar}

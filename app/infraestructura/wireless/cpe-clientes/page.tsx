@@ -208,12 +208,7 @@ export default function CpeClientesPage() {
     return (
         <div className="p-6 text-white">
             <div className="flex items-center justify-between mb-5">
-                <div>
-                    <h1 className="text-2xl font-bold">CPE Clientes</h1>
-                    <p className="text-slate-400 text-sm">
-                        Clientes guardados y clientes detectados desde sectoriales.
-                    </p>
-                </div>
+
 
                 <button
                     onClick={cargarTodo}

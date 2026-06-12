@@ -106,6 +106,7 @@ export default function InfraestructuraPage({
     onAbrirCPEClientes,
     onAbrirAlertasWireless,
     onAbrirMonitoreoWireless,
+    onAbrirEquiposOffline,
 }: {
     onVolver: () => void;
     onAbrirtorre: () => void;
@@ -117,6 +118,7 @@ export default function InfraestructuraPage({
     onAbrirCPEClientes: () => void;
     onAbrirAlertasWireless: () => void;
     onAbrirMonitoreoWireless: () => void;
+    onAbrirEquiposOffline: () => void;
 }) {
     const router = useRouter();
 
@@ -285,6 +287,11 @@ export default function InfraestructuraPage({
                                 onAbrirMonitoreoWireless();
                                 return;
                             }
+                            if (mod.title === 'Equipos Offline') {
+                                onAbrirEquiposOffline();
+                                return;
+                            }
+
 
                             router.push(mod.href)
                         }}

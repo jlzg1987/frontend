@@ -801,9 +801,7 @@ export default function EquiposWirelessPage() {
 
     return (
         <div className="p-6 text-white">
-            <h1 className="text-2xl font-bold mb-6">
-                Equipos Wireless
-            </h1>
+
 
             <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5 mb-6">
 

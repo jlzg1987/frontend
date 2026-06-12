@@ -120,6 +120,59 @@ export default function AlertasWirelessPage() {
         if (estado === "ATENDIDA") return "text-blue-400";
         return "text-green-400";
     }
+    async function crearTicketDesdeNotificacion(n: any) {
+        try {
+            const token = getToken();
+
+            const empresaId =
+                localStorage.getItem("empresaId") ||
+                localStorage.getItem("empresa_id") ||
+                "";
+
+            if (!empresaId) {
+                alert("No se encontró empresaId");
+                return;
+            }
+
+            const prioridad =
+                n.nivel === "CRITICA"
+                    ? "ALTA"
+                    : n.nivel === "ADVERTENCIA"
+                        ? "MEDIA"
+                        : "BAJA";
+
+            const res = await fetch(`${API_BASE}/tickets`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    empresaId,
+                    clienteTipo: "ISP",
+                    clienteId: null,
+                    titulo: `[${n.modulo}] ${n.titulo}`,
+                    descripcion: `${n.mensaje}\n\nOrigen: ${n.tipo}\nNotificación: ${n.notificacionId}`,
+                    categoria: "INTERNET",
+                    prioridad,
+                }),
+            });
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.mensaje || "Error creando ticket");
+                return;
+            }
+
+            alert(`Ticket creado correctamente: ${data.codigoTicket}`);
+
+
+        } catch (error) {
+            console.error("Error creando ticket:", error);
+            alert("Error creando ticket");
+        }
+    }
 
     return (
         <div className="p-6 text-white space-y-6">
@@ -250,7 +303,14 @@ export default function AlertasWirelessPage() {
                                     </td>
 
                                     <td className="p-3">
+
                                         <div className="flex justify-end gap-2">
+                                            <button
+                                                onClick={() => crearTicketDesdeNotificacion(a)}
+                                                className="flex-1 bg-blue-600 hover:bg-blue-700 rounded-lg py-2 text-xs font-bold text-white"
+                                            >
+                                                Crear ticket
+                                            </button>
                                             {a.estado === "ABIERTA" && (
                                                 <button
                                                     onClick={() =>
