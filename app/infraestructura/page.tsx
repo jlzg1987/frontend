@@ -129,6 +129,7 @@ export default function InfraestructuraPage({
     const [totalNatRedes, setTotalNatRedes] = useState(0);
     const [loading, setLoading] = useState(true);
 
+
     const cargarResumenInfraestructura = async () => {
         try {
             setLoading(true);
@@ -164,7 +165,7 @@ export default function InfraestructuraPage({
             setLoading(false);
         }
     };
-    const token = getToken();
+
 
 
     useEffect(() => {

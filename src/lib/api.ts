@@ -10,6 +10,7 @@ export function saveToken(token: string) {
 }
 
 export function getToken() {
+    if (typeof window === "undefined") return null;
     return localStorage.getItem('isp_token');
 }
 
