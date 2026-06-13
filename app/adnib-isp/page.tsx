@@ -8,12 +8,15 @@ export default function AdminIspPageInterno({
     onAbrirAdministracion,
     onAbrirClientes,
     onAbrirImportarclientes,
-
+    onAbrirPagosmensuales,
+    onAbrirFacturacion,
 }: {
     onVolver: () => void;
     onAbrirAdministracion: () => void;
     onAbrirClientes: () => void;
     onAbrirImportarclientes: () => void;
+    onAbrirPagosmensuales: () => void;
+    onAbrirFacturacion: () => void;
 }) {
     const router = useRouter();
 
@@ -135,7 +138,14 @@ export default function AdminIspPageInterno({
                                 onAbrirImportarclientes();
                                 return;
                             }
-
+                            if (card.titulo === 'Pagos y mensualidades') {
+                                onAbrirPagosmensuales();
+                                return;
+                            }
+                            if (card.titulo === 'Facturas internas') {
+                                onAbrirFacturacion();
+                                return;
+                            }
 
                             router.push(card.ruta);
                         }}

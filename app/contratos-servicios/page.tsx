@@ -3,8 +3,6 @@
 import { API_BASE } from '@/src/lib/api';
 import { useEffect, useState } from 'react';
 
-
-
 type Servicio = {
     servicioId: string;
     clienteId: string;
@@ -72,7 +70,11 @@ type Servicio = {
     | 'CANCELADO';
 };
 
-export default function ContratosServiciosPage() {
+export default function ContratosServiciosPage({
+    onAbrirFacturainterna
+}: {
+    onAbrirFacturainterna: () => void;
+}) {
     const [servicios, setServicios] = useState<Servicio[]>([]);
     const [loading, setLoading] = useState(true);
     const [busqueda, setBusqueda] = useState('');
@@ -97,6 +99,16 @@ export default function ContratosServiciosPage() {
 
     const [tipoServicioSeleccionado, setTipoServicioSeleccionado] =
         useState<'FIBRA' | 'RADIO' | 'MIXTO' | ''>('');
+
+    const [showDetalleModal, setShowDetalleModal] = useState(false);
+
+    const [servicioDetalle, setServicioDetalle] =
+        useState<Servicio | null>(null);
+
+    const abrirDetalleServicio = (servicio: Servicio) => {
+        setServicioDetalle(servicio);
+        setShowDetalleModal(true);
+    };
 
     const [formData, setFormData] = useState({
         clienteId: '',
@@ -634,62 +646,21 @@ export default function ContratosServiciosPage() {
                                     </span>
                                 </div>
 
+
                                 <div style={styles.infoBox}>
                                     <p><strong>Plan:</strong> {servicio.nombrePlan}</p>
-                                    <p><strong>Bajada:</strong> {servicio.velocidadBajada}</p>
-                                    <p><strong>Subida:</strong> {servicio.velocidadSubida}</p>
                                     <p><strong>Precio:</strong> ${Number(servicio.precioMensual || 0).toFixed(2)}</p>
-                                    <p><strong>Día de pago:</strong> {servicio.diaPago}</p>
-                                </div>
-
-                                <div style={styles.contractBox}>
-                                    <p><strong>Contrato:</strong> {servicio.tipoContrato || 'No definido'}</p>
-                                    <p>
-                                        <strong>Fecha de firma:</strong> {formatearFecha(servicio.fechaFirmaContrato)}
-                                    </p>
-                                    <p>
-                                        <strong>Fecha de instalación:</strong> {formatearFecha(servicio.fechaInstalacion)}
-                                    </p>
-                                    <p><strong>Canal:</strong> {servicio.canalContrato || 'No definido'}</p>
-                                    <p><strong>Tiempo:</strong> {servicio.tiempoContratoMeses ? `${servicio.tiempoContratoMeses} meses` : 'No definido'}</p>
-
-                                    <p><strong>Instalación:</strong> ${Number(servicio.precioInstalacion || 0).toFixed(2)}</p>
-                                    <p><strong>Descuento:</strong> ${Number(servicio.descuentoInstalacion || 0).toFixed(2)}</p>
-                                    <p><strong>Gratis:</strong> {servicio.instalacionGratis ? 'Sí' : 'No'}</p>
-                                </div>
-
-                                <div style={styles.techBox}>
-                                    <p><strong>PPPoE:</strong> {servicio.pppSecret || 'No asignado'}</p>
-                                    <p><strong>Queue:</strong> {servicio.queueName || 'No asignado'}</p>
+                                    <p><strong>Tipo:</strong> {servicio.tipoServicio}</p>
                                     <p><strong>IP:</strong> {servicio.ipCliente || 'No asignada'}</p>
-                                    <p><strong>MAC:</strong> {servicio.mac || 'No asignada'}</p>
+                                    <p><strong>Día pago:</strong> {servicio.diaPago}</p>
+                                    <button
+                                        style={styles.secondaryButton}
+                                        onClick={() => abrirDetalleServicio(servicio)}
+                                    >
+                                        Ver detalle
+                                    </button>
                                 </div>
 
-
-                                {esFibra && (
-                                    <div style={styles.gponBox}>
-                                        <p><strong>Tipo técnico:</strong> Fibra óptica / GPON</p>
-                                        <p><strong>Nodo fibra:</strong> {servicio.nombreNodoFibra || 'N/A'}</p>
-                                        <p><strong>NAP:</strong> {servicio.nombreNap || servicio.cajaNap || 'N/A'}</p>
-                                        <p><strong>Puerto NAP:</strong> {servicio.puertoNap || 'N/A'}</p>
-                                        <p><strong>ONU:</strong> {servicio.onuId || 'N/A'}</p>
-                                        <p><strong>VLAN:</strong> {servicio.vlan || 'N/A'}</p>
-                                        <p><strong>RX/TX:</strong> {servicio.senalRx || '-'} / {servicio.senalTx || '-'}</p>
-                                    </div>
-                                )}
-
-                                {esWisp && (
-                                    <div style={styles.gponBox}>
-                                        <p><strong>Tipo técnico:</strong> WISP / Radio enlace</p>
-                                        <p><strong>Torre:</strong> {servicio.nombreTorre || 'N/A'}</p>
-                                        <p><strong>Sectorial:</strong> {servicio.nombreSectorial || servicio.sectorial || 'N/A'}</p>
-                                        <p><strong>Frecuencia:</strong> {servicio.frecuencia || 'N/A'}</p>
-                                        <p><strong>SSID:</strong> {servicio.ssid || 'N/A'}</p>
-                                        <p><strong>IP antena:</strong> {servicio.ipAntena || 'N/A'}</p>
-                                        <p><strong>Modelo antena:</strong> {servicio.modeloAntena || 'N/A'}</p>
-                                        <p><strong>Usuario CPE:</strong> {servicio.usuarioCpe || 'N/A'}</p>
-                                    </div>
-                                )}
                                 <p><strong>Estado:</strong></p>
                                 <div style={styles.actions}>
 
@@ -730,14 +701,14 @@ export default function ContratosServiciosPage() {
                                     )}
                                 </div>
 
-                                <p><strong>Autorización / Ficha de Instalación:</strong></p>
+                                <p><strong>Documnetacion PDF/ imprimir:</strong></p>
                                 <div style={styles.actions}>
 
                                     <button
                                         style={styles.secondaryButton}
                                         onClick={() => abrirContratoPdf(servicio)}
                                     >
-                                        PDF contrato
+                                        Contrato
                                     </button>
                                     <button
                                         style={styles.secondaryButton}
@@ -767,21 +738,11 @@ export default function ContratosServiciosPage() {
                                         Editar
                                     </button>
 
-
-
-
                                     <button
                                         style={styles.secondaryButton}
-                                        onClick={() => abrirFacturacion(servicio, 'INTERNA')}
+                                        onClick={() => onAbrirFacturainterna()}
                                     >
-                                        Fact. interna
-                                    </button>
-
-                                    <button
-                                        style={styles.secondaryButton}
-                                        onClick={() => abrirFacturacion(servicio, 'SRI')}
-                                    >
-                                        Fact. SRI
+                                        Fact. inter
                                     </button>
 
                                     <button
@@ -1359,6 +1320,104 @@ export default function ContratosServiciosPage() {
                     </div>
                 </div>
             )}
+            {showDetalleModal && servicioDetalle && (
+                <div style={styles.modalOverlay}>
+                    <div
+                        style={{
+                            ...styles.modal,
+                            maxWidth: '1000px',
+                        }}
+                    >
+                        <div style={styles.modalHeader}>
+                            <h2>
+                                Detalle del Servicio
+                            </h2>
+
+                            <button
+                                style={styles.closeButton}
+                                onClick={() => {
+                                    setShowDetalleModal(false);
+                                    setServicioDetalle(null);
+                                }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div
+                            style={{
+                                padding: 20,
+                                display: 'grid',
+                                gridTemplateColumns:
+                                    'repeat(auto-fit,minmax(300px,1fr))',
+                                gap: 15,
+                            }}
+                        >
+
+                            <div style={styles.infoBox}>
+                                <h3>General</h3>
+                                <p><strong>Servicio ID:</strong> {servicioDetalle.servicioId}</p>
+
+                                <p><strong>Cliente ID:</strong> {servicioDetalle.clienteId}</p>
+                                <p><strong>Plan:</strong> {servicioDetalle.nombrePlan}</p>
+                                <p><strong>Bajada:</strong> {servicioDetalle.velocidadBajada}</p>
+                                <p><strong>Subida:</strong> {servicioDetalle.velocidadSubida}</p>
+                                <p><strong>Precio:</strong> ${Number(servicioDetalle.precioMensual || 0).toFixed(2)}</p>
+                                <p><strong>Día de pago:</strong> {servicioDetalle.diaPago}</p>
+                            </div>
+
+                            <div style={styles.contractBox}>
+                                <p><strong>Contrato:</strong> {servicioDetalle.tipoContrato || 'No definido'}</p>
+                                <p>
+                                    <strong>Fecha de firma:</strong> {formatearFecha(servicioDetalle.fechaFirmaContrato)}
+                                </p>
+                                <p>
+                                    <strong>Fecha de instalación:</strong> {formatearFecha(servicioDetalle.fechaInstalacion)}
+                                </p>
+                                <p><strong>Canal:</strong> {servicioDetalle.canalContrato || 'No definido'}</p>
+                                <p><strong>Tiempo:</strong> {servicioDetalle.tiempoContratoMeses ? `${servicioDetalle.tiempoContratoMeses} meses` : 'No definido'}</p>
+
+                                <p><strong>Instalación:</strong> ${Number(servicioDetalle.precioInstalacion || 0).toFixed(2)}</p>
+                                <p><strong>Descuento:</strong> ${Number(servicioDetalle.descuentoInstalacion || 0).toFixed(2)}</p>
+                                <p><strong>Gratis:</strong> {servicioDetalle.instalacionGratis ? 'Sí' : 'No'}</p>
+                            </div>
+                            {servicioDetalle.tipoServicio !== 'RADIO' && (
+                                <div style={styles.techBox}>
+                                    <p><strong>PPPoE:</strong> {servicioDetalle.pppSecret || 'No asignado'}</p>
+                                    <p><strong>Queue:</strong> {servicioDetalle.queueName || 'No asignado'}</p>
+                                    <p><strong>IP:</strong> {servicioDetalle.ipCliente || 'No asignada'}</p>
+                                    <p><strong>MAC:</strong> {servicioDetalle.mac || 'No asignada'}</p>
+                                </div>
+                            )}
+
+                            {servicioDetalle.tipoServicio !== 'FIBRA' && (
+                                <div style={styles.gponBox}>
+                                    <p><strong>Tipo técnico:</strong> Fibra óptica / GPON</p>
+                                    <p><strong>Nodo fibra:</strong> {servicioDetalle.nombreNodoFibra || 'N/A'}</p>
+                                    <p><strong>NAP:</strong> {servicioDetalle.nombreNap || servicioDetalle.cajaNap || 'N/A'}</p>
+                                    <p><strong>Puerto NAP:</strong> {servicioDetalle.puertoNap || 'N/A'}</p>
+                                    <p><strong>ONU:</strong> {servicioDetalle.onuId || 'N/A'}</p>
+                                    <p><strong>VLAN:</strong> {servicioDetalle.vlan || 'N/A'}</p>
+                                    <p><strong>RX/TX:</strong> {servicioDetalle.senalRx || '-'} / {servicioDetalle.senalTx || '-'}</p>
+                                </div>
+                            )}
+
+                            {servicioDetalle.tipoServicio !== 'RADIO' && (
+                                <div style={styles.gponBox}>
+                                    <p><strong>Tipo técnico:</strong> WISP / Radio enlace</p>
+                                    <p><strong>Torre:</strong> {servicioDetalle.nombreTorre || 'N/A'}</p>
+                                    <p><strong>Sectorial:</strong> {servicioDetalle.nombreSectorial || servicioDetalle.sectorial || 'N/A'}</p>
+                                    <p><strong>Frecuencia:</strong> {servicioDetalle.frecuencia || 'N/A'}</p>
+                                    <p><strong>SSID:</strong> {servicioDetalle.ssid || 'N/A'}</p>
+                                    <p><strong>IP antena:</strong> {servicioDetalle.ipAntena || 'N/A'}</p>
+                                    <p><strong>Modelo antena:</strong> {servicioDetalle.modeloAntena || 'N/A'}</p>
+                                    <p><strong>Usuario CPE:</strong> {servicioDetalle.usuarioCpe || 'N/A'}</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </main>
     );
 }
@@ -1383,7 +1442,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         padding: '12px',
         marginTop: '10px',
         fontSize: '13px',
-        color: '#334155',
+        color: '#1b222c',
         marginBottom: 10,
     },
 
@@ -1579,6 +1638,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     },
     card: {
         background: 'linear-gradient(180deg, #0f172a, #020617)',
+        width: 400,
         border: '1px solid rgba(34,211,238,0.22)',
         borderRadius: '22px',
         padding: '18px',

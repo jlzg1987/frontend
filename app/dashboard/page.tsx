@@ -1018,6 +1018,8 @@ export default function DashboardPage() {
                                 onAbrirAdministracion={() => setVistaActual('PlanInternet')}
                                 onAbrirClientes={() => setVistaActual('Clientes')}
                                 onAbrirImportarclientes={() => setVistaActual('ImportarClientes')}
+                                onAbrirPagosmensuales={() => setVistaActual('pagos')}
+                                onAbrirFacturacion={() => setVistaActual('facturamanual')}
                             />
                         )}
                         {vistaActual === 'PlanInternet' && (
@@ -1030,7 +1032,9 @@ export default function DashboardPage() {
                             <ImportarClientesInterno />
                         )}
                         {vistaActual === 'contratosServicios' && (
-                            <ContratosServiciosPage />
+                            <ContratosServiciosPage
+                                onAbrirFacturainterna={() => setVistaActual('facturamanual')}
+                            />
                         )}
                         {vistaActual === 'infraestructura' && (
                             <InfraestructuraPage
