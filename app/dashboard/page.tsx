@@ -71,6 +71,7 @@ import WirelessMonitoreoProPage from '../infraestructura/wireless/monitoreo/page
 import BotNotificaciones from './notificaciones/page';
 import AlertasCriticasWirelessPage from '../infraestructura/wireless/alertas-criticas/page';
 import TodasNotificacionesPage from './lista-notificaciones/page';
+import PerfilAdministrativoPage from './perfiles/administrativo/[servicioId]/page';
 
 
 type DashboardResponse = {
@@ -97,6 +98,8 @@ export default function DashboardPage() {
     const [tecnicoSeleccionadoId, setTecnicoSeleccionadoId] = useState<string | null>(null);
     const [DetalleClienteId, setDetalleClienteId] = useState<string | null>(null);
     const [ticketsIdSeleccionadoId, setticketsIdSeleccionadoId] = useState<string | null>(null);
+    const [servicioIdPerfil, setServicioIdPerfil] = useState<string>('');
+
 
     const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
 
@@ -112,6 +115,7 @@ export default function DashboardPage() {
         | 'ListadoTickets' | 'fichaCliente' | 'talleCliente' | 'detalletickets' | 'AtencionCampo' | 'AbrirMantenimiento'
         | 'AbrirReportes' | 'AbrirReporteAdmin' | 'mikrotikCortes' | 'mikroikconfiguracion' | 'pagos' | 'EquiposWireless'
         | 'enlaces' | 'CPEClientes' | 'AlertasWireless' | 'MonitoreoWireless' | 'EquiposOffline' | 'listaNotificacion'
+        | 'PerfilAdministrativo'
     >('dashboard');
 
 
@@ -235,6 +239,13 @@ export default function DashboardPage() {
 
 
     const cards = [
+        {
+            title: 'Perfil Administrativo',
+            desc: 'Consulta comercial, facturación, tickets y estado del servicio.',
+            icon: '🧾',
+            href: '/clientes/perfiles/administrativo',
+            color: 'bg-cyan-600',
+        },
         {
             title: 'Clientes',
             desc: 'Registrar, buscar y administrar clientes ISP.',
@@ -877,6 +888,10 @@ export default function DashboardPage() {
                                                     setVistaActual('pagos');
                                                     return;
                                                 }
+                                                if (item.title === 'Perfil Administrativo') {
+                                                    setVistaActual('PerfilAdministrativo');
+                                                    return;
+                                                }
 
 
                                                 router.push(item.href);
@@ -900,7 +915,9 @@ export default function DashboardPage() {
                             </>
                         )}
 
-
+                        {vistaActual === 'PerfilAdministrativo' && servicioIdPerfil && (
+                            <PerfilAdministrativoPage servicioId={servicioIdPerfil} />
+                        )}
                         {vistaActual === 'listaNotificacion' && (
                             <TodasNotificacionesPage />
                         )}
@@ -1034,8 +1051,14 @@ export default function DashboardPage() {
                         {vistaActual === 'contratosServicios' && (
                             <ContratosServiciosPage
                                 onAbrirFacturainterna={() => setVistaActual('facturamanual')}
+                                onAbrirPerfilAdministrativo={(servicioId) => {
+                                    setServicioIdPerfil(servicioId);
+                                    setVistaActual('PerfilAdministrativo');
+                                }}
                             />
+
                         )}
+
                         {vistaActual === 'infraestructura' && (
                             <InfraestructuraPage
                                 onVolver={() => setVistaActual('dashboard')}

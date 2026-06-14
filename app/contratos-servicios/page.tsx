@@ -71,9 +71,11 @@ type Servicio = {
 };
 
 export default function ContratosServiciosPage({
-    onAbrirFacturainterna
+    onAbrirFacturainterna,
+    onAbrirPerfilAdministrativo,
 }: {
     onAbrirFacturainterna: () => void;
+    onAbrirPerfilAdministrativo: (servicioId: string) => void;
 }) {
     const [servicios, setServicios] = useState<Servicio[]>([]);
     const [loading, setLoading] = useState(true);
@@ -658,6 +660,19 @@ export default function ContratosServiciosPage({
                                         onClick={() => abrirDetalleServicio(servicio)}
                                     >
                                         Ver detalle
+                                    </button>
+                                    <button
+                                        style={{
+                                            ...styles.secondaryButton,
+                                            background: '#0891b2',
+                                            color: '#fff',
+                                            marginLeft: 10,
+                                        }}
+                                        onClick={() =>
+                                            onAbrirPerfilAdministrativo(servicio.servicioId)
+                                        }
+                                    >
+                                        Perfil Admin
                                     </button>
                                 </div>
 
