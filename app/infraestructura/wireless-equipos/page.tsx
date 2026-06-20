@@ -95,10 +95,66 @@ export default function EquiposWirelessPage() {
     const [ordenCampo, setOrdenCampo] = useState<'ipGestion' | 'ultimoPingMs' | null>(null);
     const [ordenAsc, setOrdenAsc] = useState(true);
 
+    const [frecuenciaCliente, setFrecuenciaCliente] = useState('');
+    const [aplicandoFrecuencia, setAplicandoFrecuencia] = useState(false);
+
+    const [modalWanConfig, setModalWanConfig] = useState(false);
+    const [modalReiniciarCpe, setModalReiniciarCpe] = useState(false);
+    const [datosReinicio, setDatosReinicio] = useState({
+        usuario: "ubnt",
+        clave: "",
+        puerto: 22,
+    });
+
+    const [modalCambiarNombre, setModalCambiarNombre] = useState(false);
+
+    const [datosNombreEquipo, setDatosNombreEquipo] = useState({
+        usuario: "ubnt",
+        clave: "",
+        puerto: 22,
+        nuevoNombre: "",
+    });
+
+    const [aplicandoWanConfig, setAplicandoWanConfig] = useState(false);
+
+    const [wanConfig, setWanConfig] = useState({
+        ipAddress: '',
+        netmask: '255.255.255.0',
+        gateway: '',
+        dns1: '8.8.8.8',
+        dns2: '1.1.1.1',
+    });
+
     const [credencialesCliente, setCredencialesCliente] = useState({
         usuarioCliente: '',
         claveCliente: '',
         puertoCliente: 22,
+    });
+
+    const [modalDmzConfig, setModalDmzConfig] = useState(false);
+    const [aplicandoDmz, setAplicandoDmz] = useState(false);
+
+    const [dmzConfig, setDmzConfig] = useState({
+        dmzActivo: true,
+        dmzIp: '',
+        dmzManagementPorts: false,
+        usuario: 'ubnt',
+        clave: '',
+        puerto: 22,
+    });
+
+    const [modalPortForward, setModalPortForward] = useState(false);
+    const [aplicandoPortForward, setAplicandoPortForward] = useState(false);
+
+    const [portForwardConfig, setPortForwardConfig] = useState({
+        nombre: "NETCOMP_FORWARD",
+        protocolo: "tcp",
+        puertoExterno: "",
+        ipDestino: "",
+        puertoInterno: "",
+        usuario: "ubnt",
+        clave: "",
+        puerto: 22,
     });
 
     const token = getToken();
@@ -799,6 +855,352 @@ export default function EquiposWirelessPage() {
         return `${dias}d ${horas}h ${minutos}m`;
     }
 
+
+    async function reiniciarClienteWireless() {
+        if (!equipoMetricasId || !clienteWireless?.lastip) return;
+
+        const confirmar = confirm(
+            `¿Seguro que deseas reiniciar el CPE?\n\nIP: ${clienteWireless.lastip}`
+        );
+
+        if (!confirmar) return;
+
+        try {
+            const res = await fetch(
+                `${API_BASE}/wireless/equipos/${equipoMetricasId}/reiniciar`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${getToken()}`,
+                    },
+                    body: JSON.stringify({
+                        ipCliente: clienteWireless.lastip,
+                        usuarioCliente: datosReinicio.usuario,
+                        claveCliente: datosReinicio.clave,
+                        puertoCliente: Number(datosReinicio.puerto || 22),
+                    }),
+                }
+            );
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.mensaje || "No se pudo reiniciar el CPE");
+                return;
+            }
+
+            alert(data.mensaje || "Reinicio enviado correctamente");
+        } catch (error) {
+            console.error(error);
+            alert("Error reiniciando CPE");
+        }
+    }
+    function calcularGatewayPorIp(ip?: string) {
+        const partes = String(ip || "").split(".");
+
+        if (partes.length !== 4) {
+            return "100.100.3.1";
+        }
+
+        return `${partes[0]}.${partes[1]}.${partes[2]}.1`;
+    }
+
+    function abrirModalWanCliente() {
+        const ipActual = clienteWireless?.lastip || "";
+
+        const gatewayActual =
+            routeInfo.gateway && routeInfo.gateway !== "-"
+                ? routeInfo.gateway
+                : calcularGatewayPorIp(ipActual);
+
+        setWanConfig({
+            ipAddress: ipActual,
+            netmask: "255.255.255.0",
+            gateway: gatewayActual,
+            dns1: dnsInfo.dns1 && dnsInfo.dns1 !== "-" ? dnsInfo.dns1 : "8.8.8.8",
+            dns2: dnsInfo.dns2 && dnsInfo.dns2 !== "-" ? dnsInfo.dns2 : "1.1.1.1",
+        });
+
+        setModalWanConfig(true);
+    }
+
+    async function cambiarFrecuenciaClienteWireless() {
+        if (!equipoMetricasId || !clienteWireless?.lastip) return;
+
+        const frecuencia = Number(frecuenciaCliente);
+
+        if (!frecuencia || frecuencia < 5000 || frecuencia > 6100) {
+            alert("Ingrese una frecuencia válida entre 5000 y 6100 MHz");
+            return;
+        }
+
+        if (!credencialesCliente.usuarioCliente || !credencialesCliente.claveCliente) {
+            alert("Ingrese usuario y clave SSH del CPE cliente.");
+            setModalScanSectorial(true);
+            return;
+        }
+
+        const confirmar = confirm(
+            `¿Cambiar frecuencia del CPE?\n\nIP: ${clienteWireless.lastip}\nFrecuencia: ${frecuencia} MHz\n\nEl equipo puede reiniciarse.`
+        );
+
+        if (!confirmar) return;
+
+        setAplicandoFrecuencia(true);
+
+        try {
+            const res = await fetch(
+                `${API_BASE}/wireless/equipos/${equipoMetricasId}/cliente/cambiar-frecuencia`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${getToken()}`,
+                    },
+                    body: JSON.stringify({
+                        ipCliente: clienteWireless.lastip,
+                        usuarioCliente: credencialesCliente.usuarioCliente,
+                        claveCliente: credencialesCliente.claveCliente,
+                        puertoCliente: Number(credencialesCliente.puertoCliente || 22),
+                        frecuencia,
+                    }),
+                }
+            );
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.mensaje || "No se pudo cambiar la frecuencia");
+                return;
+            }
+
+            alert(data.mensaje || "Frecuencia aplicada correctamente");
+
+        } catch (error) {
+            console.error(error);
+            alert("Error cambiando frecuencia");
+        } finally {
+            setAplicandoFrecuencia(false);
+        }
+    }
+
+    async function aplicarWanConfigCliente() {
+        if (!equipoMetricasId || !clienteWireless?.lastip) return;
+
+        if (!credencialesCliente.usuarioCliente || !credencialesCliente.claveCliente) {
+            alert("Ingrese usuario y clave SSH del CPE cliente.");
+            setModalScanSectorial(true);
+            return;
+        }
+
+        if (!wanConfig.ipAddress || !wanConfig.netmask || !wanConfig.gateway) {
+            alert("IP, máscara y gateway son obligatorios");
+            return;
+        }
+
+        const confirmar = confirm(
+            `¿Aplicar nueva configuración WAN?\n\nIP: ${wanConfig.ipAddress}\nGateway: ${wanConfig.gateway}`
+        );
+
+        if (!confirmar) return;
+
+        setAplicandoWanConfig(true);
+
+        try {
+            const res = await fetch(
+                `${API_BASE}/wireless/equipos/${equipoMetricasId}/cliente/config-wan`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${getToken()}`,
+                    },
+                    body: JSON.stringify({
+                        ipCliente: clienteWireless.lastip,
+                        usuarioCliente: credencialesCliente.usuarioCliente,
+                        claveCliente: credencialesCliente.claveCliente,
+                        puertoCliente: Number(credencialesCliente.puertoCliente || 22),
+                        ...wanConfig,
+                    }),
+                }
+            );
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.mensaje || "No se pudo aplicar configuración WAN");
+                return;
+            }
+
+            alert(data.mensaje || "Configuración aplicada correctamente");
+            setModalWanConfig(false);
+
+        } catch (error) {
+            console.error(error);
+            alert("Error aplicando configuración WAN");
+        } finally {
+            setAplicandoWanConfig(false);
+        }
+    }
+
+    async function cambiarNombreEquipoWireless() {
+        if (!equipoMetricasId || !clienteWireless?.lastip) return;
+
+        const res = await fetch(
+            `${API_BASE}/wireless/equipos/${equipoMetricasId}/cliente/cambiar-nombre`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${getToken()}`,
+                },
+                body: JSON.stringify({
+                    ipCliente: clienteWireless.lastip,
+                    usuarioCliente: datosNombreEquipo.usuario,
+                    claveCliente: datosNombreEquipo.clave,
+                    puertoCliente: datosNombreEquipo.puerto,
+                    nuevoNombre: datosNombreEquipo.nuevoNombre,
+                }),
+            }
+        );
+
+        const data = await res.json();
+
+        if (!data.ok) {
+            alert(data.mensaje || "Error");
+            return;
+        }
+
+        alert("Nombre actualizado");
+        setModalCambiarNombre(false);
+    }
+
+    async function aplicarDmzConfigCliente() {
+        if (!equipoMetricasId || !clienteWireless?.lastip) return;
+
+        if (!dmzConfig.usuario || !dmzConfig.clave) {
+            alert("Ingrese usuario y clave SSH");
+            return;
+        }
+
+        if (dmzConfig.dmzActivo && !dmzConfig.dmzIp) {
+            alert("Ingrese la IP DMZ");
+            return;
+        }
+
+        setAplicandoDmz(true);
+
+        try {
+            const res = await fetch(
+                `${API_BASE}/wireless/equipos/${equipoMetricasId}/cliente/config-dmz`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${getToken()}`,
+                    },
+                    body: JSON.stringify({
+                        ipCliente: clienteWireless.lastip,
+                        usuarioCliente: dmzConfig.usuario,
+                        claveCliente: dmzConfig.clave,
+                        puertoCliente: Number(dmzConfig.puerto || 22),
+                        dmzActivo: dmzConfig.dmzActivo,
+                        dmzIp: dmzConfig.dmzIp,
+                        dmzManagementPorts: dmzConfig.dmzManagementPorts,
+                    }),
+                }
+            );
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.mensaje || "No se pudo configurar DMZ");
+                return;
+            }
+
+            alert(data.mensaje || "DMZ configurado correctamente");
+            setModalDmzConfig(false);
+
+        } catch (error) {
+            console.error(error);
+            alert("Error configurando DMZ");
+        } finally {
+            setAplicandoDmz(false);
+        }
+    }
+
+    async function aplicarPortForwardCliente() {
+        if (!equipoMetricasId || !clienteWireless?.lastip) return;
+
+        if (!portForwardConfig.usuario || !portForwardConfig.clave) {
+            alert("Ingrese usuario y clave SSH");
+            return;
+        }
+
+        if (
+            !portForwardConfig.protocolo ||
+            !portForwardConfig.puertoExterno ||
+            !portForwardConfig.ipDestino ||
+            !portForwardConfig.puertoInterno
+        ) {
+            alert("Protocolo, puerto externo, IP destino y puerto interno son obligatorios");
+            return;
+        }
+
+        const confirmar = confirm(
+            `¿Agregar Port Forward?\n\n` +
+            `CPE: ${clienteWireless.lastip}\n` +
+            `Protocolo: ${portForwardConfig.protocolo}\n` +
+            `Puerto externo: ${portForwardConfig.puertoExterno}\n` +
+            `Destino: ${portForwardConfig.ipDestino}:${portForwardConfig.puertoInterno}`
+        );
+
+        if (!confirmar) return;
+
+        setAplicandoPortForward(true);
+
+        try {
+            const res = await fetch(
+                `${API_BASE}/wireless/equipos/${equipoMetricasId}/cliente/port-forward`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${getToken()}`,
+                    },
+                    body: JSON.stringify({
+                        ipCliente: clienteWireless.lastip,
+                        usuarioCliente: portForwardConfig.usuario,
+                        claveCliente: portForwardConfig.clave,
+                        puertoCliente: Number(portForwardConfig.puerto || 22),
+                        nombre: portForwardConfig.nombre,
+                        protocolo: portForwardConfig.protocolo,
+                        puertoExterno: Number(portForwardConfig.puertoExterno),
+                        ipDestino: portForwardConfig.ipDestino,
+                        puertoInterno: Number(portForwardConfig.puertoInterno),
+                    }),
+                }
+            );
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.mensaje || "No se pudo agregar el Port Forward");
+                return;
+            }
+
+            alert(data.mensaje || "Port Forward agregado correctamente");
+            setModalPortForward(false);
+
+        } catch (error) {
+            console.error(error);
+            alert("Error agregando Port Forward");
+        } finally {
+            setAplicandoPortForward(false);
+        }
+    }
+
     return (
         <div className="p-6 text-white">
 
@@ -1197,6 +1599,7 @@ export default function EquiposWirelessPage() {
                                         </p>
                                     </div>
                                 )}
+
                                 {/* RADIO */}
 
                                 <h3 className="text-lg font-bold text-cyan-400 mb-3">
@@ -1287,6 +1690,50 @@ export default function EquiposWirelessPage() {
                                     <p className="text-cyan-400 font-bold">
                                         {calcularCcq(mca.signal)}
                                     </p>
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={escanearSectorialesCliente}
+                                        disabled={escaneandoSectoriales}
+                                        className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-700 px-4 py-2 rounded-xl font-bold"
+                                    >
+                                        {escaneandoSectoriales ? "Escaneando..." : "Escanear"}
+                                    </button>
+
+                                    <button
+                                        onClick={() => setModalReiniciarCpe(true)}
+                                        className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-xl font-bold"
+                                    >
+                                        Reiniciar CPE
+                                    </button>
+
+                                    <div className="flex flex-wrap gap-2 items-center mb-4">
+                                        <input
+                                            type="number"
+                                            min={5000}
+                                            max={6100}
+                                            value={frecuenciaCliente}
+                                            onChange={(e) => setFrecuenciaCliente(e.target.value)}
+                                            placeholder="Frecuencia 5000-6100"
+                                            className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                                        />
+
+                                        <button
+                                            onClick={cambiarFrecuenciaClienteWireless}
+                                            disabled={aplicandoFrecuencia}
+                                            className="bg-orange-600 hover:bg-orange-700 disabled:bg-slate-700 px-4 py-2 rounded-xl font-bold"
+                                        >
+                                            {aplicandoFrecuencia ? "Aplicando..." : "Cambiar frecuencia"}
+                                        </button>
+
+                                    </div>
+                                    <button
+                                        onClick={abrirModalWanCliente}
+                                        className="bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-xl font-bold"
+                                    >
+                                        Configurar WAN
+                                    </button>
                                 </div>
                                 {/* TRAFICO */}
 
@@ -1832,14 +2279,56 @@ export default function EquiposWirelessPage() {
                             </div>
 
                         </div>
+                        <h3 className="text-lg font-bold text-pink-400 mb-3">
+                            Soporte - Online
+                        </h3>
+                        <div className="bg-slate-800 rounded-xl p-4 mb-4">
 
-                        <button
-                            onClick={() => setModalScanSectorial(true)}
-                            className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-xl font-bold mb-4"
-                        >
-                            Escanear sectoriales
-                        </button>
+                            <div className="flex flex-wrap gap-3 mb-4">
+                                <button
+                                    onClick={() => setModalScanSectorial(true)}
+                                    className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-xl font-bold"
+                                >
+                                    Escanear SSID
+                                </button>
 
+                                <button
+                                    onClick={() => setModalReiniciarCpe(true)}
+                                    className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-xl font-bold"
+                                >
+                                    Reiniciar CPE
+                                </button>
+
+                                <button
+                                    onClick={abrirModalWanCliente}
+                                    className="bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-xl font-bold"
+                                >
+                                    Configurar WAN
+                                </button>
+
+                                <button
+                                    onClick={() => setModalDmzConfig(true)}
+                                    className="bg-pink-600 hover:bg-pink-700 px-4 py-2 rounded-xl font-bold"
+                                >
+                                    Configurar DMZ
+                                </button>
+                                <button
+                                    onClick={() => setModalPortForward(true)}
+                                    className="bg-orange-600 hover:bg-orange-700 px-4 py-2 rounded-xl font-bold"
+                                >
+                                    Port Forward
+                                </button>
+
+                                <button
+                                    onClick={() => setModalCambiarNombre(true)}
+                                    className="bg-cyan-600 hover:bg-cyan-700 px-4 py-2 rounded-xl font-bold"
+                                >
+                                    Cambiar Nombre
+                                </button>
+
+                            </div>
+
+                        </div>
 
                         <div className="bg-slate-800 rounded-xl p-4 h-72 mb-4">
                             <h4 className="font-bold text-cyan-400 mb-3">
@@ -2023,6 +2512,556 @@ export default function EquiposWirelessPage() {
                 </div>
             )}
 
+            {modalReiniciarCpe && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80">
+                    <div className="w-full max-w-md rounded-2xl border border-purple-700 bg-slate-900 p-6">
+
+                        <h2 className="text-xl font-bold mb-4">
+                            Reiniciar CPE
+                        </h2>
+
+                        <div className="space-y-3">
+
+                            <div>
+                                <label className="block text-sm mb-1">
+                                    Usuario SSH
+                                </label>
+
+                                <input
+                                    value={datosReinicio.usuario}
+                                    onChange={(e) =>
+                                        setDatosReinicio((p) => ({
+                                            ...p,
+                                            usuario: e.target.value,
+                                        }))
+                                    }
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm mb-1">
+                                    Clave SSH
+                                </label>
+
+                                <input
+                                    type="password"
+                                    value={datosReinicio.clave}
+                                    onChange={(e) =>
+                                        setDatosReinicio((p) => ({
+                                            ...p,
+                                            clave: e.target.value,
+                                        }))
+                                    }
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm mb-1">
+                                    Puerto SSH
+                                </label>
+
+                                <input
+                                    type="number"
+                                    value={datosReinicio.puerto}
+                                    onChange={(e) =>
+                                        setDatosReinicio((p) => ({
+                                            ...p,
+                                            puerto: Number(e.target.value || 22),
+                                        }))
+                                    }
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                                />
+                            </div>
+
+                            <div className="rounded-xl border border-yellow-700 bg-yellow-950/30 p-3 text-sm">
+                                El equipo se reiniciará inmediatamente.
+                            </div>
+
+                        </div>
+
+                        <div className="flex justify-end gap-3 mt-5">
+
+                            <button
+                                onClick={() => setModalReiniciarCpe(false)}
+                                className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-xl"
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                onClick={reiniciarClienteWireless}
+                                className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-xl font-bold"
+                            >
+                                Reiniciar
+                            </button>
+                            <button
+                                onClick={() => setModalCambiarNombre(true)}
+                                className="bg-cyan-600 hover:bg-cyan-700 px-4 py-2 rounded-xl font-bold"
+                            >
+                                Cambiar Nombre
+                            </button>
+
+
+
+                        </div>
+
+                    </div>
+                </div>
+            )}
+
+            {modalCambiarNombre && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80">
+                    <div className="w-full max-w-lg rounded-2xl border border-cyan-700 bg-slate-900 p-6">
+
+                        <h2 className="text-xl font-bold mb-4">
+                            Cambiar Nombre del Equipo
+                        </h2>
+
+                        <div className="space-y-3">
+
+                            <input
+                                value={datosNombreEquipo.nuevoNombre}
+                                onChange={(e) =>
+                                    setDatosNombreEquipo((p) => ({
+                                        ...p,
+                                        nuevoNombre: e.target.value,
+                                    }))
+                                }
+                                placeholder="Nuevo nombre"
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <input
+                                value={datosNombreEquipo.usuario}
+                                onChange={(e) =>
+                                    setDatosNombreEquipo((p) => ({
+                                        ...p,
+                                        usuario: e.target.value,
+                                    }))
+                                }
+                                placeholder="Usuario SSH"
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <input
+                                type="password"
+                                value={datosNombreEquipo.clave}
+                                onChange={(e) =>
+                                    setDatosNombreEquipo((p) => ({
+                                        ...p,
+                                        clave: e.target.value,
+                                    }))
+                                }
+                                placeholder="Clave SSH"
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <input
+                                type="number"
+                                value={datosNombreEquipo.puerto}
+                                onChange={(e) =>
+                                    setDatosNombreEquipo((p) => ({
+                                        ...p,
+                                        puerto: Number(e.target.value || 22),
+                                    }))
+                                }
+                                placeholder="Puerto SSH"
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                        </div>
+
+                        <div className="flex justify-end gap-3 mt-5">
+                            <button
+                                onClick={() => setModalCambiarNombre(false)}
+                                className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-xl"
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                onClick={cambiarNombreEquipoWireless}
+                                className="bg-cyan-600 hover:bg-cyan-700 px-4 py-2 rounded-xl font-bold"
+                            >
+                                Guardar
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+            )}
+
+            {modalWanConfig && clienteWireless && (
+                <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[90]">
+                    <div className="bg-slate-900 border border-emerald-700 rounded-2xl p-6 w-full max-w-2xl">
+                        <div className="flex justify-between items-center mb-4">
+                            <div>
+                                <h2 className="text-xl font-bold text-white">
+                                    Configuración WAN / Red
+                                </h2>
+                                <p className="text-sm text-slate-400">
+                                    CPE: {clienteWireless?.remote?.hostname || clienteWireless?.name || "-"} —
+                                    IP actual: {clienteWireless?.lastip || "-"}
+                                </p>
+                            </div>
+
+                            <button
+                                onClick={() => setModalWanConfig(false)}
+                                className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-xl font-bold"
+                            >
+                                Cerrar
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <input
+                                value={wanConfig.ipAddress}
+                                onChange={(e) =>
+                                    setWanConfig((p) => ({ ...p, ipAddress: e.target.value }))
+                                }
+                                placeholder="Nueva IP Ej: 192.168.84.50"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <input
+                                value={wanConfig.netmask}
+                                onChange={(e) =>
+                                    setWanConfig((p) => ({ ...p, netmask: e.target.value }))
+                                }
+                                placeholder="Máscara Ej: 255.255.255.0"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <input
+                                value={wanConfig.gateway}
+                                onChange={(e) =>
+                                    setWanConfig((p) => ({ ...p, gateway: e.target.value }))
+                                }
+                                placeholder="Gateway Ej: 192.168.84.1"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <input
+                                value={wanConfig.dns1}
+                                onChange={(e) =>
+                                    setWanConfig((p) => ({ ...p, dns1: e.target.value }))
+                                }
+                                placeholder="DNS 1"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <input
+                                value={wanConfig.dns2}
+                                onChange={(e) =>
+                                    setWanConfig((p) => ({ ...p, dns2: e.target.value }))
+                                }
+                                placeholder="DNS 2"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+                        </div>
+
+                        <div className="mt-4 rounded-xl border border-yellow-700 bg-yellow-950/40 p-3 text-sm text-yellow-200">
+                            Al aplicar, el CPE puede perder conexión si la IP o gateway quedan incorrectos.
+                        </div>
+
+                        <div className="flex justify-end gap-3 mt-5">
+                            <button
+                                onClick={() => setModalWanConfig(false)}
+                                className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-xl font-bold"
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                onClick={aplicarWanConfigCliente}
+                                disabled={aplicandoWanConfig}
+                                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 px-4 py-2 rounded-xl font-bold"
+                            >
+                                {aplicandoWanConfig ? "Aplicando..." : "Guardar y aplicar"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {modalDmzConfig && clienteWireless && (
+                <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[95]">
+                    <div className="bg-slate-900 border border-pink-700 rounded-2xl p-6 w-full max-w-lg">
+                        <div className="flex justify-between items-center mb-4">
+                            <div>
+                                <h2 className="text-xl font-bold text-white">
+                                    Configurar DMZ
+                                </h2>
+                                <p className="text-sm text-slate-400">
+                                    CPE: {clienteWireless?.remote?.hostname || clienteWireless?.name || "-"} —
+                                    IP actual: {clienteWireless?.lastip || "-"}
+                                </p>
+                            </div>
+
+                            <button
+                                onClick={() => setModalDmzConfig(false)}
+                                className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-xl font-bold"
+                            >
+                                Cerrar
+                            </button>
+                        </div>
+
+                        <div className="space-y-3">
+                            <label className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    checked={dmzConfig.dmzActivo}
+                                    onChange={(e) =>
+                                        setDmzConfig((p) => ({
+                                            ...p,
+                                            dmzActivo: e.target.checked,
+                                        }))
+                                    }
+                                />
+                                <span>DMZ Enable</span>
+                            </label>
+
+                            <label className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    checked={dmzConfig.dmzManagementPorts}
+                                    onChange={(e) =>
+                                        setDmzConfig((p) => ({
+                                            ...p,
+                                            dmzManagementPorts: e.target.checked,
+                                        }))
+                                    }
+                                />
+                                <span>DMZ Management Ports</span>
+                            </label>
+
+                            <input
+                                value={dmzConfig.dmzIp}
+                                onChange={(e) =>
+                                    setDmzConfig((p) => ({
+                                        ...p,
+                                        dmzIp: e.target.value,
+                                    }))
+                                }
+                                placeholder="DMZ IP Ej: 192.168.1.100"
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <input
+                                value={dmzConfig.usuario}
+                                onChange={(e) =>
+                                    setDmzConfig((p) => ({
+                                        ...p,
+                                        usuario: e.target.value,
+                                    }))
+                                }
+                                placeholder="Usuario SSH"
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <input
+                                type="password"
+                                value={dmzConfig.clave}
+                                onChange={(e) =>
+                                    setDmzConfig((p) => ({
+                                        ...p,
+                                        clave: e.target.value,
+                                    }))
+                                }
+                                placeholder="Clave SSH"
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <input
+                                type="number"
+                                value={dmzConfig.puerto}
+                                onChange={(e) =>
+                                    setDmzConfig((p) => ({
+                                        ...p,
+                                        puerto: Number(e.target.value || 22),
+                                    }))
+                                }
+                                placeholder="Puerto SSH"
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+                        </div>
+
+                        <div className="mt-4 rounded-xl border border-yellow-700 bg-yellow-950/40 p-3 text-sm text-yellow-200">
+                            Al guardar se aplicará la configuración y el CPE puede reiniciarse.
+                        </div>
+
+                        <div className="flex justify-end gap-3 mt-5">
+                            <button
+                                onClick={() => setModalDmzConfig(false)}
+                                className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-xl font-bold"
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                onClick={aplicarDmzConfigCliente}
+                                disabled={aplicandoDmz}
+                                className="bg-pink-600 hover:bg-pink-700 disabled:bg-slate-700 px-4 py-2 rounded-xl font-bold"
+                            >
+                                {aplicandoDmz ? "Aplicando..." : "Guardar y aplicar"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {modalPortForward && clienteWireless && (
+                <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[96]">
+                    <div className="bg-slate-900 border border-orange-700 rounded-2xl p-6 w-full max-w-xl">
+                        <div className="flex justify-between items-center mb-4">
+                            <div>
+                                <h2 className="text-xl font-bold text-white">
+                                    Configurar Port Forward
+                                </h2>
+                                <p className="text-sm text-slate-400">
+                                    CPE: {clienteWireless?.remote?.hostname || clienteWireless?.name || "-"} —
+                                    IP actual: {clienteWireless?.lastip || "-"}
+                                </p>
+                            </div>
+
+                            <button
+                                onClick={() => setModalPortForward(false)}
+                                className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-xl font-bold"
+                            >
+                                Cerrar
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <input
+                                value={portForwardConfig.nombre}
+                                onChange={(e) =>
+                                    setPortForwardConfig((p) => ({
+                                        ...p,
+                                        nombre: e.target.value,
+                                    }))
+                                }
+                                placeholder="Nombre regla Ej: CAMARA_CLIENTE"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 md:col-span-2"
+                            />
+
+                            <select
+                                value={portForwardConfig.protocolo}
+                                onChange={(e) =>
+                                    setPortForwardConfig((p) => ({
+                                        ...p,
+                                        protocolo: e.target.value,
+                                    }))
+                                }
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            >
+                                <option value="tcp">TCP</option>
+                                <option value="udp">UDP</option>
+                                <option value="tcpudp">TCP/UDP</option>
+                            </select>
+
+                            <input
+                                type="number"
+                                value={portForwardConfig.puertoExterno}
+                                onChange={(e) =>
+                                    setPortForwardConfig((p) => ({
+                                        ...p,
+                                        puertoExterno: e.target.value,
+                                    }))
+                                }
+                                placeholder="Puerto externo Ej: 8080"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <input
+                                value={portForwardConfig.ipDestino}
+                                onChange={(e) =>
+                                    setPortForwardConfig((p) => ({
+                                        ...p,
+                                        ipDestino: e.target.value,
+                                    }))
+                                }
+                                placeholder="IP destino LAN Ej: 192.168.1.100"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <input
+                                type="number"
+                                value={portForwardConfig.puertoInterno}
+                                onChange={(e) =>
+                                    setPortForwardConfig((p) => ({
+                                        ...p,
+                                        puertoInterno: e.target.value,
+                                    }))
+                                }
+                                placeholder="Puerto interno Ej: 80"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <input
+                                value={portForwardConfig.usuario}
+                                onChange={(e) =>
+                                    setPortForwardConfig((p) => ({
+                                        ...p,
+                                        usuario: e.target.value,
+                                    }))
+                                }
+                                placeholder="Usuario SSH"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <input
+                                type="password"
+                                value={portForwardConfig.clave}
+                                onChange={(e) =>
+                                    setPortForwardConfig((p) => ({
+                                        ...p,
+                                        clave: e.target.value,
+                                    }))
+                                }
+                                placeholder="Clave SSH"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <input
+                                type="number"
+                                value={portForwardConfig.puerto}
+                                onChange={(e) =>
+                                    setPortForwardConfig((p) => ({
+                                        ...p,
+                                        puerto: Number(e.target.value || 22),
+                                    }))
+                                }
+                                placeholder="Puerto SSH"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 md:col-span-2"
+                            />
+                        </div>
+
+                        <div className="mt-4 rounded-xl border border-yellow-700 bg-yellow-950/40 p-3 text-sm text-yellow-200">
+                            Esta regla abrirá un puerto externo del CPE hacia un equipo interno de la red LAN.
+                        </div>
+
+                        <div className="flex justify-end gap-3 mt-5">
+                            <button
+                                onClick={() => setModalPortForward(false)}
+                                className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-xl font-bold"
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                onClick={aplicarPortForwardCliente}
+                                disabled={aplicandoPortForward}
+                                className="bg-orange-600 hover:bg-orange-700 disabled:bg-slate-700 px-4 py-2 rounded-xl font-bold"
+                            >
+                                {aplicandoPortForward ? "Aplicando..." : "Guardar Port Forward"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 }

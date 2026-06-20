@@ -10,7 +10,28 @@ type RouterMikrotik = {
     parroquia: string;
     sector: string;
 };
-
+type EquipoWireless = {
+    routerId: number | '';
+    equipoId?: string;
+    nombre: string;
+    marca: string;
+    modelo?: string;
+    tipoEquipo: string;
+    ipGestion: string;
+    mac?: string;
+    usuarioSsh?: string;
+    claveSsh?: string;
+    puertoSsh?: number;
+    snmpActivo?: number;
+    snmpComunidad?: string;
+    snmpVersion?: string;
+    ubicacion?: string;
+    estado?: string;
+    ultimoEstado?: string;
+    ultimoPingMs?: number | null;
+    routerNombre?: string;
+    routerSector?: string;
+};
 export default function ConfiguracionMikrotikPage() {
     const [routers, setRouters] = useState<RouterMikrotik[]>([]);
     const [routerId, setRouterId] = useState<number | ''>('');
@@ -108,7 +129,262 @@ export default function ConfiguracionMikrotikPage() {
     const [ordenArpAsc, setOrdenArpAsc] = useState(true);
     const [ordenNeighborAsc, setOrdenNeighborAsc] = useState(true);
 
+    const [addressLists, setAddressLists] = useState<any[]>([]);
+    const [cargandoAddressLists, setCargandoAddressLists] = useState(false);
+
+    const [mangleRules, setMangleRules] = useState<any[]>([]);
+    const [cargandoMangle, setCargandoMangle] = useState(false);
+
+    const [modalMangle, setModalMangle] = useState(false);
+
+    const [mangleChain, setMangleChain] = useState("prerouting");
+    const [mangleAction, setMangleAction] = useState("mark-packet");
+    const [mangleSrcAddress, setMangleSrcAddress] = useState("");
+    const [mangleDstAddress, setMangleDstAddress] = useState("");
+    const [mangleProtocol, setMangleProtocol] = useState("");
+    const [mangleDstPort, setMangleDstPort] = useState("");
+    const [mangleInInterface, setMangleInInterface] = useState("");
+    const [mangleOutInterface, setMangleOutInterface] = useState("");
+    const [mangleNewPacketMark, setMangleNewPacketMark] = useState("");
+    const [mangleNewConnectionMark, setMangleNewConnectionMark] = useState("");
+    const [mangleNewRoutingMark, setMangleNewRoutingMark] = useState("");
+    const [manglePassthrough, setManglePassthrough] = useState("yes");
+    const [mangleComment, setMangleComment] = useState("");
+
+    const [modalAgregarLista, setModalAgregarLista] = useState(false);
+    const [ipSeleccionadaLista, setIpSeleccionadaLista] = useState('');
+    const [listaSeleccionada, setListaSeleccionada] = useState<'MOROSOS' | 'CORTADOS'>('MOROSOS');
+    const [comentarioLista, setComentarioLista] = useState('');
+    const [agregandoLista, setAgregandoLista] = useState(false);
+
+    const [modalCrearEquipoNeighbor, setModalCrearEquipoNeighbor] = useState(false);
+    const [creandoEquipoNeighbor, setCreandoEquipoNeighbor] = useState(false);
+
+    const [equipoNeighborForm, setEquipoNeighborForm] = useState({
+        routerId: '',
+        nombre: '',
+        marca: 'OTRO',
+        modelo: '',
+        tipoEquipo: 'SECTORIAL',
+        ipGestion: '',
+        mac: '',
+        usuarioSsh: '',
+        claveSsh: '',
+        puertoSsh: 22,
+        snmpActivo: 1,
+        snmpComunidad: 'public',
+        snmpVersion: '2c',
+        ubicacion: '',
+        estado: 'ACTIVO',
+    });
+    const [equipos, setEquipos] = useState<EquipoWireless[]>([]);
+    async function cargarEquipos() {
+        try {
+            const res = await fetch(`${API_BASE}/wireless/equipos`, {
+                headers: {
+                    Authorization: `Bearer ${getToken()}`,
+                },
+            });
+
+            const data = await res.json();
+
+            const lista = Array.isArray(data.equipos)
+                ? data.equipos
+                : Array.isArray(data.data)
+                    ? data.data
+                    : [];
+
+            if (data.ok) {
+                setEquipos(lista);
+            }
+
+        } catch (error) {
+            console.error('Error cargarEquipos:', error);
+        }
+    }
+    function detectarMarcaNeighbor(item: any) {
+        const texto = `${item.platform || ''} ${item.board || ''} ${item.identity || ''}`.toLowerCase();
+
+        if (texto.includes('mikrotik')) return 'MIKROTIK';
+        if (
+            texto.includes('ubiquiti') ||
+            texto.includes('litebeam') ||
+            texto.includes('nanostation') ||
+            texto.includes('nanobeam') ||
+            texto.includes('powerbeam') ||
+            texto.includes('rocket')
+        ) return 'UBIQUITI';
+
+        if (
+            texto.includes('tp-link') ||
+            texto.includes('cpe610') ||
+            texto.includes('cpe605')
+        ) return 'TPLINK';
+
+        return 'OTRO';
+    }
+
+    function abrirModalCrearEquipoNeighbor(item: any) {
+        const ip = item.address || item["address4"] || "";
+        const nombre = item.identity || "";
+        const modelo = item.platform || item.board || "";
+        const mac = item["mac-address"] || "";
+
+        if (!routerId) {
+            alert("Seleccione un router");
+            return;
+        }
+
+        if (!ip) {
+            alert("Este neighbor no tiene IP");
+            return;
+        }
+
+        const routerActual = routers.find((r) => r.id === Number(routerId));
+
+        setEquipoNeighborForm({
+            routerId: Number(routerId) as any,
+            nombre,
+            marca: detectarMarcaNeighbor(item),
+            modelo,
+            tipoEquipo: 'SECTORIAL',
+            ipGestion: ip,
+            mac,
+            usuarioSsh: '',
+            claveSsh: '',
+            puertoSsh: 22,
+            snmpActivo: 1,
+            snmpComunidad: 'public',
+            snmpVersion: '2c',
+            ubicacion: routerActual
+                ? `${routerActual.nombre} - ${routerActual.parroquia} - ${routerActual.sector}`
+                : '',
+            estado: 'ACTIVO',
+        });
+
+        setModalCrearEquipoNeighbor(true);
+    }
+
+    async function guardarEquipoDesdeNeighbor() {
+        if (!equipoNeighborForm.routerId) return alert("Seleccione router");
+        if (!equipoNeighborForm.nombre.trim()) return alert("Ingrese nombre");
+        if (!equipoNeighborForm.ipGestion.trim()) return alert("Ingrese IP gestión");
+        if (!equipoNeighborForm.usuarioSsh.trim()) return alert("Ingrese usuario SSH");
+        if (!equipoNeighborForm.claveSsh.trim()) return alert("Ingrese clave SSH");
+
+        setCreandoEquipoNeighbor(true);
+
+        try {
+            const res = await fetch(`${API_BASE}/wireless/equipos`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${getToken()}`,
+                },
+                body: JSON.stringify(equipoNeighborForm),
+            });
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.mensaje || data.message || "Error creando equipo wireless");
+                return;
+            }
+
+            alert(data.mensaje || "Equipo wireless creado correctamente");
+
+            setModalCrearEquipoNeighbor(false);
+            await cargarIpNeighbors();
+
+        } catch (error) {
+            console.error(error);
+            alert("Error conectando con backend");
+        } finally {
+            setCreandoEquipoNeighbor(false);
+        }
+    }
+
+    function equipoYaRegistrado(item: any) {
+        const ip = item.address || item["address4"] || "";
+        const mac = item["mac-address"] || "";
+
+        return equipos.find(
+            (e) =>
+                e.ipGestion === ip ||
+                (mac && e.mac?.toUpperCase() === mac.toUpperCase())
+        );
+    }
+
     const token = () => getToken();
+
+    function abrirModalAgregarLista(ip: string) {
+        setIpSeleccionadaLista(ip);
+        setListaSeleccionada('MOROSOS');
+        setComentarioLista('');
+        setModalAgregarLista(true);
+    }
+    function abrirModalAgregarNeighborLista(item: any) {
+        const ip = item.address || item.address4 || '';
+        const identity = item.identity || 'Sin nombre';
+
+        if (!ip) {
+            alert('Este neighbor no tiene IP');
+            return;
+        }
+
+        setIpSeleccionadaLista(ip);
+        setListaSeleccionada('MOROSOS');
+        setComentarioLista(identity);
+        setModalAgregarLista(true);
+    }
+
+    async function agregarIpALista() {
+        if (!routerId) return alert('Seleccione un router');
+        if (!ipSeleccionadaLista) return alert('No hay IP seleccionada');
+        if (!comentarioLista.trim()) return alert('Ingrese el nombre del cliente en comentario');
+
+        setAgregandoLista(true);
+
+        try {
+            const res = await fetch(
+                `${API_BASE}/mikrotik-conf/routers/${routerId}/morosos/agregar`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${getToken()}`,
+                    },
+                    body: JSON.stringify({
+                        ipCliente: ipSeleccionadaLista,
+                        comentario: comentarioLista.trim(),
+                        addressList: listaSeleccionada,
+                    }),
+                }
+            );
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.message || data.mensaje || 'Error agregando IP a la lista');
+                return;
+            }
+
+            alert(data.message || `IP agregada a ${listaSeleccionada}`);
+
+            setModalAgregarLista(false);
+            setIpSeleccionadaLista('');
+            setComentarioLista('');
+            setListaSeleccionada('MOROSOS');
+
+            await cargarAddressLists();
+
+        } catch (error) {
+            console.error(error);
+            alert('Error conectando con backend');
+        } finally {
+            setAgregandoLista(false);
+        }
+    }
 
     const arpOrdenado = [...ipArp].sort((a, b) => {
         const ipA = a.address || "";
@@ -216,6 +492,63 @@ export default function ConfiguracionMikrotikPage() {
         XLSX.utils.book_append_sheet(workbook, worksheet, "Datos");
 
         XLSX.writeFile(workbook, `${nombreArchivo}.xlsx`);
+    }
+
+    async function guardarMangle() {
+        if (!routerId) return alert("Seleccione un router");
+
+        try {
+            const res = await fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/mangle`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${getToken()}`,
+                },
+                body: JSON.stringify({
+                    chain: mangleChain,
+                    action: mangleAction,
+                    srcAddress: mangleSrcAddress,
+                    dstAddress: mangleDstAddress,
+                    protocol: mangleProtocol,
+                    dstPort: mangleDstPort,
+                    inInterface: mangleInInterface,
+                    outInterface: mangleOutInterface,
+                    newPacketMark: mangleNewPacketMark,
+                    newConnectionMark: mangleNewConnectionMark,
+                    newRoutingMark: mangleNewRoutingMark,
+                    passthrough: manglePassthrough,
+                    comment: mangleComment,
+                }),
+            });
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.message || "Error creando regla Mangle");
+                return;
+            }
+
+            setModalMangle(false);
+            setMangleSrcAddress("");
+            setMangleDstAddress("");
+            setMangleProtocol("");
+            setMangleDstPort("");
+            setMangleInInterface("");
+            setMangleOutInterface("");
+            setMangleNewPacketMark("");
+            setMangleNewConnectionMark("");
+            setMangleNewRoutingMark("");
+            setManglePassthrough("yes");
+            setMangleComment("");
+
+            await cargarMangle();
+
+            alert(data.message || "Regla Mangle creada correctamente");
+
+        } catch (error) {
+            console.error(error);
+            alert("Error creando regla Mangle");
+        }
     }
 
     async function cargarRouters() {
@@ -1513,8 +1846,62 @@ export default function ConfiguracionMikrotikPage() {
             setCargandoNeighbors(false);
         }
     }
+
+    async function cargarAddressLists() {
+        if (!routerId) return alert("Seleccione un router");
+
+        setCargandoAddressLists(true);
+
+        try {
+            const res = await fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/address-list`, {
+                headers: {
+                    Authorization: `Bearer ${getToken()}`,
+                },
+            });
+
+            const data = await res.json();
+
+            if (data.ok) {
+                setAddressLists(data.datos || []);
+            } else {
+                alert(data.message || "Error cargando Address Lists");
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Error conectando con backend");
+        } finally {
+            setCargandoAddressLists(false);
+        }
+    }
+
+    async function cargarMangle() {
+        if (!routerId) return;
+
+        setCargandoMangle(true);
+
+        try {
+            const res = await fetch(`${API_BASE}/mikrotik-conf/routers/${routerId}/mangle`, {
+                headers: {
+                    Authorization: `Bearer ${getToken()}`,
+                },
+            }
+            );
+            const data = await res.json();
+            if (data.ok) {
+                setMangleRules(data.datos || []);
+            } else {
+                alert(data.message || "Error cargando Mangle");
+            }
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setCargandoMangle(false);
+        }
+    }
+
     useEffect(() => {
         cargarRouters();
+        cargarEquipos();
     }, []);
 
     useEffect(() => {
@@ -1541,12 +1928,7 @@ export default function ConfiguracionMikrotikPage() {
 
     return (
         <main className="min-h-screen bg-slate-950 text-white p-6">
-            <div className="mb-6">
-                <h1 className="text-2xl font-bold">Configuración MikroTik</h1>
-                <p className="text-slate-400">
-                    Servicios, firewall, cortes, address-list, NAT y herramientas operativas.
-                </p>
-            </div>
+
 
             <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
                 <select
@@ -1999,6 +2381,239 @@ export default function ConfiguracionMikrotikPage() {
                         </div>
                     )}
                 </div>
+
+                <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <h2 className="text-lg font-bold">Firewall Mangle</h2>
+                            <p className="text-sm text-slate-400">
+                                Lista las reglas Mangle del MikroTik usadas para marcado de paquetes, rutas, conexiones y QoS.
+                            </p>
+                        </div>
+
+                        <div className="flex gap-2">
+
+                            <button
+                                onClick={cargarMangle}
+                                disabled={!routerId || cargandoMangle}
+                                className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                {cargandoMangle ? "Cargando..." : "Cargar Mangle"}
+                            </button>
+
+                            <button
+                                onClick={() => setModalMangle(true)}
+                                disabled={!routerId}
+                                className="bg-green-600 hover:bg-green-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                Agregar Mangle
+                            </button>
+
+                            <button
+                                onClick={() => exportarExcel("mangle-mikrotik", mangleRules)}
+                                disabled={mangleRules.length === 0}
+                                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                Exportar Excel
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 p-3">
+                            <p className="text-xs text-slate-400">Total reglas</p>
+                            <p className="text-xl font-bold text-cyan-400">{mangleRules.length}</p>
+                        </div>
+
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 p-3">
+                            <p className="text-xs text-slate-400">Activas</p>
+                            <p className="text-xl font-bold text-green-400">
+                                {mangleRules.filter((x) => x.disabled !== "true").length}
+                            </p>
+                        </div>
+
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 p-3">
+                            <p className="text-xs text-slate-400">Desactivadas</p>
+                            <p className="text-xl font-bold text-red-400">
+                                {mangleRules.filter((x) => x.disabled === "true").length}
+                            </p>
+                        </div>
+
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 p-3">
+                            <p className="text-xs text-slate-400">Mark Packet</p>
+                            <p className="text-xl font-bold text-yellow-400">
+                                {mangleRules.filter((x) => x.action === "mark-packet").length}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <div className="max-h-[450px] overflow-y-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-slate-700 text-slate-400">
+                                        <th className="text-left py-2">Chain</th>
+                                        <th className="text-left py-2">Action</th>
+                                        <th className="text-left py-2">Src Address</th>
+                                        <th className="text-left py-2">Dst Address</th>
+                                        <th className="text-left py-2">Protocol</th>
+                                        <th className="text-left py-2">In Interface</th>
+                                        <th className="text-left py-2">Out Interface</th>
+                                        <th className="text-left py-2">New Mark</th>
+                                        <th className="text-left py-2">Comentario</th>
+                                        <th className="text-left py-2">Estado</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    {mangleRules.length === 0 && (
+                                        <tr>
+                                            <td colSpan={10} className="py-4 text-center text-slate-500">
+                                                No hay reglas Mangle cargadas
+                                            </td>
+                                        </tr>
+                                    )}
+
+                                    {mangleRules.map((item, index) => {
+                                        const id = item[".id"] || index;
+                                        const desactivado = item.disabled === "true";
+
+                                        const newMark =
+                                            item["new-packet-mark"] ||
+                                            item["new-connection-mark"] ||
+                                            item["new-routing-mark"] ||
+                                            item["new-dscp"] ||
+                                            "-";
+
+                                        return (
+                                            <tr key={id} className="border-b border-slate-800">
+                                                <td className="py-2 font-semibold">{item.chain || "-"}</td>
+                                                <td className="py-2">{item.action || "-"}</td>
+                                                <td className="py-2">{item["src-address"] || "-"}</td>
+                                                <td className="py-2">{item["dst-address"] || "-"}</td>
+                                                <td className="py-2">{item.protocol || "-"}</td>
+                                                <td className="py-2">{item["in-interface"] || "-"}</td>
+                                                <td className="py-2">{item["out-interface"] || "-"}</td>
+                                                <td className="py-2">{newMark}</td>
+                                                <td className="py-2">{item.comment || "-"}</td>
+                                                <td className="py-2">
+                                                    <span className={desactivado ? "text-red-400 font-semibold" : "text-green-400 font-semibold"}>
+                                                        {desactivado ? "Desactivada" : "Activa"}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <h2 className="text-lg font-bold">Address Lists</h2>
+                            <p className="text-sm text-slate-400">
+                                Lista completa de IP Firewall Address List del MikroTik: MOROSOS, CORTADOS y otras listas.
+                            </p>
+                        </div>
+
+                        <div className="flex gap-2">
+                            <button
+                                onClick={cargarAddressLists}
+                                disabled={!routerId || cargandoAddressLists}
+                                className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                {cargandoAddressLists ? "Cargando..." : "Cargar Address Lists"}
+                            </button>
+
+                            <button
+                                onClick={() => exportarExcel("address-list-mikrotik", addressLists)}
+                                disabled={addressLists.length === 0}
+                                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                Exportar Excel
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 p-3">
+                            <p className="text-xs text-slate-400">Total registros</p>
+                            <p className="text-xl font-bold text-cyan-400">{addressLists.length}</p>
+                        </div>
+
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 p-3">
+                            <p className="text-xs text-slate-400">MOROSOS</p>
+                            <p className="text-xl font-bold text-yellow-400">
+                                {addressLists.filter((x) => x.list === "MOROSOS").length}
+                            </p>
+                        </div>
+
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 p-3">
+                            <p className="text-xs text-slate-400">CORTADOS</p>
+                            <p className="text-xl font-bold text-red-400">
+                                {addressLists.filter((x) => x.list === "CORTADOS").length}
+                            </p>
+                        </div>
+
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 p-3">
+                            <p className="text-xs text-slate-400">Activos</p>
+                            <p className="text-xl font-bold text-green-400">
+                                {addressLists.filter((x) => x.disabled !== "true").length}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <div className="max-h-[450px] overflow-y-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="border-b border-slate-700 text-slate-400">
+                                        <th className="text-left py-2">Lista</th>
+                                        <th className="text-left py-2">IP / Address</th>
+                                        <th className="text-left py-2">Comentario</th>
+                                        <th className="text-left py-2">Creado</th>
+                                        <th className="text-left py-2">Timeout</th>
+                                        <th className="text-left py-2">Estado</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    {addressLists.length === 0 && (
+                                        <tr>
+                                            <td colSpan={6} className="py-4 text-center text-slate-500">
+                                                No hay Address Lists cargadas
+                                            </td>
+                                        </tr>
+                                    )}
+
+                                    {addressLists.map((item) => {
+                                        const id = item[".id"];
+                                        const desactivado = item.disabled === "true";
+
+                                        return (
+                                            <tr key={id} className="border-b border-slate-800">
+                                                <td className="py-2 font-semibold">{item.list || "-"}</td>
+                                                <td className="py-2">{item.address || "-"}</td>
+                                                <td className="py-2">{item.comment || "-"}</td>
+                                                <td className="py-2">{item["creation-time"] || "-"}</td>
+                                                <td className="py-2">{item.timeout || "-"}</td>
+                                                <td className="py-2">
+                                                    <span className={desactivado ? "text-red-400 font-semibold" : "text-green-400 font-semibold"}>
+                                                        {desactivado ? "Desactivado" : "Activo"}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
 
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex items-center justify-between mb-4">
@@ -2768,6 +3383,9 @@ export default function ConfiguracionMikrotikPage() {
                         </div>
                     </div>
                 </div>
+
+
+
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex items-center justify-between mb-4">
                         <div>
@@ -2815,13 +3433,14 @@ export default function ConfiguracionMikrotikPage() {
                                         <th className="text-left py-2">Tipo</th>
                                         <th className="text-left py-2">Estado</th>
                                         <th className="text-left py-2">Comentario</th>
+                                        <th className="text-right py-2">Acción</th>
                                     </tr>
                                 </thead>
 
                                 <tbody>
                                     {arpOrdenado.length === 0 && (
                                         <tr>
-                                            <td colSpan={6} className="py-4 text-center text-slate-500">
+                                            <td colSpan={7} className="py-4 text-center text-slate-500">
                                                 No hay registros ARP cargados
                                             </td>
                                         </tr>
@@ -2845,6 +3464,15 @@ export default function ConfiguracionMikrotikPage() {
                                                     </span>
                                                 </td>
                                                 <td className="py-2">{item.comment || "-"}</td>
+                                                <td className="py-2 text-right">
+                                                    <button
+                                                        onClick={() => abrirModalAgregarLista(item.address)}
+                                                        disabled={!item.address}
+                                                        className="bg-red-600 hover:bg-red-700 disabled:bg-slate-700 rounded-lg px-3 py-1 text-xs font-semibold"
+                                                    >
+                                                        Agregar a lista
+                                                    </button>
+                                                </td>
                                             </tr>
                                         );
                                     })}
@@ -2853,6 +3481,9 @@ export default function ConfiguracionMikrotikPage() {
                         </div>
                     </div>
                 </div>
+
+
+
 
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex items-center justify-between mb-4">
@@ -2925,34 +3556,63 @@ export default function ConfiguracionMikrotikPage() {
                                         <th className="text-left py-2">Plataforma</th>
                                         <th className="text-left py-2">Versión</th>
                                         <th className="text-left py-2">Uptime</th>
+                                        <th className="text-right py-2">Acción</th>
                                     </tr>
                                 </thead>
 
                                 <tbody>
                                     {neighborOrdenado.length === 0 && (
                                         <tr>
-                                            <td colSpan={7} className="py-4 text-center text-slate-500">
+                                            <td colSpan={8} className="py-4 text-center text-slate-500">
                                                 No hay neighbors cargados
                                             </td>
                                         </tr>
                                     )}
 
-                                    {neighborOrdenado.map((item, index) => (
-                                        <tr key={item[".id"] || index} className="border-b border-slate-800">
-                                            <td className="py-2 font-semibold">{item.identity || "-"}</td>
-                                            <td className="py-2">{item.address || item["address4"] || "-"}</td>
-                                            <td className="py-2">{item["mac-address"] || "-"}</td>
-                                            <td className="py-2">{item.interface || "-"}</td>
-                                            <td className="py-2">{item.platform || item.board || "-"}</td>
-                                            <td className="py-2">{item.version || "-"}</td>
-                                            <td className="py-2">{item.uptime || "-"}</td>
-                                        </tr>
-                                    ))}
+                                    {neighborOrdenado.map((item, index) => {
+                                        const ipNeighbor = item.address || item["address4"] || "";
+                                        const existente = equipoYaRegistrado(item);
+                                        return (
+                                            <tr key={item[".id"] || index} className="border-b border-slate-800">
+                                                <td className="py-2 font-semibold">{item.identity || "-"}</td>
+                                                <td className="py-2">{ipNeighbor || "-"}</td>
+                                                <td className="py-2">{item["mac-address"] || "-"}</td>
+                                                <td className="py-2">{item.interface || "-"}</td>
+                                                <td className="py-2">{item.platform || item.board || "-"}</td>
+                                                <td className="py-2">{item.version || "-"}</td>
+                                                <td className="py-2">{item.uptime || "-"}</td>
+
+                                                <td className="py-2 text-right">
+                                                    <button
+                                                        onClick={() => abrirModalAgregarNeighborLista(item)}
+                                                        disabled={!ipNeighbor}
+                                                        className="bg-red-600 hover:bg-red-700 disabled:bg-slate-700 rounded-lg px-3 py-1 text-xs font-semibold"
+                                                    >
+                                                        Agregar a lista
+                                                    </button>
+                                                    <button
+                                                        onClick={() => abrirModalCrearEquipoNeighbor(item)}
+                                                        disabled={!!existente}
+                                                        className={
+                                                            existente
+                                                                ? "bg-green-900 text-green-300 rounded-lg px-3 py-1 text-xs font-semibold cursor-not-allowed"
+                                                                : "bg-cyan-600 hover:bg-cyan-700 rounded-lg px-3 py-1 text-xs font-semibold"
+                                                        }
+                                                    >
+                                                        {existente ? "Registrado" : "Crear equipo"}
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
                     </div>
                 </div>
+
+
+
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
                         <div>
@@ -3094,6 +3754,355 @@ export default function ConfiguracionMikrotikPage() {
                     </div>
                 </div>
             </section>
+
+            {modalMangle && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+                    <div className="w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-900 p-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-bold">Agregar regla Mangle</h3>
+
+                            <button
+                                onClick={() => setModalMangle(false)}
+                                className="text-slate-400 hover:text-white"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <select
+                                value={mangleChain}
+                                onChange={(e) => setMangleChain(e.target.value)}
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                            >
+                                <option value="prerouting">prerouting</option>
+                                <option value="input">input</option>
+                                <option value="forward">forward</option>
+                                <option value="output">output</option>
+                                <option value="postrouting">postrouting</option>
+                            </select>
+
+                            <select
+                                value={mangleAction}
+                                onChange={(e) => setMangleAction(e.target.value)}
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                            >
+                                <option value="mark-packet">mark-packet</option>
+                                <option value="mark-connection">mark-connection</option>
+                                <option value="mark-routing">mark-routing</option>
+                                <option value="change-dscp">change-dscp</option>
+                                <option value="accept">accept</option>
+                                <option value="passthrough">passthrough</option>
+                            </select>
+
+                            <input
+                                value={mangleSrcAddress}
+                                onChange={(e) => setMangleSrcAddress(e.target.value)}
+                                placeholder="Src Address Ej: 192.168.80.0/24"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                            />
+
+                            <input
+                                value={mangleDstAddress}
+                                onChange={(e) => setMangleDstAddress(e.target.value)}
+                                placeholder="Dst Address Ej: 8.8.8.8"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                            />
+
+                            <select
+                                value={mangleProtocol}
+                                onChange={(e) => setMangleProtocol(e.target.value)}
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                            >
+                                <option value="">Protocol - ninguno</option>
+                                <option value="tcp">tcp</option>
+                                <option value="udp">udp</option>
+                                <option value="icmp">icmp</option>
+                            </select>
+
+                            <input
+                                value={mangleDstPort}
+                                onChange={(e) => setMangleDstPort(e.target.value)}
+                                placeholder="Dst Port Ej: 443, 80, 5060"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                            />
+
+                            <input
+                                value={mangleInInterface}
+                                onChange={(e) => setMangleInInterface(e.target.value)}
+                                placeholder="In Interface Ej: bridge-clientes"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                            />
+
+                            <input
+                                value={mangleOutInterface}
+                                onChange={(e) => setMangleOutInterface(e.target.value)}
+                                placeholder="Out Interface Ej: ether1"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                            />
+
+                            <input
+                                value={mangleNewPacketMark}
+                                onChange={(e) => setMangleNewPacketMark(e.target.value)}
+                                placeholder="New Packet Mark Ej: pkt_youtube"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                            />
+
+                            <input
+                                value={mangleNewConnectionMark}
+                                onChange={(e) => setMangleNewConnectionMark(e.target.value)}
+                                placeholder="New Connection Mark Ej: conn_youtube"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                            />
+
+                            <input
+                                value={mangleNewRoutingMark}
+                                onChange={(e) => setMangleNewRoutingMark(e.target.value)}
+                                placeholder="New Routing Mark Ej: ruta_wan1"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                            />
+
+                            <select
+                                value={manglePassthrough}
+                                onChange={(e) => setManglePassthrough(e.target.value)}
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                            >
+                                <option value="yes">passthrough yes</option>
+                                <option value="no">passthrough no</option>
+                            </select>
+
+                            <input
+                                value={mangleComment}
+                                onChange={(e) => setMangleComment(e.target.value)}
+                                placeholder="Comentario"
+                                className="md:col-span-2 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                            />
+                        </div>
+
+                        <div className="mt-4 rounded-xl border border-yellow-700 bg-yellow-950/40 p-3 text-sm text-yellow-200">
+                            Recomendación: para <b>mark-packet</b> usa New Packet Mark. Para <b>mark-connection</b> usa New Connection Mark. Para <b>mark-routing</b> usa New Routing Mark.
+                        </div>
+
+                        <div className="flex justify-end gap-2 mt-5">
+                            <button
+                                onClick={() => setModalMangle(false)}
+                                className="bg-slate-700 hover:bg-slate-600 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                onClick={guardarMangle}
+                                className="bg-green-600 hover:bg-green-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                Guardar Mangle
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {modalAgregarLista && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+                    <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-bold">Agregar IP a lista</h3>
+
+                            <button
+                                onClick={() => setModalAgregarLista(false)}
+                                className="text-slate-400 hover:text-white"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div className="rounded-xl bg-slate-950 border border-slate-700 p-3">
+                                <p className="text-xs text-slate-400">IP seleccionada</p>
+                                <p className="font-bold text-cyan-400">{ipSeleccionadaLista}</p>
+                            </div>
+
+                            <select
+                                value={listaSeleccionada}
+                                onChange={(e) => setListaSeleccionada(e.target.value as 'MOROSOS' | 'CORTADOS')}
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                            >
+                                <option value="MOROSOS">MOROSOS</option>
+                                <option value="CORTADOS">CORTADOS</option>
+                            </select>
+
+                            <input
+                                value={comentarioLista}
+                                onChange={(e) => setComentarioLista(e.target.value)}
+                                placeholder="Nombre del cliente"
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm outline-none"
+                            />
+                        </div>
+
+                        <div className="flex justify-end gap-2 mt-5">
+                            <button
+                                onClick={() => setModalAgregarLista(false)}
+                                className="bg-slate-700 hover:bg-slate-600 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                onClick={agregarIpALista}
+                                disabled={agregandoLista}
+                                className="bg-red-600 hover:bg-red-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                {agregandoLista ? 'Agregando...' : 'Agregar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {modalCrearEquipoNeighbor && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+                    <div className="w-full max-w-3xl rounded-2xl border border-slate-700 bg-slate-900 p-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-bold">Crear equipo desde Neighbor</h3>
+
+                            <button
+                                onClick={() => setModalCrearEquipoNeighbor(false)}
+                                className="text-slate-400 hover:text-white"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <input
+                                value={equipoNeighborForm.nombre}
+                                onChange={(e) => setEquipoNeighborForm((p) => ({ ...p, nombre: e.target.value }))}
+                                placeholder="Nombre"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <select
+                                value={equipoNeighborForm.marca}
+                                onChange={(e) => setEquipoNeighborForm((p) => ({ ...p, marca: e.target.value }))}
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            >
+                                <option value="UBIQUITI">Ubiquiti</option>
+                                <option value="TPLINK">TP-Link</option>
+                                <option value="MIKROTIK">MikroTik</option>
+                                <option value="OTRO">Otro</option>
+                            </select>
+
+                            <input
+                                value={equipoNeighborForm.modelo}
+                                onChange={(e) => setEquipoNeighborForm((p) => ({ ...p, modelo: e.target.value }))}
+                                placeholder="Modelo"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <select
+                                value={equipoNeighborForm.tipoEquipo}
+                                onChange={(e) => setEquipoNeighborForm((p) => ({ ...p, tipoEquipo: e.target.value }))}
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            >
+                                <option value="SECTORIAL">Sectorial</option>
+                                <option value="CPE_CLIENTE">CPE Cliente</option>
+                                <option value="ENLACE">Enlace</option>
+                                <option value="AP">AP</option>
+                                <option value="BACKBONE">Backbone</option>
+                                <option value="OTRO">Otro</option>
+                            </select>
+
+                            <input
+                                value={equipoNeighborForm.ipGestion}
+                                onChange={(e) => setEquipoNeighborForm((p) => ({ ...p, ipGestion: e.target.value }))}
+                                placeholder="IP gestión"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <input
+                                value={equipoNeighborForm.mac}
+                                onChange={(e) => setEquipoNeighborForm((p) => ({ ...p, mac: e.target.value }))}
+                                placeholder="MAC"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <input
+                                value={equipoNeighborForm.usuarioSsh}
+                                onChange={(e) => setEquipoNeighborForm((p) => ({ ...p, usuarioSsh: e.target.value }))}
+                                placeholder="Usuario SSH"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <input
+                                type="password"
+                                value={equipoNeighborForm.claveSsh}
+                                onChange={(e) => setEquipoNeighborForm((p) => ({ ...p, claveSsh: e.target.value }))}
+                                placeholder="Clave SSH"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <input
+                                type="number"
+                                value={equipoNeighborForm.puertoSsh}
+                                onChange={(e) => setEquipoNeighborForm((p) => ({ ...p, puertoSsh: Number(e.target.value || 22) }))}
+                                placeholder="Puerto SSH"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <input
+                                value={equipoNeighborForm.snmpComunidad}
+                                onChange={(e) => setEquipoNeighborForm((p) => ({ ...p, snmpComunidad: e.target.value }))}
+                                placeholder="Comunidad SNMP"
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+
+                            <select
+                                value={equipoNeighborForm.snmpVersion}
+                                onChange={(e) => setEquipoNeighborForm((p) => ({ ...p, snmpVersion: e.target.value }))}
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            >
+                                <option value="2c">SNMP v2c</option>
+                                <option value="1">SNMP v1</option>
+                                <option value="3">SNMP v3</option>
+                            </select>
+
+                            <select
+                                value={equipoNeighborForm.estado}
+                                onChange={(e) => setEquipoNeighborForm((p) => ({ ...p, estado: e.target.value }))}
+                                className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            >
+                                <option value="ACTIVO">Activo</option>
+                                <option value="INACTIVO">Inactivo</option>
+                                <option value="MANTENIMIENTO">Mantenimiento</option>
+                            </select>
+
+                            <input
+                                value={equipoNeighborForm.ubicacion}
+                                onChange={(e) => setEquipoNeighborForm((p) => ({ ...p, ubicacion: e.target.value }))}
+                                placeholder="Ubicación"
+                                className="md:col-span-3 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2"
+                            />
+                        </div>
+
+                        <div className="flex justify-end gap-2 mt-5">
+                            <button
+                                onClick={() => setModalCrearEquipoNeighbor(false)}
+                                className="bg-slate-700 hover:bg-slate-600 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                onClick={guardarEquipoDesdeNeighbor}
+                                disabled={creandoEquipoNeighbor}
+                                className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                {creandoEquipoNeighbor ? "Guardando..." : "Crear equipo"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </main>
     );
 }
