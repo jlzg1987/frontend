@@ -1,3 +1,5 @@
+import PublicidadWebPage from "./adnib-isp/publicidad/publiciadad-web/page";
+
 export default function NetcomprfPage() {
     const servicios = [
         ["Internet residencial", "Planes para hogares con soporte técnico local."],
@@ -27,11 +29,13 @@ export default function NetcomprfPage() {
                     />
 
                     <nav className="hidden gap-6 text-sm text-slate-300 md:flex">
+                        <a href="#publicidad" className="hover:text-cyan-300">Anuncios</a>
                         <a href="#servicios" className="hover:text-cyan-300">Servicios</a>
                         <a href="#cobertura" className="hover:text-cyan-300">Cobertura</a>
                         <a href="#test" className="hover:text-cyan-300">Test</a>
                         <a href="#app" className="hover:text-cyan-300">App</a>
                         <a href="#contacto" className="hover:text-cyan-300">Contacto</a>
+
                     </nav>
 
                     <a
@@ -86,6 +90,34 @@ export default function NetcomprfPage() {
                     </div>
                 </div>
             </section>
+
+            {/* PUBLICIDAD Y PROMOCIONES */}
+            <section id="publicidad" className="relative overflow-hidden bg-slate-950 py-16">
+                <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/5 via-pink-500/5 to-cyan-500/5" />
+
+                <div className="relative mx-auto max-w-7xl px-6">
+                    <div className="mb-10 text-center">
+                        <span className="inline-flex rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-1 text-sm font-semibold text-cyan-400">
+                            🔥 Novedades Netcomprf
+                        </span>
+
+                        <h2 className="mt-4 text-3xl font-black text-white md:text-5xl">
+                            Promociones, anuncios y novedades
+                        </h2>
+
+                        <p className="mx-auto mt-4 max-w-3xl text-lg text-slate-400">
+                            Descubre nuestras promociones especiales, nuevos servicios,
+                            ampliaciones de cobertura y todas las novedades que tenemos
+                            para nuestros clientes.
+                        </p>
+                    </div>
+
+                    {/* Carrusel */}
+                    <PublicidadWebPage />
+                </div>
+            </section>
+
+
 
             {/* SERVICIOS */}
             <section id="servicios" className="px-6 py-20">
@@ -153,6 +185,8 @@ export default function NetcomprfPage() {
                 </p>
             </section>
             {/* TEST DE VELOCIDAD */}
+
+
             <section id="test" className="px-6 py-20">
                 <div className="mx-auto max-w-6xl rounded-[2rem] border border-cyan-400/30 bg-cyan-400/10 p-10 text-center">
                     <p className="text-sm font-bold uppercase tracking-[0.3em] text-cyan-300">
@@ -164,12 +198,21 @@ export default function NetcomprfPage() {
                     </h2>
 
                     <p className="mx-auto mt-4 max-w-2xl text-slate-300">
-                        Realiza una prueba de velocidad para verificar tu conexión de descarga,
-                        subida y estabilidad del servicio.
+                        Comprueba la velocidad de descarga, subida, ping y jitter desde nuestro servidor.
+                        Ideal para clientes Netcomprf y usuarios que desean verificar su conexión.
                     </p>
 
+                    <iframe
+                        src="https://speed.netcomprf.com/index-classic.html"
+                        className="h-[700px] w-full rounded-3xl border border-cyan-400/30"
+                        style={{ marginTop: 10 }}
+                        loading="lazy"
+                    />
+
                     <a
-                        href="/test-velocidad"
+                        href="https://speed.netcomprf.com/index-classic.html"
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="mt-8 inline-block rounded-full bg-cyan-400 px-8 py-4 font-bold text-slate-950 shadow-lg shadow-cyan-500/30"
                     >
                         Iniciar test de velocidad

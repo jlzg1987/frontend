@@ -10,6 +10,11 @@ export default function AdminIspPageInterno({
     onAbrirImportarclientes,
     onAbrirPagosmensuales,
     onAbrirFacturacion,
+    onAbrirCortespormora,
+    onAbrirConfiguraciónISP,
+    onAbrirPublicidad,
+    onAbrirReportesISP,
+    onAbrirSpeedTestAnalytics,
 }: {
     onVolver: () => void;
     onAbrirAdministracion: () => void;
@@ -17,6 +22,11 @@ export default function AdminIspPageInterno({
     onAbrirImportarclientes: () => void;
     onAbrirPagosmensuales: () => void;
     onAbrirFacturacion: () => void;
+    onAbrirCortespormora: () => void;
+    onAbrirConfiguraciónISP: () => void;
+    onAbrirPublicidad: () => void;
+    onAbrirReportesISP: () => void;
+    onAbrirSpeedTestAnalytics: () => void;
 }) {
     const router = useRouter();
 
@@ -90,6 +100,14 @@ export default function AdminIspPageInterno({
                 ruta: '/dashboard/components/importarClientesInterno',
                 color: '#14b8a6',
             },
+
+            {
+                titulo: "SpeedTest Analytics",
+                descripcion: "Estadísticas del servidor de velocidad Netcomprf.",
+                icono: "🚀",
+                ruta: "/speedtest",
+                color: "#06b6d4",
+            }
         ];
 
     return (
@@ -144,6 +162,28 @@ export default function AdminIspPageInterno({
                             }
                             if (card.titulo === 'Facturas internas') {
                                 onAbrirFacturacion();
+                                return;
+                            }
+                            if (card.titulo === 'Cortes por mora') {
+                                onAbrirCortespormora();
+                                return;
+                            }
+                            if (card.titulo === 'Configuración ISP') {
+                                onAbrirConfiguraciónISP();
+                                return;
+                            }
+                            if (card.titulo === 'Publicidad') {
+                                onAbrirPublicidad();
+                                return;
+                            }
+
+                            if (card.titulo === 'Reportes ISP') {
+                                onAbrirReportesISP();
+                                return;
+                            }
+
+                            if (card.titulo === "SpeedTest Analytics") {
+                                onAbrirSpeedTestAnalytics();
                                 return;
                             }
 

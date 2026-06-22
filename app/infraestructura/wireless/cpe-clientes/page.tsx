@@ -2,6 +2,8 @@
 
 import { API_BASE, getToken } from "@/src/lib/api";
 import { useEffect, useState } from "react";
+import WirelessScanSectorialModal from "../componentes/WirelessScanSectorialModal";
+import WirelessDetalleClienteModal from "../componentes/WirelessDetalleClienteModal";
 
 export default function CpeClientesPage() {
     const [cpeGuardados, setCpeGuardados] = useState<any[]>([]);
@@ -10,9 +12,18 @@ export default function CpeClientesPage() {
     const [clientesDetectados, setClientesDetectados] = useState<any[]>([]);
     const [sectorialSeleccionada, setSectorialSeleccionada] = useState<any>(null);
 
+    const [modalScanSectorial, setModalScanSectorial] = useState(false);
+    const [equipoMetricasId, setEquipoMetricasId] = useState<string | null>(null);
+
     const [loading, setLoading] = useState(false);
     const [escaneando, setEscaneando] = useState(false);
     const [agregandoIp, setAgregandoIp] = useState<string | null>(null);
+
+    const [modalDetalleCliente, setModalDetalleCliente] = useState(false);
+    const [clienteWireless, setClienteWireless] = useState<any>(null);
+    const [equipoDetalleId, setEquipoDetalleId] = useState<string | null>(null);
+    const [metricasDetalle, setMetricasDetalle] = useState<any>(null);
+    const [historialCliente, setHistorialCliente] = useState<any[]>([]);
 
     async function cargarCpeGuardados() {
         try {
@@ -205,6 +216,49 @@ export default function CpeClientesPage() {
         }
     }
 
+    async function abrirDetalleCliente(eq: any) {
+        if (!eq.equipoId) return;
+
+        setEquipoDetalleId(eq.equipoId);
+        setHistorialCliente([]);
+
+        setClienteWireless({
+            lastip: eq.ipGestion,
+            mac: eq.mac,
+            name: eq.nombre || eq.nombreEquipo,
+            signal: eq.signal || "-",
+            ack: eq.ack || "-",
+            distance: eq.distance || "-",
+            tx_power: eq.txPower || "-",
+            remote: {
+                hostname: eq.nombre || eq.nombreEquipo,
+                platform: eq.modelo || "-",
+                version: eq.version || "-",
+                ipaddr: [eq.ipGestion],
+                netrole: eq.modoRed || "-",
+                cpuload: eq.cpu || "-",
+                freeram: eq.ramLibre || "-",
+                ethlist: [],
+            },
+        });
+
+        setModalDetalleCliente(true);
+
+        try {
+            const res = await fetch(`${API_BASE}/wireless/equipos/${eq.equipoId}/metricas`, {
+                headers: {
+                    Authorization: `Bearer ${getToken()}`,
+                },
+            });
+
+            const data = await res.json();
+            setMetricasDetalle(data);
+        } catch (error) {
+            console.error("Error cargando métricas detalle CPE:", error);
+            setMetricasDetalle(null);
+        }
+    }
+
     return (
         <div className="p-6 text-white">
             <div className="flex items-center justify-between mb-5">
@@ -345,6 +399,7 @@ export default function CpeClientesPage() {
                                     <th className="p-3 text-left">Estado</th>
                                     <th className="p-3 text-left">Ping</th>
                                     <th className="p-3 text-left">Última lectura</th>
+                                    <th className="p-3 text-right">Acciones</th>
                                 </tr>
                             </thead>
 
@@ -380,6 +435,35 @@ export default function CpeClientesPage() {
                                         <td className="p-3 text-slate-400">
                                             {e.ultimaLectura || "-"}
                                         </td>
+                                        <td className="p-3 text-right">
+                                            <button
+                                                onClick={() => {
+                                                    setEquipoMetricasId(e.equipoId);
+                                                    setClienteWireless({
+                                                        lastip: e.ipGestion,
+                                                        mac: e.mac,
+                                                        name: e.nombre || e.nombreEquipo,
+                                                        remote: {
+                                                            hostname: e.nombre || e.nombreEquipo,
+                                                            platform: e.modelo,
+                                                            ipaddr: [e.ipGestion],
+                                                        },
+                                                    });
+                                                    setModalScanSectorial(true);
+                                                }}
+                                                className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded-lg font-bold"
+                                            >
+                                                Escanear SSID
+                                            </button>
+                                            <button
+                                                onClick={() => abrirDetalleCliente(e)}
+                                                className="bg-cyan-600 hover:bg-cyan-700 px-3 py-1 rounded-lg text-xs font-bold"
+                                            >
+                                                Detalle
+                                            </button>
+
+                                        </td>
+
                                     </tr>
                                 ))}
                             </tbody>
@@ -393,6 +477,32 @@ export default function CpeClientesPage() {
                     </div>
                 )}
             </div>
+            {modalScanSectorial && clienteWireless && equipoMetricasId && (
+                <WirelessScanSectorialModal
+                    equipoId={equipoMetricasId}
+                    clienteWireless={clienteWireless}
+                    onClose={() => {
+                        setModalScanSectorial(false);
+                        setClienteWireless(null);
+                        setEquipoMetricasId(null);
+                    }}
+                />
+            )}
+            {modalDetalleCliente && clienteWireless && equipoDetalleId && (
+                <WirelessDetalleClienteModal
+                    equipoId={equipoDetalleId}
+                    clienteWireless={clienteWireless}
+                    metricas={metricasDetalle}
+                    historialCliente={historialCliente}
+                    onClose={() => {
+                        setModalDetalleCliente(false);
+                        setClienteWireless(null);
+                        setEquipoDetalleId(null);
+                        setMetricasDetalle(null);
+                        setHistorialCliente([]);
+                    }}
+                />
+            )}
         </div>
     );
 }

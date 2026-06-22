@@ -72,6 +72,9 @@ import BotNotificaciones from './notificaciones/page';
 import AlertasCriticasWirelessPage from '../infraestructura/wireless/alertas-criticas/page';
 import TodasNotificacionesPage from './lista-notificaciones/page';
 import PerfilAdministrativoPage from './perfiles/administrativo/[servicioId]/page';
+import PublicidadPage from '../adnib-isp/publicidad/Publicidad-admin/page';
+import ReportesIspPage from '../adnib-isp/reportes-isp/page';
+import SpeedTestAnalyticsPage from '../adnib-isp/speedtest/page';
 
 
 type DashboardResponse = {
@@ -115,7 +118,7 @@ export default function DashboardPage() {
         | 'ListadoTickets' | 'fichaCliente' | 'talleCliente' | 'detalletickets' | 'AtencionCampo' | 'AbrirMantenimiento'
         | 'AbrirReportes' | 'AbrirReporteAdmin' | 'mikrotikCortes' | 'mikroikconfiguracion' | 'pagos' | 'EquiposWireless'
         | 'enlaces' | 'CPEClientes' | 'AlertasWireless' | 'MonitoreoWireless' | 'EquiposOffline' | 'listaNotificacion'
-        | 'PerfilAdministrativo'
+        | 'PerfilAdministrativo' | 'Publicidad' | 'ReportesISP' | 'SpeedTestAnalytics'
     >('dashboard');
 
 
@@ -1037,8 +1040,27 @@ export default function DashboardPage() {
                                 onAbrirImportarclientes={() => setVistaActual('ImportarClientes')}
                                 onAbrirPagosmensuales={() => setVistaActual('pagos')}
                                 onAbrirFacturacion={() => setVistaActual('facturamanual')}
+                                onAbrirCortespormora={() => setVistaActual('mikrotikCortes')}
+                                onAbrirConfiguraciónISP={() => setVistaActual('confg')}
+                                onAbrirPublicidad={() => setVistaActual('Publicidad')}
+                                onAbrirReportesISP={() => setVistaActual('ReportesISP')}
+                                onAbrirSpeedTestAnalytics={() => setVistaActual('SpeedTestAnalytics')}
                             />
                         )}
+
+
+                        {vistaActual === 'SpeedTestAnalytics' && (
+                            <SpeedTestAnalyticsPage />
+                        )}
+
+                        {vistaActual === 'ReportesISP' && (
+                            <ReportesIspPage />
+                        )}
+
+                        {vistaActual === 'Publicidad' && (
+                            <PublicidadPage />
+                        )}
+
                         {vistaActual === 'PlanInternet' && (
                             <PlanesInternetPage />
                         )}

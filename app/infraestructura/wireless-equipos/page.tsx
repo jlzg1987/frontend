@@ -1692,7 +1692,13 @@ export default function EquiposWirelessPage() {
                                     </p>
                                 </div>
 
-                                <div className="flex gap-2">
+                                {/* Botones Accion */}
+                                <h3 className="text-lg font-bold text-cyan-400 mb-3">
+                                    Accion-Online
+                                </h3>
+
+                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
+
                                     <button
                                         onClick={escanearSectorialesCliente}
                                         disabled={escaneandoSectoriales}
@@ -1734,6 +1740,7 @@ export default function EquiposWirelessPage() {
                                     >
                                         Configurar WAN
                                     </button>
+
                                 </div>
                                 {/* TRAFICO */}
 
