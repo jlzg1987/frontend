@@ -24,6 +24,27 @@ export default function PagoPayphoneContenido() {
             return;
         }
 
+        if (!id && !paymentId) {
+            const res = await fetch(
+                `${API_BASE}/tienda/payphone/verificar-pedido/${pedidoId}`,
+                {
+                    method: "POST",
+                }
+            );
+
+            const data = await res.json();
+
+            if (data.estado === "PAGADO") {
+                router.push(
+                    `/inventario/tienda/pedido-exitoso?pedidoId=${pedidoId}`
+                );
+                return;
+            }
+
+            setMensaje("El pago aún no ha sido confirmado.");
+            return;
+        }
+
         try {
             setCargando(true);
             setError("");
@@ -68,6 +89,8 @@ export default function PagoPayphoneContenido() {
     }
 
     useEffect(() => {
+        if (!pedidoId) return;
+
         confirmarRetornoPayPhone();
     }, [pedidoId, id, paymentId]);
 
