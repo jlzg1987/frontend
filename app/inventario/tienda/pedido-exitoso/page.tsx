@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
-import PedidoExitosoContenido from "../PedidoExitosoContenido";
+import PedidoExitosoContenido from "./PedidoExitosoContenido";
 
 export default function PedidoExitosoPage() {
     return (
