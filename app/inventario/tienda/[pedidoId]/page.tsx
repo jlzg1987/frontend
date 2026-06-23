@@ -168,41 +168,6 @@ Quiero continuar con la compra.`;
         }
     }
 
-    async function verificarPagoPedido() {
-        try {
-            setVerificandoPago(true);
-            setErrorPago("");
-
-            const res = await fetch(`${API_BASE}/tienda/payphone/verificar-pedido/${pedidoId}`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-            });
-
-            const data = await res.json();
-
-            if (!res.ok || !data.ok) {
-                throw new Error(data.mensaje || "No se pudo verificar el pago.");
-            }
-
-            await cargarPedido();
-
-            if (data.estado === "PAGADO" || data.pedidoEstado === "PAGADO") {
-                localStorage.removeItem("tienda_pedido_activo");
-                router.push(`/inventario/tienda/pedido-exitoso?pedidoId=${pedidoId}`);
-                return;
-            }
-
-            alert("El pago todavía no aparece como aprobado en PayPhone.");
-        } catch (error: any) {
-            console.error("Error verificarPagoPedido:", error);
-            setErrorPago(error.message || "Error verificando pago.");
-        } finally {
-            setVerificandoPago(false);
-        }
-    }
-
     if (loading) {
         return (
             <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
@@ -409,7 +374,11 @@ Quiero continuar con la compra.`;
                                 </button>
                             ) : (
                                 <button
-                                    onClick={verificarPagoPedido}
+                                    onClick={() =>
+                                        router.push(
+                                            `/inventario/tienda/pago-payphone?pedidoId=${pedido.pedidoId}`
+                                        )
+                                    }
                                     disabled={verificandoPago || pedido.estado === "PAGADO"}
                                     className="
             mt-3
