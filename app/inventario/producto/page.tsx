@@ -42,6 +42,8 @@ export default function ProductosServiciosPage() {
     const [editando, setEditando] = useState(false);
     const [modal, setModal] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [imagenFile, setImagenFile] = useState<File | null>(null);
+    const [subiendoImagen, setSubiendoImagen] = useState(false);
 
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
 
@@ -74,6 +76,7 @@ export default function ProductosServiciosPage() {
         setForm(formInicial);
         setEditando(false);
         setModal(true);
+        setImagenFile(null);
     };
 
     const abrirEditar = (item: any) => {
@@ -95,6 +98,7 @@ export default function ProductosServiciosPage() {
 
         setEditando(true);
         setModal(true);
+        setImagenFile(null);
     };
 
     const guardar = async () => {
@@ -133,8 +137,32 @@ export default function ProductosServiciosPage() {
                 return;
             }
 
+            const productoId = editando ? form.productoId : data.productoId;
+
+            if (imagenFile && productoId) {
+                setSubiendoImagen(true);
+
+                const formData = new FormData();
+                formData.append('imagen', imagenFile);
+
+                const respImagen = await fetch(`${API_BASE}/inventario/productos/${productoId}/imagen`, {
+                    method: 'PUT',
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: formData,
+                });
+
+                const dataImagen = await respImagen.json();
+
+                if (!dataImagen.ok) {
+                    alert(dataImagen.message || 'Producto guardado, pero no se pudo subir la imagen');
+                }
+            }
+
             setModal(false);
             setForm(formInicial);
+            setImagenFile(null);
             cargarProductos();
 
         } catch (error) {
@@ -142,6 +170,7 @@ export default function ProductosServiciosPage() {
             alert('Error al guardar producto o servicio');
         } finally {
             setLoading(false);
+            setSubiendoImagen(false);
         }
     };
 
@@ -385,13 +414,24 @@ export default function ProductosServiciosPage() {
                             </div>
 
                             <div>
-                                <label className="text-xs text-slate-400">URL imagen</label>
+                                <label className="text-xs text-slate-400">Imagen del producto</label>
+
                                 <input
-                                    value={form.imagen_url || ''}
-                                    onChange={(e) => setForm({ ...form, imagen_url: e.target.value })}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => setImagenFile(e.target.files?.[0] || null)}
                                     className="input"
-                                    placeholder="Luego lo cambiamos por upload"
                                 />
+
+                                {(imagenFile || form.imagen_url) && (
+                                    <div className="mt-3">
+                                        <img
+                                            src={imagenFile ? URL.createObjectURL(imagenFile) : form.imagen_url}
+                                            alt="Vista previa"
+                                            className="h-24 w-24 object-cover rounded-xl border border-cyan-500/30 bg-slate-950"
+                                        />
+                                    </div>
+                                )}
                             </div>
 
                             <div className="md:col-span-3">
@@ -418,7 +458,7 @@ export default function ProductosServiciosPage() {
                                 disabled={loading}
                                 className="px-6 py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black disabled:opacity-50"
                             >
-                                {loading ? 'Guardando...' : 'Guardar'}
+                                {loading || subiendoImagen ? 'Guardando...' : 'Guardar'}
                             </button>
                         </div>
                     </div>

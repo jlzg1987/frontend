@@ -36,7 +36,7 @@ export default function PlanesInternetPage() {
     const cargarPlanes = async () => {
         try {
             setLoading(true);
-            const token = await getToken();
+            const token = getToken();
 
             const res = await fetch(`${API_BASE}/planes-internet`, {
                 headers: {
@@ -77,7 +77,7 @@ export default function PlanesInternetPage() {
                 return;
             }
 
-            const token = await getToken();
+            const token = getToken();
 
             const url = editandoId
                 ? `${API_BASE}/planes-internet/${editandoId}`
@@ -126,7 +126,7 @@ export default function PlanesInternetPage() {
     const cambiarEstado = async (plan: PlanInternet) => {
         try {
             const nuevoEstado = plan.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO';
-            const token = await getToken();
+            const token = getToken();
 
             const res = await fetch(`${API_BASE}/planes-internet/${plan.planId}/estado`, {
                 method: 'PATCH',
@@ -155,7 +155,7 @@ export default function PlanesInternetPage() {
         if (!confirm('¿Seguro que desea eliminar este plan?')) return;
 
         try {
-            const token = await getToken();
+            const token = getToken();
 
             const res = await fetch(`${API_BASE}/planes-internet/${planId}`, {
                 method: 'DELETE',

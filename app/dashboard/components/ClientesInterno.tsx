@@ -62,7 +62,7 @@ export default function ClientesInterno() {
     const cargarClientes = async () => {
         try {
             setLoading(true);
-            const token = await getToken();
+            const token = getToken();
 
             const res = await fetch(`${API_BASE}/clientes`, {
                 headers: { Authorization: `Bearer ${token}` },
@@ -113,7 +113,7 @@ export default function ClientesInterno() {
                 return;
             }
 
-            const token = await getToken();
+            const token = getToken();
 
             const url = editandoId
                 ? `${API_BASE}/clientes/${editandoId}`
@@ -175,7 +175,7 @@ export default function ClientesInterno() {
 
     const cambiarEstado = async (cliente: Cliente, estadoCliente: string) => {
         try {
-            const token = await getToken();
+            const token = getToken();
 
             const res = await fetch(`${API_BASE}/clientes/${cliente.clienteId}/estado`, {
                 method: 'PATCH',
@@ -204,7 +204,7 @@ export default function ClientesInterno() {
         if (!confirm('¿Seguro que desea eliminar este cliente? También se eliminará su usuario.')) return;
 
         try {
-            const token = await getToken();
+            const token = getToken();
 
             const res = await fetch(`${API_BASE}/clientes/${clienteId}`, {
                 method: 'DELETE',
@@ -254,7 +254,7 @@ export default function ClientesInterno() {
                 return;
             }
 
-            const token = await getToken();
+            const token = getToken();
 
             const res = await fetch(`${API_BASE}/clientes/${clientePassword.clienteId}/password`, {
                 method: 'PATCH',

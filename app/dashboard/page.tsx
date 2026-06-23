@@ -75,6 +75,9 @@ import PerfilAdministrativoPage from './perfiles/administrativo/[servicioId]/pag
 import PublicidadPage from '../adnib-isp/publicidad/Publicidad-admin/page';
 import ReportesIspPage from '../adnib-isp/reportes-isp/page';
 import SpeedTestAnalyticsPage from '../adnib-isp/speedtest/page';
+import TiendaNetcompPage from '../inventario/tienda/page';
+import ImportarInventarioPdfPage from '../inventario/importar-pdf/page';
+import PedidoTiendaPage from '../inventario/tienda/[pedidoId]/page';
 
 
 type DashboardResponse = {
@@ -102,7 +105,7 @@ export default function DashboardPage() {
     const [DetalleClienteId, setDetalleClienteId] = useState<string | null>(null);
     const [ticketsIdSeleccionadoId, setticketsIdSeleccionadoId] = useState<string | null>(null);
     const [servicioIdPerfil, setServicioIdPerfil] = useState<string>('');
-
+    const [CarritoId, setCarritoId] = useState<string>('');
 
     const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
 
@@ -118,13 +121,14 @@ export default function DashboardPage() {
         | 'ListadoTickets' | 'fichaCliente' | 'talleCliente' | 'detalletickets' | 'AtencionCampo' | 'AbrirMantenimiento'
         | 'AbrirReportes' | 'AbrirReporteAdmin' | 'mikrotikCortes' | 'mikroikconfiguracion' | 'pagos' | 'EquiposWireless'
         | 'enlaces' | 'CPEClientes' | 'AlertasWireless' | 'MonitoreoWireless' | 'EquiposOffline' | 'listaNotificacion'
-        | 'PerfilAdministrativo' | 'Publicidad' | 'ReportesISP' | 'SpeedTestAnalytics'
+        | 'PerfilAdministrativo' | 'Publicidad' | 'ReportesISP' | 'SpeedTestAnalytics' | 'TiendaOnline' | 'ImportarPDF'
+        | 'AbrirCArrrito'
     >('dashboard');
 
 
     const cargarResumenClientes = async () => {
         try {
-            const token = await getToken();
+            const token = getToken();
 
             const res = await fetch(`${API_BASE}/clientes`, {
                 headers: {
@@ -1243,7 +1247,28 @@ export default function DashboardPage() {
                                 onAbrirCodigoBarra={() => setVistaActual('codigoBarra')}
                                 onAbrirMoviminetoStock={() => setVistaActual('moviminetoStock')}
                                 onAbrirKitsInstalacion={() => setVistaActual('kitsInstalacion')}
+                                onAbrirTiendaOnline={() => setVistaActual('TiendaOnline')}
+                                onAbrirImportarPDF={() => setVistaActual('ImportarPDF')}
+                            />
+                        )}
+                        {vistaActual === 'ImportarPDF' && (
+                            <ImportarInventarioPdfPage />
+                        )}
+                        {vistaActual === "TiendaOnline" && (
+                            <TiendaNetcompPage
+                                onAbrirAbrirCArrito={(CarritoId) => {
+                                    setCarritoId(CarritoId);
+                                    setVistaActual("AbrirCArrrito");
+                                }}
+                            />
+                        )}
 
+                        {vistaActual === "AbrirCArrrito" && CarritoId && (
+                            <PedidoTiendaPage
+                                CarritoId={CarritoId}
+                                onVolver={() => {
+                                    setVistaActual("TiendaOnline");
+                                }}
                             />
                         )}
                         {vistaActual === 'kitsInstalacion' && (

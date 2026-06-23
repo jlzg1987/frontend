@@ -1,3 +1,4 @@
+import ProductosDestacados from "@/src/components/ProductosDestacados";
 import PublicidadWebPage from "./adnib-isp/publicidad/publiciadad-web/page";
 
 export default function NetcomprfPage() {
@@ -14,7 +15,6 @@ export default function NetcomprfPage() {
         ["Punto de venta", "Sistema POS para tiendas, locales y negocios."],
         ["Sistemas personalizados", "Software adaptado a las necesidades de tu empresa."],
         ["Paneles solares", "Soluciones solares para hogares, negocios y telecomunicaciones."],
-        ["Tienda online", "Equipos tecnológicos, redes, cámaras y accesorios."],
     ];
 
     return (
@@ -22,15 +22,19 @@ export default function NetcomprfPage() {
             {/* HEADER */}
             <header className="sticky top-0 z-50 border-b border-white/10 bg-slate-950/80 backdrop-blur">
                 <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-                    <img
-                        src="/netcomp-logo.png"
-                        alt="Netcomp R.F. S.A.S."
-                        className="h-14 w-auto rounded-xl bg-white p-2"
-                    />
-
+                    <a href="#">
+                        <img
+                            src="/netcomp-logo.png"
+                            alt="Netcomp R.F. S.A.S."
+                            className="h-14 w-60
+    drop-shadow-[0_0_8px_rgba(34,197,94,0.6)]
+    hover:drop-shadow-[0_0_12px_rgba(255,255,255,0.6)]"
+                        />
+                    </a>
                     <nav className="hidden gap-6 text-sm text-slate-300 md:flex">
                         <a href="#publicidad" className="hover:text-cyan-300">Anuncios</a>
                         <a href="#servicios" className="hover:text-cyan-300">Servicios</a>
+                        <a href="#tienda" className="hover:text-cyan-300">Tienda Online</a>
                         <a href="#cobertura" className="hover:text-cyan-300">Cobertura</a>
                         <a href="#test" className="hover:text-cyan-300">Test</a>
                         <a href="#app" className="hover:text-cyan-300">App</a>
@@ -151,9 +155,12 @@ export default function NetcomprfPage() {
                     ))}
                 </div>
             </section>
-
+            {/* tienda online*/}
+            <section id="tienda" className="px-6 py-20 border-cyan-400/30 bg-cyan-400/10">
+                <ProductosDestacados />
+            </section>
             {/* BENEFICIOS */}
-            <section className="bg-white/[0.04] px-6 py-20">
+            <section className="bg-white/[0.04] px-6 py-20 ">
                 <h2 className="text-center text-3xl font-black">
                     ¿Por qué elegir Netcomp?
                 </h2>
@@ -185,8 +192,6 @@ export default function NetcomprfPage() {
                 </p>
             </section>
             {/* TEST DE VELOCIDAD */}
-
-
             <section id="test" className="px-6 py-20">
                 <div className="mx-auto max-w-6xl rounded-[2rem] border border-cyan-400/30 bg-cyan-400/10 p-10 text-center">
                     <p className="text-sm font-bold uppercase tracking-[0.3em] text-cyan-300">

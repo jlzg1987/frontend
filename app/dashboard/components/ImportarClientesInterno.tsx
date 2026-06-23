@@ -10,7 +10,7 @@ export default function ImportarClientesInterno() {
 
     const descargarFormato = async () => {
         try {
-            const token = await getToken();
+            const token = getToken();
 
             const res = await fetch(`${API_BASE}/importador/formato-clientes`, {
                 headers: {
@@ -45,7 +45,7 @@ export default function ImportarClientesInterno() {
             setLoading(true);
             setResultado(null);
 
-            const token = await getToken();
+            const token = getToken();
             const formData = new FormData();
             formData.append('archivo', archivo);
 

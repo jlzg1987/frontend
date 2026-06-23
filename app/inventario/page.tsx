@@ -29,6 +29,8 @@ export default function DashboardInventarioPage({
     onAbrirMoviminetoStock,
     onAbrirCodigoBarra,
     onAbrirKitsInstalacion,
+    onAbrirTiendaOnline,
+    onAbrirImportarPDF,
 }: {
     onVolver: () => void;
     onAbrirProductoServicio: () => void;
@@ -37,6 +39,8 @@ export default function DashboardInventarioPage({
     onAbrirMoviminetoStock: () => void;
     onAbrirCodigoBarra: () => void;
     onAbrirKitsInstalacion: () => void;
+    onAbrirTiendaOnline: () => void;
+    onAbrirImportarPDF: () => void;
 }) {
     const router = useRouter();
 
@@ -172,6 +176,21 @@ export default function DashboardInventarioPage({
             color: 'from-yellow-500 to-amber-600',
             disabled: false,
         },
+        {
+            title: 'Tienda Online',
+            desc: 'Catálogo público de productos tecnológicos, carrito de compras y ventas web.',
+            icon: '🛒',
+            href: '/tienda-online',
+            color: 'from-cyan-500 to-blue-700',
+            disabled: false,
+        },
+        {
+            title: 'Importar PDF',
+            desc: 'Subir listas de precios PDF y crear productos automáticamente.',
+            icon: '📄',
+            href: '/inventario/importar-pdf',
+            color: 'from-red-500 to-orange-500',
+        }
     ];
 
     return (
@@ -291,6 +310,15 @@ export default function DashboardInventarioPage({
                                     onAbrirKitsInstalacion();
                                     return;
                                 }
+                                if (card.title === 'Tienda Online') {
+                                    onAbrirTiendaOnline();
+                                    return;
+                                }
+                                if (card.title === 'Importar PDF') {
+                                    onAbrirImportarPDF();
+                                    return;
+                                }
+
 
                                 !card.disabled && router.push(card.href)
 
