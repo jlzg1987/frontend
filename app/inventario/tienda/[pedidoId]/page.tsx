@@ -188,7 +188,7 @@ Quiero continuar con la compra.`;
                     <p className="mt-3 text-red-200">{error || "No existe este pedido."}</p>
 
                     <button
-                        onClick={onVolver}
+                        onClick={() => router.push("/invetario/tienda")}
                     >
                         Volver a la tienda
                     </button>
@@ -201,7 +201,7 @@ Quiero continuar con la compra.`;
         <main className="min-h-screen bg-slate-950 px-5 py-10 text-white">
             <div className="mx-auto max-w-6xl">
                 <button
-                    onClick={onVolver}
+                    onClick={() => router.push("/invetario/tienda")}
                     className="mb-6 flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-slate-300 transition hover:bg-white/10"
                 >
                     <ArrowLeft size={18} />

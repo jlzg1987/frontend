@@ -453,7 +453,7 @@ TOTAL: $${totalCarrito.toFixed(2)}
 
             setModalPedido(false);
             setCarritoAbierto(false);
-            onAbrirAbrirCArrito(nuevoPedidoId);
+            router.push(`/inventario/tienda/${nuevoPedidoId}`);
 
 
         } catch (error: any) {
