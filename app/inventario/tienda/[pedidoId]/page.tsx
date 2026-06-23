@@ -29,6 +29,7 @@ type Pedido = {
     total: string | number;
     estado: "PENDIENTE" | "PAGADO" | "ENTREGADO" | "ANULADO";
     creadoEn: string;
+    linkPago: string;
 };
 
 type DetallePedido = {
@@ -374,11 +375,13 @@ Quiero continuar con la compra.`;
                                 </button>
                             ) : (
                                 <button
-                                    onClick={() =>
-                                        router.push(
-                                            `/inventario/tienda/pago-payphone?pedidoId=${pedido.pedidoId}`
-                                        )
-                                    }
+                                    onClick={() => {
+                                        if (pedido.linkPago) {
+                                            window.location.href = pedido.linkPago;
+                                        } else {
+                                            router.push(`/inventario/tienda/pago-payphone?pedidoId=${pedido.pedidoId}`);
+                                        }
+                                    }}
                                     disabled={verificandoPago || pedido.estado === "PAGADO"}
                                     className="
             mt-3
