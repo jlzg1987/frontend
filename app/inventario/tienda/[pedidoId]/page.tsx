@@ -60,7 +60,21 @@ export default function PedidoTiendaPage() {
 
     const [pagando, setPagando] = useState(false);
     const [errorPago, setErrorPago] = useState("");
+
+    const [verificandoPago, setVerificandoPago] = useState(false);
+    const [linkPagoGenerado, setLinkPagoGenerado] = useState(false);
+
     const token = getToken();
+
+    useEffect(() => {
+        if (!pedidoId) return;
+
+        const timer = setInterval(async () => {
+            await verificarPagoPedido();
+        }, 7000);
+
+        return () => clearInterval(timer);
+    }, [pedidoId]);
 
     async function cargarPedido() {
         try {
@@ -154,11 +168,47 @@ Quiero continuar con la compra.`;
             }
 
             window.open(data.linkPago, "_blank", "noopener,noreferrer");
+            setLinkPagoGenerado(true);
         } catch (error: any) {
             console.error("Error pagarConPayPhone:", error);
             alert(error.message || "No se pudo generar el link de pago.");
         } finally {
             setPagando(false);
+        }
+    }
+
+    async function verificarPagoPedido() {
+        try {
+            setVerificandoPago(true);
+            setErrorPago("");
+
+            const res = await fetch(`${API_BASE}/tienda/payphone/verificar-pedido/${pedidoId}`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            });
+
+            const data = await res.json();
+
+            if (!res.ok || !data.ok) {
+                throw new Error(data.mensaje || "No se pudo verificar el pago.");
+            }
+
+            await cargarPedido();
+
+            if (data.estado === "PAGADO" || data.pedidoEstado === "PAGADO") {
+                localStorage.removeItem("tienda_pedido_activo");
+                router.push(`/inventario/tienda/pedido-exitoso?pedidoId=${pedidoId}`);
+                return;
+            }
+
+            alert("El pago todavía no aparece como aprobado en PayPhone.");
+        } catch (error: any) {
+            console.error("Error verificarPagoPedido:", error);
+            setErrorPago(error.message || "Error verificando pago.");
+        } finally {
+            setVerificandoPago(false);
         }
     }
 
@@ -348,15 +398,65 @@ Quiero continuar con la compra.`;
                                 <MessageCircle size={22} />
                                 Confirmar por WhatsApp
                             </a>
+                            {linkPagoGenerado && pedido.estado === "PENDIENTE" && (
+                                <div className="mt-4 rounded-2xl border border-amber-400 bg-amber-500/10 p-4 text-center">
+                                    <p className="text-sm font-bold text-amber-300">
+                                        ⏳ Si ya realizaste el pago en PayPhone, presiona el botón de abajo
+                                        para confirmar tu compra inmediatamente.
+                                    </p>
+                                </div>
+                            )}
 
-                            <button
-                                onClick={pagarConPayPhone}
-                                disabled={pagando || pedido.estado !== "PENDIENTE"}
-                                className="mt-3 flex w-full items-center justify-center gap-3 rounded-2xl bg-cyan-400 px-5 py-4 font-black text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
-                            >
-                                <CreditCard size={22} />
-                                {pagando ? "Generando link..." : "Pagar con PayPhone"}
-                            </button>
+                            {!linkPagoGenerado ? (
+                                <button
+                                    onClick={pagarConPayPhone}
+                                    disabled={pagando || pedido.estado !== "PENDIENTE"}
+                                    className="mt-3 flex w-full items-center justify-center gap-3 rounded-2xl bg-cyan-400 px-5 py-4 font-black text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                                >
+                                    <CreditCard size={22} />
+                                    {pagando ? "Generando link..." : "💳 Pagar con PayPhone"}
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={verificarPagoPedido}
+                                    disabled={verificandoPago || pedido.estado === "PAGADO"}
+                                    className="
+            mt-3
+            flex
+            w-full
+            animate-pulse
+            items-center
+            justify-center
+            gap-3
+            rounded-2xl
+            border-2
+            border-amber-300
+            bg-gradient-to-r
+            from-amber-400
+            via-yellow-300
+            to-amber-400
+            px-5
+            py-5
+            font-black
+            text-slate-950
+            shadow-lg
+            shadow-amber-500/40
+            transition
+            hover:scale-[1.02]
+            hover:from-amber-300
+            hover:to-yellow-200
+            disabled:cursor-not-allowed
+            disabled:animate-none
+            disabled:bg-slate-700
+            disabled:text-slate-400
+        "
+                                >
+                                    ⚠️
+                                    {verificandoPago
+                                        ? "Verificando pago con PayPhone..."
+                                        : "YA PAGUÉ • VERIFICAR MI PAGO"}
+                                </button>
+                            )}
 
                             {errorPago && (
                                 <p className="mt-3 rounded-2xl border border-red-400/20 bg-red-500/10 p-3 text-sm font-bold text-red-200">
