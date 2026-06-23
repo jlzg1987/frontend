@@ -928,7 +928,7 @@ TOTAL: $${totalCarrito.toFixed(2)}
                                     </button>
                                     {pedidoActivoId && pedidoPendienteCargado && (
                                         <button
-                                            onClick={() => onAbrirAbrirCArrito(pedidoActivoId)}
+                                            onClick={() => { router.push(`/inventario/tienda/${pedidoActivoId}`); }}
                                             className="mt-3 w-full rounded-2xl bg-yellow-400 px-5 py-4 font-black text-slate-950 transition hover:bg-yellow-300"
                                         >
                                             Ir a pagar pedido
