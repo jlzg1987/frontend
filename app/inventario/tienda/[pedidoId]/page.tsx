@@ -66,15 +66,6 @@ export default function PedidoTiendaPage() {
 
     const token = getToken();
 
-    useEffect(() => {
-        if (!pedidoId) return;
-
-        const timer = setInterval(async () => {
-            await verificarPagoPedido();
-        }, 7000);
-
-        return () => clearInterval(timer);
-    }, [pedidoId]);
 
     async function cargarPedido() {
         try {
