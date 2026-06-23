@@ -47,18 +47,11 @@ type DetallePedido = {
 function money(valor: string | number) {
     return Number(valor || 0).toFixed(2);
 }
-type Props = {
-    CarritoId: string | null;
-    onVolver: () => void;
-};
-
-export default function PedidoTiendaPage({
-    CarritoId,
-    onVolver,
-}: Props) {
+export default function PedidoTiendaPage() {
+    const params = useParams();
     const router = useRouter();
 
-    const pedidoId = CarritoId;
+    const pedidoId = params.pedidoId as string;
 
     const [pedido, setPedido] = useState<Pedido | null>(null);
     const [detalles, setDetalles] = useState<DetallePedido[]>([]);

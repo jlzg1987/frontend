@@ -1265,10 +1265,7 @@ export default function DashboardPage() {
 
                         {vistaActual === "AbrirCArrrito" && CarritoId && (
                             <PedidoTiendaPage
-                                CarritoId={CarritoId}
-                                onVolver={() => {
-                                    setVistaActual("TiendaOnline");
-                                }}
+
                             />
                         )}
                         {vistaActual === 'kitsInstalacion' && (
