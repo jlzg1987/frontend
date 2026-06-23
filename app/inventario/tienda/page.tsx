@@ -110,6 +110,8 @@ export default function TiendaNetcompPage({
     const [modalPedido, setModalPedido] = useState(false);
     const [pedidoActivoId, setPedidoActivoId] = useState<string | null>(null);
 
+    const [pedidoPendienteCargado, setPedidoPendienteCargado] = useState(false);
+
     async function cargarDatos() {
         try {
             setLoading(true);
@@ -171,6 +173,7 @@ export default function TiendaNetcompPage({
 
         if (pedidoGuardado) {
             setPedidoActivoId(pedidoGuardado);
+            cargarPedidoPendienteEnCarrito(pedidoGuardado)
         }
     }, []);
 
@@ -186,6 +189,7 @@ export default function TiendaNetcompPage({
         }, 0);
     }, [carrito]);
 
+
     function agregarAlCarrito(producto: Producto) {
         if (producto.tipo_item === "PRODUCTO" && producto.stock <= 0) {
             alert("Este producto no tiene stock disponible.");
@@ -193,7 +197,11 @@ export default function TiendaNetcompPage({
         }
 
         setCarrito((prev) => {
-            const existe = prev.find((item) => item.producto.productoId === producto.productoId);
+            let nuevoCarrito: CarritoItem[];
+
+            const existe = prev.find(
+                (item) => item.producto.productoId === producto.productoId
+            );
 
             if (existe) {
                 if (
@@ -204,22 +212,28 @@ export default function TiendaNetcompPage({
                     return prev;
                 }
 
-                return prev.map((item) =>
+                nuevoCarrito = prev.map((item) =>
                     item.producto.productoId === producto.productoId
                         ? { ...item, cantidad: item.cantidad + 1 }
                         : item
                 );
+            } else {
+                nuevoCarrito = [...prev, { producto, cantidad: 1 }];
             }
 
-            return [...prev, { producto, cantidad: 1 }];
+            localStorage.setItem("tienda_carrito", JSON.stringify(nuevoCarrito));
+
+            const pedidoGuardado = localStorage.getItem("tienda_pedido_activo");
+
+
+            return nuevoCarrito;
         });
-
-
     }
 
+
     function aumentarCantidad(productoId: number) {
-        setCarrito((prev) =>
-            prev.map((item) => {
+        setCarrito((prev) => {
+            const nuevoCarrito = prev.map((item) => {
                 if (item.producto.productoId !== productoId) return item;
 
                 if (
@@ -230,27 +244,109 @@ export default function TiendaNetcompPage({
                     return item;
                 }
 
-                return { ...item, cantidad: item.cantidad + 1 };
-            })
-        );
+                return {
+                    ...item,
+                    cantidad: item.cantidad + 1,
+                };
+            });
+
+            localStorage.setItem("tienda_carrito", JSON.stringify(nuevoCarrito));
+
+            const pedidoGuardado = localStorage.getItem("tienda_pedido_activo");
+            if (pedidoGuardado) {
+                actualizarPedidoPendiente(nuevoCarrito);
+            }
+
+            return nuevoCarrito;
+        });
     }
 
     function disminuirCantidad(productoId: number) {
-        setCarrito((prev) =>
-            prev
+        setCarrito((prev) => {
+            const nuevoCarrito = prev
                 .map((item) =>
                     item.producto.productoId === productoId
-                        ? { ...item, cantidad: item.cantidad - 1 }
+                        ? {
+                            ...item,
+                            cantidad: item.cantidad - 1,
+                        }
                         : item
                 )
-                .filter((item) => item.cantidad > 0)
-        );
+                .filter((item) => item.cantidad > 0);
+
+            localStorage.setItem("tienda_carrito", JSON.stringify(nuevoCarrito));
+
+            const pedidoGuardado = localStorage.getItem("tienda_pedido_activo");
+            if (pedidoGuardado && nuevoCarrito.length > 0) {
+                actualizarPedidoPendiente(nuevoCarrito);
+            }
+
+            return nuevoCarrito;
+        });
     }
 
     function eliminarDelCarrito(productoId: number) {
-        setCarrito((prev) =>
-            prev.filter((item) => item.producto.productoId !== productoId)
-        );
+        setCarrito((prev) => {
+            const nuevoCarrito = prev.filter(
+                (item) => item.producto.productoId !== productoId
+            );
+
+            localStorage.setItem("tienda_carrito", JSON.stringify(nuevoCarrito));
+
+            const pedidoGuardado = localStorage.getItem("tienda_pedido_activo");
+            if (pedidoGuardado && nuevoCarrito.length > 0) {
+                actualizarPedidoPendiente(nuevoCarrito);
+            }
+
+            return nuevoCarrito;
+        });
+    }
+
+    async function anularPedidoPendiente() {
+        try {
+            const pedidoGuardado = localStorage.getItem("tienda_pedido_activo");
+
+            if (!pedidoGuardado) {
+                vaciarCarrito();
+                return;
+            }
+
+            const confirmar = confirm(
+                "¿Seguro que deseas anular este pedido pendiente y vaciar el carrito?"
+            );
+
+            if (!confirmar) return;
+
+            const res = await fetch(
+                `${API_BASE}/tienda-pedidos/${pedidoGuardado}/anular`,
+                {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ empresaId: 1 }),
+                }
+            );
+
+            const data = await res.json();
+
+            if (!res.ok || !data.ok) {
+                throw new Error(data.mensaje || "No se pudo anular el pedido.");
+            }
+
+            localStorage.removeItem("tienda_pedido_activo");
+            localStorage.removeItem("tienda_carrito");
+
+            setPedidoActivoId(null);
+            setCarrito([]);
+            setCarritoAbierto(false);
+            setModalPedido(false);
+
+            alert("Pedido anulado correctamente.");
+        } catch (error: any) {
+            console.error("Error anularPedidoPendiente:", error);
+            alert(error.message || "Error anulando pedido.");
+        }
     }
 
     function vaciarCarrito() {
@@ -365,6 +461,108 @@ TOTAL: $${totalCarrito.toFixed(2)}
             alert(error.message || "Error creando pedido.");
         } finally {
             setCreandoPedido(false);
+        }
+    }
+
+    async function actualizarPedidoPendiente(carritoActual = carrito) {
+        try {
+            const pedidoGuardado = localStorage.getItem("tienda_pedido_activo");
+
+            if (!pedidoGuardado) {
+                alert("No tienes un pedido pendiente.");
+                return;
+            }
+
+            if (carritoActual.length === 0) {
+                alert("El carrito está vacío. Mejor anula el pedido.");
+                return;
+            }
+
+            const payload = {
+                empresaId: 1,
+                items: carritoActual.map((item) => ({
+                    productoId: item.producto.productoId,
+                    cantidad: item.cantidad,
+                })),
+            };
+
+            const res = await fetch(
+                `${API_BASE}/tienda-pedidos/${pedidoGuardado}/items`,
+                {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(payload),
+                }
+            );
+
+            const data = await res.json();
+
+            if (!res.ok || !data.ok) {
+                throw new Error(data.mensaje || "No se pudo actualizar el pedido.");
+            }
+
+            setPedidoActivoId(pedidoGuardado);
+            alert("Pedido actualizado correctamente.");
+            setCarritoAbierto(true);
+        } catch (error: any) {
+            console.error("Error actualizarPedidoPendiente:", error);
+            alert(error.message || "Error actualizando pedido pendiente.");
+        }
+    }
+
+    async function cargarPedidoPendienteEnCarrito(pedidoId: string) {
+        try {
+            const res = await fetch(`${API_BASE}/tienda-pedidos/${pedidoId}`);
+            const data = await res.json();
+
+            console.log("PEDIDO PENDIENTE BACKEND:", data);
+
+            if (!res.ok || !data.ok) {
+                throw new Error(data.mensaje || "No se pudo cargar el pedido pendiente.");
+            }
+
+            const itemsBackend =
+                data.items ||
+                data.detalle ||
+                data.detalles ||
+                data.pedido?.items ||
+                data.pedido?.detalle ||
+                data.pedido?.detalles ||
+                [];
+
+            if (!Array.isArray(itemsBackend)) {
+                alert("El backend no está devolviendo los productos del pedido.");
+                return;
+            }
+
+            const itemsCarrito = itemsBackend.map((item: any) => ({
+                producto: {
+                    productoId: item.productoId,
+                    empresaId: item.empresaId || 1,
+                    tipo_item: item.tipo_item || "PRODUCTO",
+                    codigo: item.codigo || "",
+                    nombre: item.nombre || item.productoNombre || item.descripcion || "Producto",
+                    descripcion: item.descripcion || null,
+                    imagen_url: item.imagen_url || item.imagenUrl || null,
+                    categoria: item.categoria || null,
+                    stock: Number(item.stock || 0),
+                    precio_venta: Number(item.precioUnitario || item.precio_venta || item.precio || 0),
+                    aplica_iva: item.aplica_iva || "NO",
+                },
+                cantidad: Number(item.cantidad || 1),
+            }));
+
+            setCarrito(itemsCarrito);
+            localStorage.setItem("tienda_carrito", JSON.stringify(itemsCarrito));
+            localStorage.setItem("tienda_pedido_activo", pedidoId);
+            setPedidoActivoId(pedidoId);
+            setPedidoPendienteCargado(true);
+            setCarritoAbierto(true);
+        } catch (error: any) {
+            console.error("Error cargarPedidoPendienteEnCarrito:", error);
+            alert(error.message || "Error cargando pedido pendiente.");
         }
     }
 
@@ -587,8 +785,12 @@ TOTAL: $${totalCarrito.toFixed(2)}
             </button>
 
             {carritoAbierto && (
-                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur">
-                    <div className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto border-l border-white/10 bg-slate-950 p-5 shadow-2xl">
+                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur"
+                    onClick={() => setCarritoAbierto(false)}
+                >
+                    <div className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto border-l border-white/10 bg-slate-950 p-5 shadow-2xl"
+
+                    >
                         <div className="flex items-center justify-between">
                             <h2 className="text-2xl font-black">🛒 Mi carrito</h2>
 
@@ -599,15 +801,18 @@ TOTAL: $${totalCarrito.toFixed(2)}
                                 <X size={22} />
                             </button>
                         </div>
-                        {pedidoActivoId && (
-                            <div className="mt-6 rounded-3xl border border-yellow-400/30 bg-yellow-400/10 p-4 text-yellow-200">
-                                <p className="font-black">Tienes un pedido pendiente</p>
-                                <p className="mt-1 break-all text-sm">
+                        {pedidoActivoId && !pedidoPendienteCargado && (
+                            <div className="rounded-3xl border border-yellow-400/40 bg-yellow-400/10 p-4">
+                                <p className="font-black text-yellow-300">
+                                    Tienes un pedido pendiente
+                                </p>
+
+                                <p className="text-xs font-bold text-yellow-200">
                                     Código: {pedidoActivoId}
                                 </p>
 
                                 <button
-                                    onClick={() => onAbrirAbrirCArrito(pedidoActivoId)}
+                                    onClick={() => cargarPedidoPendienteEnCarrito(pedidoActivoId)}
                                     className="mt-3 rounded-2xl bg-yellow-400 px-5 py-3 font-black text-slate-950"
                                 >
                                     Ver pedido pendiente
@@ -709,12 +914,26 @@ TOTAL: $${totalCarrito.toFixed(2)}
                                     </div>
 
                                     <button
-                                        onClick={() => setModalPedido(true)}
+                                        onClick={() => {
+                                            if (pedidoActivoId) {
+                                                actualizarPedidoPendiente(carrito);
+                                            } else {
+                                                setModalPedido(true);
+                                            }
+                                        }}
                                         className="mt-4 flex w-full items-center justify-center gap-3 rounded-2xl bg-cyan-400 px-5 py-4 font-black text-slate-950 transition hover:bg-cyan-300"
                                     >
                                         <ShoppingCart size={22} />
-                                        Terminar pedido
+                                        {pedidoActivoId ? "Actualizar pedido" : "Terminar pedido"}
                                     </button>
+                                    {pedidoActivoId && pedidoPendienteCargado && (
+                                        <button
+                                            onClick={() => onAbrirAbrirCArrito(pedidoActivoId)}
+                                            className="mt-3 w-full rounded-2xl bg-yellow-400 px-5 py-4 font-black text-slate-950 transition hover:bg-yellow-300"
+                                        >
+                                            Ir a pagar pedido
+                                        </button>
+                                    )}
 
                                     <a
                                         href={whatsappCarrito()}
@@ -726,10 +945,10 @@ TOTAL: $${totalCarrito.toFixed(2)}
                                     </a>
 
                                     <button
-                                        onClick={vaciarCarrito}
+                                        onClick={pedidoActivoId ? anularPedidoPendiente : vaciarCarrito}
                                         className="mt-3 w-full rounded-2xl border border-white/10 px-5 py-3 font-bold text-slate-300 transition hover:bg-white/10"
                                     >
-                                        Vaciar carrito
+                                        {pedidoActivoId ? "Anular pedido y vaciar carrito" : "Vaciar carrito"}
                                     </button>
                                 </div>
                             </>

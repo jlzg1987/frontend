@@ -14,7 +14,7 @@ import {
     ShoppingBag,
     CreditCard,
 } from "lucide-react";
-import { API_BASE } from "@/src/lib/api";
+import { API_BASE, getToken } from "@/src/lib/api";
 
 type Pedido = {
     pedidoId: string;
@@ -64,6 +64,10 @@ export default function PedidoTiendaPage({
     const [detalles, setDetalles] = useState<DetallePedido[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+
+    const [pagando, setPagando] = useState(false);
+    const [errorPago, setErrorPago] = useState("");
+    const token = getToken();
 
     async function cargarPedido() {
         try {
@@ -123,6 +127,46 @@ TOTAL: $${money(pedido.total)}
 Quiero continuar con la compra.`;
 
         return `https://wa.me/593988899116?text=${encodeURIComponent(texto)}`;
+    }
+
+    async function pagarConPayPhone() {
+        try {
+            setPagando(true);
+
+            const res = await fetch(`${API_BASE}/tienda/payphone/crear-link`, {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${getToken()}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    pedidoId,
+                }),
+            });
+
+            const data = await res.json().catch(() => null);
+
+            console.log("RESPUESTA PAYPHONE:", {
+                status: res.status,
+                okHttp: res.ok,
+                data,
+            });
+
+            if (!res.ok || !data?.ok) {
+                throw new Error(
+                    data?.mensaje ||
+                    data?.message ||
+                    "No se pudo generar el link de pago."
+                );
+            }
+
+            window.open(data.linkPago, "_blank", "noopener,noreferrer");
+        } catch (error: any) {
+            console.error("Error pagarConPayPhone:", error);
+            alert(error.message || "No se pudo generar el link de pago.");
+        } finally {
+            setPagando(false);
+        }
     }
 
     if (loading) {
@@ -313,12 +357,19 @@ Quiero continuar con la compra.`;
                             </a>
 
                             <button
-                                disabled
-                                className="mt-3 flex w-full cursor-not-allowed items-center justify-center gap-3 rounded-2xl bg-slate-700 px-5 py-4 font-black text-slate-400"
+                                onClick={pagarConPayPhone}
+                                disabled={pagando || pedido.estado !== "PENDIENTE"}
+                                className="mt-3 flex w-full items-center justify-center gap-3 rounded-2xl bg-cyan-400 px-5 py-4 font-black text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
                             >
                                 <CreditCard size={22} />
-                                Pagar con PayPhone próximamente
+                                {pagando ? "Generando link..." : "Pagar con PayPhone"}
                             </button>
+
+                            {errorPago && (
+                                <p className="mt-3 rounded-2xl border border-red-400/20 bg-red-500/10 p-3 text-sm font-bold text-red-200">
+                                    {errorPago}
+                                </p>
+                            )}
                         </section>
                     </aside>
                 </div>
