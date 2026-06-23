@@ -12,6 +12,7 @@ export default function PagoPayphoneContenido() {
     const pedidoId = params.get("pedidoId");
     const id = params.get("id");
     const paymentId = params.get("paymentId");
+    const clientTransactionId = params.get("clientTransactionId");
 
     const [cargando, setCargando] = useState(true);
     const [error, setError] = useState("");
@@ -24,30 +25,35 @@ export default function PagoPayphoneContenido() {
             return;
         }
 
-        if (!id && !paymentId) {
-            const res = await fetch(
-                `${API_BASE}/tienda/payphone/verificar-pedido/${pedidoId}`,
-                {
-                    method: "POST",
-                }
-            );
-
-            const data = await res.json();
-
-            if (data.estado === "PAGADO") {
-                router.push(
-                    `/inventario/tienda/pedido-exitoso?pedidoId=${pedidoId}`
-                );
-                return;
-            }
-
-            setMensaje("El pago aún no ha sido confirmado.");
-            return;
-        }
-
         try {
             setCargando(true);
             setError("");
+
+            if (!id && !paymentId) {
+                setMensaje("PayPhone regresó sin id. Consultando estado interno...");
+
+                const res = await fetch(
+                    `${API_BASE}/tienda/payphone/estado-pedido/${pedidoId}`,
+                    {
+                        method: "GET",
+                    }
+                );
+
+                const data = await res.json();
+
+                if (data.estado === "PAGADO" || data.pedidoEstado === "PAGADO") {
+                    localStorage.removeItem("tienda_pedido_activo");
+                    router.push(`/inventario/tienda/pedido-exitoso?pedidoId=${pedidoId}`);
+                    return;
+                }
+
+                setMensaje(
+                    "Pago enviado. Estamos esperando la notificación automática de PayPhone."
+                );
+                setCargando(false);
+                return;
+            }
+
             setMensaje("Confirmando pago con PayPhone...");
 
             const res = await fetch(`${API_BASE}/tienda/payphone/confirmar-retorno`, {
@@ -59,6 +65,7 @@ export default function PagoPayphoneContenido() {
                     pedidoId,
                     id,
                     paymentId,
+                    clientTransactionId,
                 }),
             });
 
@@ -89,10 +96,9 @@ export default function PagoPayphoneContenido() {
     }
 
     useEffect(() => {
-        if (!pedidoId) return;
-
         confirmarRetornoPayPhone();
-    }, [pedidoId, id, paymentId]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pedidoId, id, paymentId, clientTransactionId]);
 
     return (
         <main className="min-h-screen bg-slate-950 px-4 py-10 text-white">
@@ -134,9 +140,16 @@ export default function PagoPayphoneContenido() {
                     <div className="text-center">
                         <CheckCircle className="mx-auto mb-4 text-emerald-400" size={70} />
                         <h1 className="text-3xl font-black text-emerald-300">
-                            Pago confirmado
+                            Pago en revisión
                         </h1>
                         <p className="mt-3 text-slate-300">{mensaje}</p>
+
+                        <button
+                            onClick={confirmarRetornoPayPhone}
+                            className="mt-5 w-full rounded-2xl bg-cyan-400 px-5 py-4 font-black text-slate-950 hover:bg-cyan-300"
+                        >
+                            Verificar otra vez
+                        </button>
                     </div>
                 )}
             </section>
