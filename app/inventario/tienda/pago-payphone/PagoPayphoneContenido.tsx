@@ -117,7 +117,6 @@ export default function PagoPayphoneContenido() {
                     localStorage.removeItem("tienda_pedido_activo");
                     router.push(`/inventario/tienda/pedido-exitoso?pedidoId=${pedidoId}`);
                 }
-                alert("estoy consultando a payphone")
             } catch (error) {
                 console.error("Error consultando estado automático:", error);
             }
