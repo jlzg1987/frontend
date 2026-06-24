@@ -100,6 +100,31 @@ export default function PagoPayphoneContenido() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pedidoId, id, paymentId, clientTransactionId]);
 
+
+    useEffect(() => {
+        if (!pedidoId) return;
+
+        const timer = setInterval(async () => {
+            try {
+                const res = await fetch(
+                    `${API_BASE}/tienda/payphone/estado-pedido/${pedidoId}`,
+                    { method: "GET" }
+                );
+
+                const data = await res.json();
+
+                if (data.estado === "PAGADO" || data.pedidoEstado === "PAGADO") {
+                    localStorage.removeItem("tienda_pedido_activo");
+                    router.push(`/inventario/tienda/pedido-exitoso?pedidoId=${pedidoId}`);
+                }
+            } catch (error) {
+                console.error("Error consultando estado automático:", error);
+            }
+        }, 5000);
+
+        return () => clearInterval(timer);
+    }, [pedidoId, router]);
+
     return (
         <main className="min-h-screen bg-slate-950 px-4 py-10 text-white">
             <section className="mx-auto max-w-xl rounded-3xl border border-white/10 bg-slate-900/90 p-6 shadow-2xl">
