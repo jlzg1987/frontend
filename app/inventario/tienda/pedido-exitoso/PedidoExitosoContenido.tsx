@@ -28,6 +28,16 @@ type Recibo = {
         amount: number;
         currency: string;
     } | null;
+    empresa?: {
+        empresaId?: number;
+        nombreComercial?: string;
+        razonSocial?: string;
+        ruc?: string;
+        direccion?: string;
+        telefono?: string;
+        email?: string;
+        logoUrl?: string;
+    } | null;
     cliente: {
         nombre?: string;
         cedula?: string;
@@ -130,7 +140,11 @@ export default function PedidoExitosoContenido() {
 
                         <div className="mt-6 grid gap-4 sm:grid-cols-2">
                             <div>
-                                <h2 className="font-black">NETCOMP RF S.A.S.</h2>
+                                <h2 className="font-black">
+                                    {recibo.empresa?.nombreComercial ||
+                                        recibo.empresa?.razonSocial ||
+                                        "NETCOMP RF S.A.S."}
+                                </h2>
                                 <p className="text-sm text-slate-600">Comprobante de compra</p>
                                 <p className="text-sm text-slate-600">
                                     Fecha: {new Date(recibo.pedido.creadoEn).toLocaleString()}
@@ -145,10 +159,13 @@ export default function PedidoExitosoContenido() {
                                     <b>Estado:</b> {recibo.pedido.estado}
                                 </p>
                                 <p className="text-sm">
-                                    <b>Transacción:</b> {recibo.pago?.transactionId || "N/A"}
+                                    <b>No. Transacción:</b> {recibo.pago?.transactionId || "N/A"}
                                 </p>
                                 <p className="text-sm">
-                                    <b>Autorización:</b> {recibo.pago?.authorizationCode || "N/A"}
+                                    <b>No. Autorización:</b> {recibo.pago?.authorizationCode || "N/A"}
+                                </p>
+                                <p className="text-sm">
+                                    <b>Estado PayPhone:</b> {recibo.pago?.transactionStatus || "N/A"}
                                 </p>
                             </div>
                         </div>
