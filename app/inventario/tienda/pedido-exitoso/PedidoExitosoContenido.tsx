@@ -55,7 +55,7 @@ export default function PedidoExitosoContenido() {
         }
 
         try {
-            const res = await fetch(`${API_BASE}/tienda/pedidos/${pedidoId}/recibo`, {
+            const res = await fetch(`${API_BASE}/tienda-pedidos/${pedidoId}/recibo`, {
                 headers: {
                     Authorization: `Bearer ${getToken()}`,
                 },
