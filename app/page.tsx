@@ -71,7 +71,7 @@ export default function NetcomprfPage() {
 
                     <div className="mt-10 flex flex-col justify-center gap-4 sm:flex-row">
                         <a
-                            href="https://wa.me/593XXXXXXXXX"
+                            href="https://wa.me/593988899116"
                             target="_blank"
                             className="rounded-full bg-cyan-400 px-8 py-4 font-bold text-slate-950 shadow-lg shadow-cyan-500/30"
                         >
@@ -79,7 +79,7 @@ export default function NetcomprfPage() {
                         </a>
 
                         <a
-                            href="/tienda"
+                            href="/inventario/tienda"
                             className="rounded-full bg-lime-400 px-8 py-4 font-bold text-slate-950 shadow-lg shadow-lime-500/30"
                         >
                             Visita nuestra tienda online
