@@ -127,7 +127,7 @@ Quiero continuar con la compra.`;
 
         return `https://wa.me/593988899116?text=${encodeURIComponent(texto)}`;
     }
-
+    /** 
     async function pagarConPayPhone() {
         try {
             setPagando(true);
@@ -171,7 +171,13 @@ Quiero continuar con la compra.`;
             setPagando(false);
         }
     }
+*/
+    function pagarConPayPhone() {
+        localStorage.setItem("tienda_pedido_activo", pedidoId);
+        localStorage.setItem("pedidoPayphonePendiente", pedidoId);
 
+        router.push(`/inventario/tienda/pago-cajita?pedidoId=${pedidoId}`);
+    }
     if (loading) {
         return (
             <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
@@ -366,62 +372,14 @@ Quiero continuar con la compra.`;
                                     </p>
                                 </div>
                             )}
-
-                            {!linkPagoGenerado ? (
-                                <button
-                                    onClick={pagarConPayPhone}
-                                    disabled={pagando || pedido.estado !== "PENDIENTE"}
-                                    className="mt-3 flex w-full items-center justify-center gap-3 rounded-2xl bg-cyan-400 px-5 py-4 font-black text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
-                                >
-                                    <CreditCard size={22} />
-                                    {pagando ? "Generando link..." : "💳 Pagar con PayPhone"}
-                                </button>
-                            ) : (
-                                <button
-                                    onClick={() => {
-                                        localStorage.setItem("tienda_pedido_activo", pedido.pedidoId);
-                                        localStorage.setItem("pedidoPayphonePendiente", pedido.pedidoId);
-
-                                        router.push(`/inventario/tienda/pago-payphone?pedidoId=${pedido.pedidoId}`);
-                                    }}
-                                    disabled={verificandoPago || pedido.estado === "PAGADO"}
-                                    className="
-            mt-3
-            flex
-            w-full
-            animate-pulse
-            items-center
-            justify-center
-            gap-3
-            rounded-2xl
-            border-2
-            border-amber-300
-            bg-gradient-to-r
-            from-amber-400
-            via-yellow-300
-            to-amber-400
-            px-5
-            py-5
-            font-black
-            text-slate-950
-            shadow-lg
-            shadow-amber-500/40
-            transition
-            hover:scale-[1.02]
-            hover:from-amber-300
-            hover:to-yellow-200
-            disabled:cursor-not-allowed
-            disabled:animate-none
-            disabled:bg-slate-700
-            disabled:text-slate-400
-        "
-                                >
-                                    ⚠️
-                                    {verificandoPago
-                                        ? "Verificando pago con PayPhone..."
-                                        : "YA PAGUÉ • VERIFICAR MI PAGO"}
-                                </button>
-                            )}
+                            <button
+                                onClick={pagarConPayPhone}
+                                disabled={pedido.estado !== "PENDIENTE"}
+                                className="mt-3 flex w-full items-center justify-center gap-3 rounded-2xl bg-cyan-400 px-5 py-4 font-black text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+                            >
+                                <CreditCard size={22} />
+                                💳 Pagar con PayPhone
+                            </button>
 
                             {errorPago && (
                                 <p className="mt-3 rounded-2xl border border-red-400/20 bg-red-500/10 p-3 text-sm font-bold text-red-200">

@@ -29,7 +29,7 @@ export default function PagoPayphoneContenido() {
                 setPedidoMostrado(pedidoId);
 
                 const res = await fetch(
-                    `${API_BASE}/tienda/payphone/verificar/${pedidoId}`,
+                    `${API_BASE}/tienda/payphone/verificar-pedido/${pedidoId}`,
                     {
                         method: "GET",
                         headers: {
