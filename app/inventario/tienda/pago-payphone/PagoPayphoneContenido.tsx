@@ -2,147 +2,110 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { CheckCircle, Clock, XCircle, ArrowLeft, RefreshCw } from "lucide-react";
 import { API_BASE } from "@/src/lib/api";
 
 export default function PagoPayphoneContenido() {
+    const searchParams = useSearchParams();
     const router = useRouter();
-    const params = useSearchParams();
 
-    const pedidoId = params.get("pedidoId");
-
-    const [cargando, setCargando] = useState(true);
+    const [estado, setEstado] = useState("Verificando pago...");
     const [error, setError] = useState("");
-    const [mensaje, setMensaje] = useState(
-        "Estamos verificando tu pago con PayPhone..."
-    );
-
-    async function consultarEstadoPedido() {
-        if (!pedidoId) {
-            setError("No se recibió el pedidoId.");
-            setCargando(false);
-            return;
-        }
-
-        try {
-            setError("");
-
-            const res = await fetch(
-                `${API_BASE}/tienda/payphone/estado-pedido/${pedidoId}`,
-                { method: "GET" }
-            );
-
-            const data = await res.json();
-
-            if (!res.ok || !data.ok) {
-                throw new Error(data.mensaje || "No se pudo consultar el pedido.");
-            }
-
-            if (data.estado === "PAGADO" || data.pedidoEstado === "PAGADO") {
-                localStorage.removeItem("tienda_pedido_activo");
-                localStorage.removeItem("tienda_carrito");
-
-                window.dispatchEvent(new Event("tienda-carrito-actualizado"));
-
-                setMensaje("Pago confirmado correctamente. Redirigiendo...");
-
-                router.push(`/inventario/tienda/pedido-exitoso?pedidoId=${pedidoId}`);
-                return;
-            }
-
-            if (data.estado === "ANULADO") {
-                setError("Este pedido fue anulado.");
-                setCargando(false);
-                return;
-            }
-
-            setMensaje(
-                "Pago enviado. Estamos esperando la confirmación automática de PayPhone."
-            );
-            setCargando(false);
-        } catch (err: any) {
-            console.error("Error consultando estado del pedido:", err);
-            setError(err.message || "Error consultando estado del pago.");
-            setCargando(false);
-        }
-    }
+    const [pedidoMostrado, setPedidoMostrado] = useState("");
 
     useEffect(() => {
-        consultarEstadoPedido();
+        async function verificarPago() {
+            try {
+                const pedidoIdUrl = searchParams.get("pedidoId");
+                const pedidoIdLocal = localStorage.getItem("pedidoPayphonePendiente");
 
-        if (!pedidoId) return;
+                const pedidoId = pedidoIdUrl || pedidoIdLocal;
 
-        const timer = setInterval(() => {
-            consultarEstadoPedido();
-        }, 5000);
+                if (!pedidoId) {
+                    setError("No se encontró el pedido pendiente para verificar el pago.");
+                    setEstado("");
+                    return;
+                }
 
-        return () => clearInterval(timer);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pedidoId]);
+                setPedidoMostrado(pedidoId);
+
+                const res = await fetch(
+                    `${API_BASE}/tienda/payphone/verificar/${pedidoId}`,
+                    {
+                        method: "GET",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                    }
+                );
+
+                const data = await res.json();
+
+                if (!res.ok || !data.ok) {
+                    throw new Error(data.mensaje || "No se pudo verificar el pago.");
+                }
+
+                if (data.estado === "PAGADO" || data.pedidoEstado === "PAGADO") {
+                    setEstado("Pago aprobado. Redirigiendo...");
+
+                    localStorage.removeItem("pedidoPayphonePendiente");
+                    localStorage.removeItem("carritoTiendaNetcomp");
+
+                    setTimeout(() => {
+                        router.push(`/inventario/tienda/pedido-exitoso?pedidoId=${pedidoId}`);
+                    }, 1500);
+
+                    return;
+                }
+
+                setEstado("Pago pendiente o no confirmado todavía. Reintentando...");
+
+                setTimeout(() => {
+                    verificarPago();
+                }, 4000);
+            } catch (err: any) {
+                setError(err.message || "Error verificando el pago.");
+                setEstado("");
+            }
+        }
+
+        verificarPago();
+    }, [searchParams, router]);
 
     return (
-        <main className="min-h-screen bg-slate-950 px-4 py-10 text-white">
-            <section className="mx-auto max-w-xl rounded-3xl border border-white/10 bg-slate-900/90 p-6 shadow-2xl">
+        <main className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
+            <section className="w-full max-w-md rounded-3xl bg-white p-8 shadow-xl text-center">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-3xl">
+                    ✅
+                </div>
+
+                <h1 className="text-2xl font-bold text-slate-900">
+                    Confirmando pago
+                </h1>
+
+                {estado && (
+                    <p className="mt-3 text-slate-600">
+                        {estado}
+                    </p>
+                )}
+
+                {error && (
+                    <div className="mt-5 rounded-xl bg-red-50 p-4 text-sm text-red-700">
+                        {error}
+                    </div>
+                )}
+
+                {pedidoMostrado && (
+                    <p className="mt-4 text-xs text-slate-400">
+                        Pedido: {pedidoMostrado}
+                    </p>
+                )}
+
                 <button
                     onClick={() => router.push("/inventario/tienda")}
-                    className="mb-6 flex items-center gap-2 text-sm font-bold text-cyan-300 hover:text-cyan-200"
+                    className="mt-6 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800"
                 >
-                    <ArrowLeft size={18} />
                     Volver a la tienda
                 </button>
-
-                {cargando && (
-                    <div className="text-center">
-                        <Clock className="mx-auto mb-4 text-cyan-300" size={56} />
-                        <h1 className="text-2xl font-black">Verificando pago...</h1>
-                        <p className="mt-2 text-slate-400">{mensaje}</p>
-                    </div>
-                )}
-
-                {!cargando && error && (
-                    <div className="text-center">
-                        <XCircle className="mx-auto mb-4 text-red-400" size={64} />
-                        <h1 className="text-2xl font-black">No se pudo confirmar</h1>
-
-                        <p className="mt-3 rounded-2xl bg-red-500/10 p-3 text-red-200">
-                            {error}
-                        </p>
-
-                        <button
-                            onClick={() => {
-                                setCargando(true);
-                                consultarEstadoPedido();
-                            }}
-                            className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-amber-400 px-5 py-4 font-black text-slate-950 hover:bg-amber-300"
-                        >
-                            <RefreshCw size={18} />
-                            Reintentar verificación
-                        </button>
-                    </div>
-                )}
-
-                {!cargando && !error && (
-                    <div className="text-center">
-                        <CheckCircle className="mx-auto mb-4 text-emerald-400" size={70} />
-
-                        <h1 className="text-3xl font-black text-emerald-300">
-                            Pago en revisión
-                        </h1>
-
-                        <p className="mt-3 text-slate-300">{mensaje}</p>
-
-                        <button
-                            onClick={() => {
-                                setCargando(true);
-                                consultarEstadoPedido();
-                            }}
-                            className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-cyan-400 px-5 py-4 font-black text-slate-950 hover:bg-cyan-300"
-                        >
-                            <RefreshCw size={18} />
-                            Verificar otra vez
-                        </button>
-                    </div>
-                )}
             </section>
         </main>
     );

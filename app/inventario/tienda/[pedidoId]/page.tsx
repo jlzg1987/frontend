@@ -159,7 +159,10 @@ Quiero continuar con la compra.`;
                 );
             }
 
-            window.open(data.linkPago, "_blank", "noopener,noreferrer");
+            localStorage.setItem("tienda_pedido_activo", pedidoId);
+            localStorage.setItem("pedidoPayphonePendiente", pedidoId);
+
+            window.location.href = data.linkPago;
             setLinkPagoGenerado(true);
         } catch (error: any) {
             console.error("Error pagarConPayPhone:", error);
@@ -376,11 +379,10 @@ Quiero continuar con la compra.`;
                             ) : (
                                 <button
                                     onClick={() => {
-                                        if (pedido.linkPago) {
-                                            window.location.href = pedido.linkPago;
-                                        } else {
-                                            router.push(`/inventario/tienda/pago-payphone?pedidoId=${pedido.pedidoId}`);
-                                        }
+                                        localStorage.setItem("tienda_pedido_activo", pedido.pedidoId);
+                                        localStorage.setItem("pedidoPayphonePendiente", pedido.pedidoId);
+
+                                        router.push(`/inventario/tienda/pago-payphone?pedidoId=${pedido.pedidoId}`);
                                     }}
                                     disabled={verificandoPago || pedido.estado === "PAGADO"}
                                     className="
