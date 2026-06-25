@@ -527,7 +527,7 @@ TOTAL: $${totalCarrito.toFixed(2)}
                 data.pedido?.estado ||
                 null;
 
-            if (estadoPedido === "PAGADO") {
+            if (["PAGADO", "ANULADO", "ENTREGADO"].includes(estadoPedido)) {
                 localStorage.removeItem("tienda_pedido_activo");
                 localStorage.removeItem("tienda_carrito");
 
