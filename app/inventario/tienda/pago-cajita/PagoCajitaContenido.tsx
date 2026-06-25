@@ -87,7 +87,7 @@ export default function PagoCajitaContenido() {
             yaRenderizo.current = true;
 
             setMensaje("Completa tu pago de forma segura.");
-
+            console.log(data.payphone);
             new window.PPaymentButtonBox(data.payphone).render("pp-button");
         } catch (err: any) {
             setError(err.message || "Error preparando pago PayPhone");
@@ -145,7 +145,7 @@ export default function PagoCajitaContenido() {
                 )}
 
                 {!id && !clientTransactionId && !error && (
-                    <div className="overflow-hidden rounded-2xl bg-white p-2">
+                    <div className="overflow-hidden rounded-2xl border-slate-800 p-2">
                         <div
                             id="pp-button"
                             className="mx-auto min-h-[620px] w-full max-w-[390px]"
