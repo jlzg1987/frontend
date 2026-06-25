@@ -130,10 +130,10 @@ export default function PagoCajitaContenido() {
     };
 
     return (
-        <main className="min-h-screen bg-slate-950 px-4 py-10 text-white">
-            <div className="mx-auto w-full max-w-lg rounded-3xl border border-slate-800 bg-slate-900/80 p-5 shadow-2xl">
+        <main className="min-h-screen bg-slate-950 px-4 py-10">
+            <div className="mx-auto w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900 p-5 text-white shadow-2xl">
                 <h1 className="mb-2 text-2xl font-bold text-cyan-300">
-                    Pago seguro NETCOMP
+                    Pago seguro NETCOMP RF S.A.S.
                 </h1>
 
                 <p className="mb-6 text-sm text-slate-300">{mensaje}</p>
@@ -145,10 +145,15 @@ export default function PagoCajitaContenido() {
                 )}
 
                 {!id && !clientTransactionId && !error && (
-                    <div className="overflow-hidden rounded-2xl border-slate-800 p-2">
+                    <div className="mt-5 rounded-2xl bg-slate-100 p-4 text-slate-900">
                         <div
                             id="pp-button"
-                            className="mx-auto min-h-[620px] w-full max-w-[390px]"
+                            className="mx-auto w-full max-w-[360px]"
+                            style={{
+                                color: "#0f172a",
+                                backgroundColor: "#f8fafc",
+                                minHeight: "520px",
+                            }}
                         />
                     </div>
                 )}
