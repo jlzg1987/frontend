@@ -522,6 +522,23 @@ TOTAL: $${totalCarrito.toFixed(2)}
             if (!res.ok || !data.ok) {
                 throw new Error(data.mensaje || "No se pudo cargar el pedido pendiente.");
             }
+            const estadoPedido =
+                data.estado ||
+                data.pedido?.estado ||
+                null;
+
+            if (estadoPedido === "PAGADO") {
+                localStorage.removeItem("tienda_pedido_activo");
+                localStorage.removeItem("tienda_carrito");
+
+                setCarrito([]);
+                setPedidoActivoId(null);
+                setPedidoPendienteCargado(false);
+
+                window.dispatchEvent(new Event("tienda-carrito-actualizado"));
+
+                return;
+            }
 
             const itemsBackend =
                 data.items ||

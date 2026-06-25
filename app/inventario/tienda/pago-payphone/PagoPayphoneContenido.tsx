@@ -40,6 +40,10 @@ export default function PagoPayphoneContenido() {
 
             if (data.estado === "PAGADO" || data.pedidoEstado === "PAGADO") {
                 localStorage.removeItem("tienda_pedido_activo");
+                localStorage.removeItem("tienda_carrito");
+
+                window.dispatchEvent(new Event("tienda-carrito-actualizado"));
+
                 setMensaje("Pago confirmado correctamente. Redirigiendo...");
 
                 router.push(`/inventario/tienda/pedido-exitoso?pedidoId=${pedidoId}`);
