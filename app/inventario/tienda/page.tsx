@@ -141,6 +141,15 @@ export default function TiendaNetcompPage({
         }
     }
 
+    function limpiarCarritoYPedido() {
+        localStorage.removeItem("carritoTiendaNetcomp");
+        localStorage.removeItem("pedidoPayphonePendiente");
+        localStorage.removeItem("tienda_pedido_activo");
+
+        setCarrito([]);
+        setPedidoActivoId(null);
+    }
+
     useEffect(() => {
         const t = setTimeout(() => {
             cargarDatos();
@@ -165,6 +174,7 @@ export default function TiendaNetcompPage({
             setPedidoActivoId(pedidoGuardado);
         }
     }, []);
+
     useEffect(() => {
         localStorage.setItem("tienda_carrito", JSON.stringify(carrito));
     }, [carrito]);
@@ -177,6 +187,45 @@ export default function TiendaNetcompPage({
             cargarPedidoPendienteEnCarrito(pedidoGuardado)
         }
     }, []);
+
+    useEffect(() => {
+        validarPedidoActivo();
+    }, []);
+
+    async function validarPedidoActivo() {
+        try {
+            const pedidoId = localStorage.getItem("tienda_pedido_activo");
+
+            if (!pedidoId) return;
+
+            const res = await fetch(`${API_BASE}/tienda/pedidos/${pedidoId}`, {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            });
+
+            const data = await res.json();
+
+            if (!res.ok || !data.ok) {
+                limpiarCarritoYPedido();
+                return;
+            }
+
+            const pedido = data.pedido;
+
+            if (pedido.estado === "PAGADO" || pedido.estado === "ENTREGADO" || pedido.estado === "ANULADO") {
+                limpiarCarritoYPedido();
+                return;
+            }
+
+            if (pedido.estado === "PENDIENTE") {
+                setPedidoActivoId(pedido);
+            }
+        } catch (error) {
+            console.error("Error validando pedido activo:", error);
+        }
+    }
 
     const totalProductos = useMemo(() => productos.length, [productos]);
 
@@ -438,9 +487,6 @@ TOTAL: $${totalCarrito.toFixed(2)}
             if (!res.ok || !data.ok) {
                 throw new Error(data.mensaje || "No se pudo crear el pedido.");
             }
-
-            alert(`Pedido creado correctamente. Código: ${data.pedido.pedidoId}`);
-
 
             setClienteNombre("");
             setClienteTelefono("");

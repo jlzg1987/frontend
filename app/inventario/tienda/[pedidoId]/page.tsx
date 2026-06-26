@@ -7,6 +7,7 @@ import {
     CheckCircle,
     Clock,
     Package,
+    IdCard,
     Phone,
     Mail,
     MapPin,
@@ -20,6 +21,7 @@ type Pedido = {
     pedidoId: string;
     empresaId: number;
     clienteNombre: string;
+    clienteDocumento: string;
     clienteTelefono: string;
     clienteEmail: string | null;
     clienteDireccion: string | null;
@@ -320,6 +322,13 @@ Quiero continuar con la compra.`;
                                     <div>
                                         <p className="text-xs text-slate-500">Cliente</p>
                                         <p className="font-bold">{pedido.clienteNombre}</p>
+                                    </div>
+                                </div>
+                                <div className="flex gap-3">
+                                    <IdCard className="mt-1 text-cyan-300" size={20} />
+                                    <div>
+                                        <p className="text-xs text-slate-500">Cédula</p>
+                                        <p className="font-bold">{pedido.clienteDocumento}</p>
                                     </div>
                                 </div>
 
