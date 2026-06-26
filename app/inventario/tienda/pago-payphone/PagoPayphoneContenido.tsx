@@ -8,72 +8,57 @@ export default function PagoPayphoneContenido() {
     const searchParams = useSearchParams();
     const router = useRouter();
 
-    const [estado, setEstado] = useState("Verificando pago...");
+    const id = searchParams.get("id");
+    const clientTransactionId = searchParams.get("clientTransactionId");
+
+    const [estado, setEstado] = useState("Confirmando pago...");
     const [error, setError] = useState("");
-    const [pedidoMostrado, setPedidoMostrado] = useState("");
 
     useEffect(() => {
-        async function verificarPago() {
+        async function confirmarPago() {
             try {
-                const pedidoIdUrl = searchParams.get("pedidoId");
-                const pedidoIdLocal = localStorage.getItem("pedidoPayphonePendiente");
-
-                const pedidoId = pedidoIdUrl || pedidoIdLocal;
-
-                if (!pedidoId) {
-                    setError("No se encontró el pedido pendiente para verificar el pago.");
-                    setEstado("");
-                    return;
+                if (!id || !clientTransactionId) {
+                    throw new Error("Faltan datos de PayPhone para confirmar el pago.");
                 }
 
-                setPedidoMostrado(pedidoId);
-
-                const res = await fetch(
-                    `${API_BASE}/tienda/payphone/verificar-pedido/${pedidoId}`,
-                    {
-                        method: "GET",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
-                    }
-                );
+                const res = await fetch(`${API_BASE}/tienda/payphone-cajita/confirmar`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        id,
+                        clientTransactionId,
+                    }),
+                });
 
                 const data = await res.json();
 
                 if (!res.ok || !data.ok) {
-                    throw new Error(data.mensaje || "No se pudo verificar el pago.");
+                    throw new Error(data.mensaje || data.message || "No se pudo confirmar el pago.");
                 }
 
-                if (data.estado === "PAGADO" || data.pedidoEstado === "PAGADO") {
-                    setEstado("Pago aprobado. Redirigiendo...");
+                localStorage.removeItem("pedidoPayphonePendiente");
+                localStorage.removeItem("carritoTiendaNetcomp");
+                localStorage.removeItem("tienda_pedido_activo");
 
-                    localStorage.removeItem("pedidoPayphonePendiente");
-                    localStorage.removeItem("carritoTiendaNetcomp");
-
-                    setTimeout(() => {
-                        router.push(`/inventario/tienda/pedido-exitoso?pedidoId=${pedidoId}`);
-                    }, 1500);
-
-                    return;
-                }
-
-                setEstado("Pago pendiente o no confirmado todavía. Reintentando...");
+                setEstado("Pago aprobado. Redirigiendo al recibo...");
 
                 setTimeout(() => {
-                    verificarPago();
-                }, 4000);
+                    router.replace(`/inventario/tienda/pedido-exitoso?pedidoId=${data.pedidoId}`);
+                }, 1200);
             } catch (err: any) {
-                setError(err.message || "Error verificando el pago.");
+                setError(err.message || "Error confirmando el pago.");
                 setEstado("");
             }
         }
 
-        verificarPago();
-    }, [searchParams, router]);
+        confirmarPago();
+    }, [id, clientTransactionId, router]);
 
     return (
-        <main className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
-            <section className="w-full max-w-md rounded-3xl bg-white p-8 shadow-xl text-center">
+        <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
+            <section className="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-xl">
                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-3xl">
                     ✅
                 </div>
@@ -92,12 +77,6 @@ export default function PagoPayphoneContenido() {
                     <div className="mt-5 rounded-xl bg-red-50 p-4 text-sm text-red-700">
                         {error}
                     </div>
-                )}
-
-                {pedidoMostrado && (
-                    <p className="mt-4 text-xs text-slate-400">
-                        Pedido: {pedidoMostrado}
-                    </p>
                 )}
 
                 <button

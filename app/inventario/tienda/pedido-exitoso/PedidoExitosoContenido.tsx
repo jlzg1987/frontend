@@ -85,6 +85,12 @@ export default function PedidoExitosoContenido() {
         }
     }
 
+    function limpiarCarritoCompleto() {
+        localStorage.removeItem("carritoTiendaNetcomp");
+        localStorage.removeItem("pedidoPayphonePendiente");
+        localStorage.removeItem("tienda_pedido_activo");
+    }
+
     useEffect(() => {
         cargarRecibo();
     }, [pedidoId]);
@@ -96,7 +102,10 @@ export default function PedidoExitosoContenido() {
             <section className="mx-auto max-w-3xl rounded-3xl border border-white/10 bg-white p-6 text-slate-900 shadow-2xl print:shadow-none">
                 <div className="mb-6 flex items-center justify-between print:hidden">
                     <button
-                        onClick={() => router.push("/inventario/tienda")}
+                        onClick={() => {
+                            limpiarCarritoCompleto();
+                            router.push("/inventario/tienda");
+                        }}
                         className="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-black text-white hover:bg-slate-800"
                     >
                         <ArrowLeft size={18} />

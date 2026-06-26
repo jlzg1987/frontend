@@ -109,6 +109,7 @@ export default function TiendaNetcompPage({
     const [creandoPedido, setCreandoPedido] = useState(false);
     const [modalPedido, setModalPedido] = useState(false);
     const [pedidoActivoId, setPedidoActivoId] = useState<string | null>(null);
+    const [clienteDocumento, setClienteDocumento] = useState("");
 
     const [pedidoPendienteCargado, setPedidoPendienteCargado] = useState(false);
 
@@ -414,6 +415,7 @@ TOTAL: $${totalCarrito.toFixed(2)}
                 empresaId: 1,
                 clienteNombre,
                 clienteTelefono,
+                clienteDocumento,
                 clienteEmail,
                 clienteDireccion,
                 observacion,
@@ -1078,6 +1080,13 @@ TOTAL: $${totalCarrito.toFixed(2)}
                                 value={clienteTelefono}
                                 onChange={(e) => setClienteTelefono(e.target.value)}
                                 placeholder="Teléfono / WhatsApp"
+                                className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-cyan-400"
+                            />
+                            <input
+                                value={clienteDocumento}
+                                onChange={(e) => setClienteDocumento(e.target.value)}
+                                placeholder="Cédula / RUC"
+                                maxLength={20}
                                 className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 outline-none focus:border-cyan-400"
                             />
 
