@@ -78,6 +78,7 @@ import SpeedTestAnalyticsPage from '../adnib-isp/speedtest/page';
 import TiendaNetcompPage from '../inventario/tienda/page';
 import ImportarInventarioPdfPage from '../inventario/importar-pdf/page';
 import PedidoTiendaPage from '../inventario/tienda/[pedidoId]/page';
+import VentasTiendaPage from '../inventario/ventas-tienda/page';
 
 
 type DashboardResponse = {
@@ -122,7 +123,7 @@ export default function DashboardPage() {
         | 'AbrirReportes' | 'AbrirReporteAdmin' | 'mikrotikCortes' | 'mikroikconfiguracion' | 'pagos' | 'EquiposWireless'
         | 'enlaces' | 'CPEClientes' | 'AlertasWireless' | 'MonitoreoWireless' | 'EquiposOffline' | 'listaNotificacion'
         | 'PerfilAdministrativo' | 'Publicidad' | 'ReportesISP' | 'SpeedTestAnalytics' | 'TiendaOnline' | 'ImportarPDF'
-        | 'AbrirCArrrito'
+        | 'AbrirCArrrito' | 'Ventas'
     >('dashboard');
 
 
@@ -1249,7 +1250,11 @@ export default function DashboardPage() {
                                 onAbrirKitsInstalacion={() => setVistaActual('kitsInstalacion')}
                                 onAbrirTiendaOnline={() => setVistaActual('TiendaOnline')}
                                 onAbrirImportarPDF={() => setVistaActual('ImportarPDF')}
+                                onAbrirVentas={() => setVistaActual('Ventas')}
                             />
+                        )}
+                        {vistaActual === 'Ventas' && (
+                            <VentasTiendaPage />
                         )}
                         {vistaActual === 'ImportarPDF' && (
                             <ImportarInventarioPdfPage />

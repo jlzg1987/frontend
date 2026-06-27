@@ -31,6 +31,7 @@ export default function DashboardInventarioPage({
     onAbrirKitsInstalacion,
     onAbrirTiendaOnline,
     onAbrirImportarPDF,
+    onAbrirVentas,
 }: {
     onVolver: () => void;
     onAbrirProductoServicio: () => void;
@@ -41,6 +42,7 @@ export default function DashboardInventarioPage({
     onAbrirKitsInstalacion: () => void;
     onAbrirTiendaOnline: () => void;
     onAbrirImportarPDF: () => void;
+    onAbrirVentas: () => void;
 }) {
     const router = useRouter();
 
@@ -185,12 +187,20 @@ export default function DashboardInventarioPage({
             disabled: false,
         },
         {
+            title: 'Ventas Tienda',
+            desc: 'Monitorea las ventas realizadas desde la tienda online, consulta pedidos pagados y visualiza el detalle de cada compra.',
+            icon: '🛍️',
+            href: '/inventario/tienda/ventas',
+            color: 'from-emerald-500 to-cyan-600',
+        },
+        {
             title: 'Importar PDF',
             desc: 'Subir listas de precios PDF y crear productos automáticamente.',
             icon: '📄',
             href: '/inventario/importar-pdf',
             color: 'from-red-500 to-orange-500',
-        }
+        },
+
     ];
 
     return (
@@ -318,6 +328,11 @@ export default function DashboardInventarioPage({
                                     onAbrirImportarPDF();
                                     return;
                                 }
+                                if (card.title === 'Ventas Tienda') {
+                                    onAbrirVentas();
+                                    return;
+                                }
+
 
 
                                 !card.disabled && router.push(card.href)

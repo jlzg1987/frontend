@@ -19,13 +19,15 @@ type Producto = {
 type Movimiento = {
     movimientoId: number;
     productoId: number;
-    tipo: 'ENTRADA' | 'SALIDA' | 'AJUSTE';
+    tipoMovimiento: 'ENTRADA' | 'SALIDA' | 'AJUSTE';
+    origen: 'TIENDA' | 'VENTA' | 'COMPRA' | 'AJUSTE' | 'MANUAL';
+    referenciaId?: string;
+    referenciaTipo?: string;
     cantidad: number;
-    stock_anterior: number;
-    stock_nuevo: number;
-    motivo?: string;
-    referencia?: string;
-    createdAt: string;
+    stockAnterior: number;
+    stockNuevo: number;
+    observacion?: string;
+    creadoEn: string;
     codigo: string;
     nombre: string;
     categoria?: string;
@@ -91,8 +93,9 @@ export default function MovimientosInventarioPage() {
             !txt ||
             m.nombre?.toLowerCase().includes(txt) ||
             m.codigo?.toLowerCase().includes(txt) ||
-            m.tipo?.toLowerCase().includes(txt) ||
-            m.referencia?.toLowerCase().includes(txt)
+            m.tipoMovimiento?.toLowerCase().includes(txt) ||
+            m.origen?.toLowerCase().includes(txt) ||
+            m.referenciaId?.toLowerCase().includes(txt)
         );
     }, [movimientos, busqueda]);
 
@@ -128,7 +131,7 @@ export default function MovimientosInventarioPage() {
                 return;
             }
 
-            alert(`Movimiento registrado. Stock nuevo: ${data.stock_nuevo}`);
+            alert(`Movimiento registrado. Stock nuevo: ${data.stockNuevo}`);
 
             setCantidad('');
             setMotivo('');
@@ -284,7 +287,7 @@ export default function MovimientosInventarioPage() {
                                 {movimientosFiltrados.map((m) => (
                                     <tr key={m.movimientoId} className="border-b border-slate-800/60">
                                         <td className="py-3 text-slate-400">
-                                            {new Date(m.createdAt).toLocaleString()}
+                                            {new Date(m.creadoEn).toLocaleString('es-EC')}
                                         </td>
 
                                         <td className="py-3">
@@ -293,20 +296,25 @@ export default function MovimientosInventarioPage() {
                                         </td>
 
                                         <td className="py-3">
-                                            <span className={`px-3 py-1 rounded-full text-xs font-black border ${colorTipo(m.tipo)}`}>
-                                                {m.tipo}
+                                            <span className={`px-3 py-1 rounded-full text-xs font-black border ${colorTipo(m.tipoMovimiento)}`}>
+                                                {m.tipoMovimiento}
                                             </span>
                                         </td>
 
                                         <td className="py-3 font-black">{m.cantidad}</td>
-                                        <td className="py-3">{m.stock_anterior}</td>
-                                        <td className="py-3 text-cyan-300 font-black">{m.stock_nuevo}</td>
+                                        <td className="py-3">{m.stockAnterior}</td>
+                                        <td className="py-3 text-cyan-300 font-black">{m.stockNuevo}</td>
 
                                         <td className="py-3 text-slate-400">
-                                            {m.motivo || 'Sin motivo'}
-                                            {m.referencia && (
+                                            {m.observacion || 'Sin observación'}
+
+                                            <div className="text-xs text-slate-500 mt-1">
+                                                Origen: {m.origen}
+                                            </div>
+
+                                            {m.referenciaId && (
                                                 <p className="text-xs text-slate-500">
-                                                    Ref: {m.referencia}
+                                                    Ref: {m.referenciaId}
                                                 </p>
                                             )}
                                         </td>
