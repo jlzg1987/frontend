@@ -28,11 +28,16 @@ export default function MikroTikDashboardPageInterno({
     onAbrirRouters,
     onAbrirmikroikCortes,
     onAbrirmikroikconfiguracion,
+    onAbrirMonitoreonodos,
+    onAbrirRedesinternas,
+
 }: {
     onVolver: () => void;
     onAbrirRouters: () => void;
     onAbrirmikroikCortes: () => void;
     onAbrirmikroikconfiguracion: () => void;
+    onAbrirMonitoreonodos: () => void;
+    onAbrirRedesinternas: () => void;
 }) {
     const router = useRouter();
     const [loadingStats, setLoadingStats] = useState(true);
@@ -227,12 +232,7 @@ export default function MikroTikDashboardPageInterno({
             icono: '🌍',
             ruta: '/mikrotik/redes',
         },
-        {
-            titulo: 'Reportes',
-            descripcion: 'Historial de cortes, reconexiones y errores',
-            icono: '📄',
-            ruta: '/mikrotik/reportes',
-        },
+
     ];
 
     return (
@@ -275,6 +275,15 @@ export default function MikroTikDashboardPageInterno({
 
                                 if (item.titulo === 'IP / Firewall') {
                                     onAbrirmikroikconfiguracion();
+                                    return;
+                                }
+                                if (item.titulo === 'Monitoreo de nodos') {
+                                    onAbrirMonitoreonodos();
+                                    return;
+                                }
+
+                                if (item.titulo === 'Redes internas') {
+                                    onAbrirRedesinternas();
                                     return;
                                 }
 

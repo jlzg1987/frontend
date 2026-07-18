@@ -79,6 +79,8 @@ import TiendaNetcompPage from '../inventario/tienda/page';
 import ImportarInventarioPdfPage from '../inventario/importar-pdf/page';
 import PedidoTiendaPage from '../inventario/tienda/[pedidoId]/page';
 import VentasTiendaPage from '../inventario/ventas-tienda/page';
+import MonitoreoNodosPage from '../mikrotik/monitoreo-nodos/page';
+import RedesInternasPage from '../mikrotik/redes-internas/page';
 
 
 type DashboardResponse = {
@@ -123,7 +125,7 @@ export default function DashboardPage() {
         | 'AbrirReportes' | 'AbrirReporteAdmin' | 'mikrotikCortes' | 'mikroikconfiguracion' | 'pagos' | 'EquiposWireless'
         | 'enlaces' | 'CPEClientes' | 'AlertasWireless' | 'MonitoreoWireless' | 'EquiposOffline' | 'listaNotificacion'
         | 'PerfilAdministrativo' | 'Publicidad' | 'ReportesISP' | 'SpeedTestAnalytics' | 'TiendaOnline' | 'ImportarPDF'
-        | 'AbrirCArrrito' | 'Ventas'
+        | 'AbrirCArrrito' | 'Ventas' | 'Monitoreonodos' | 'Redesinternas'
     >('dashboard');
 
 
@@ -308,6 +310,20 @@ export default function DashboardPage() {
     }
 
     function getHeaderInfo() {
+
+        if (vistaActual === 'Redesinternas') {
+            return {
+                titulo: 'Redes internas',
+                subtitulo: 'Redes configuradas y nodo MikroTik al que pertenece cada una.',
+            };
+        }
+
+        if (vistaActual === 'Monitoreonodos') {
+            return {
+                titulo: 'Monitoreo de nodos',
+                subtitulo: 'Monitoreo automático de sectoriales y enlaces cada 30 segundos.',
+            };
+        }
 
         if (vistaActual === 'listaNotificacion') {
             return {
@@ -1019,8 +1035,17 @@ export default function DashboardPage() {
                                 onAbrirRouters={() => setVistaActual('mikrotikRouters')}
                                 onAbrirmikroikCortes={() => setVistaActual('mikrotikCortes')}
                                 onAbrirmikroikconfiguracion={() => setVistaActual('mikroikconfiguracion')}
+                                onAbrirMonitoreonodos={() => setVistaActual('Monitoreonodos')}
+                                onAbrirRedesinternas={() => setVistaActual('Redesinternas')}
 
                             />
+                        )}
+                        {vistaActual === 'Redesinternas' && (
+                            <RedesInternasPage />
+                        )}
+
+                        {vistaActual === 'Monitoreonodos' && (
+                            <MonitoreoNodosPage />
                         )}
                         {vistaActual === 'mikroikconfiguracion' && (
                             <ConfiguracionMikrotikPage />
