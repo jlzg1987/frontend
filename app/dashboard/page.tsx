@@ -247,13 +247,7 @@ export default function DashboardPage() {
 
 
     const cards = [
-        {
-            title: 'Perfil Administrativo',
-            desc: 'Consulta comercial, facturación, tickets y estado del servicio.',
-            icon: '🧾',
-            href: '/clientes/perfiles/administrativo',
-            color: 'bg-cyan-600',
-        },
+
         {
             title: 'Clientes',
             desc: 'Registrar, buscar y administrar clientes ISP.',

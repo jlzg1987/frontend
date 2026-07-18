@@ -1899,6 +1899,80 @@ export default function ConfiguracionMikrotikPage() {
         }
     }
 
+    async function cambiarEstadoAddressList(
+        id: string,
+        disabledActual: string
+    ) {
+        if (!routerId) return;
+
+        const estaDesactivado = disabledActual === "true";
+
+        try {
+            const res = await fetch(
+                `${API_BASE}/mikrotik-conf/routers/${routerId}/address-list/disabled`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${getToken()}`,
+                    },
+                    body: JSON.stringify({
+                        id,
+                        disabled: !estaDesactivado,
+                    }),
+                }
+            );
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.message || "Error cambiando el estado");
+                return;
+            }
+
+            await cargarAddressLists();
+
+        } catch (error) {
+            console.error(error);
+            alert("Error cambiando el estado del Address List");
+        }
+    }
+
+    async function eliminarAddressList(id: string) {
+        if (!routerId) return;
+
+        if (!confirm("¿Eliminar este registro del Address List?")) {
+            return;
+        }
+
+        try {
+            const res = await fetch(
+                `${API_BASE}/mikrotik-conf/routers/${routerId}/address-list/remove`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${getToken()}`,
+                    },
+                    body: JSON.stringify({ id }),
+                }
+            );
+
+            const data = await res.json();
+
+            if (!data.ok) {
+                alert(data.message || "Error eliminando el Address List");
+                return;
+            }
+
+            await cargarAddressLists();
+
+        } catch (error) {
+            console.error(error);
+            alert("Error eliminando el Address List");
+        }
+    }
+
     useEffect(() => {
         cargarRouters();
         cargarEquipos();
@@ -1958,6 +2032,7 @@ export default function ConfiguracionMikrotikPage() {
             </div>
 
             <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/** servicio SSh */}
                 <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <h2 className="text-lg font-bold mb-2">Servicio SSH</h2>
                     <p className="text-sm text-slate-400 mb-4">
@@ -1992,7 +2067,7 @@ export default function ConfiguracionMikrotikPage() {
                                 : 'Activar SSH'}
                     </button>
                 </div>
-
+                {/** Firewall ssh Seguro */}
                 <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <h2 className="text-lg font-bold mb-2">Firewall SSH Seguro</h2>
                     <p className="text-sm text-slate-400 mb-4">
@@ -2046,7 +2121,7 @@ export default function ConfiguracionMikrotikPage() {
                                 : "Proteger API por Firewall"}
                     </button>
                 </div>
-
+                {/** ping */}
                 <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <h2 className="text-lg font-bold mb-2">Ping Cliente</h2>
                     <p className="text-sm text-slate-400 mb-4">
@@ -2079,7 +2154,7 @@ export default function ConfiguracionMikrotikPage() {
                     )}
                 </div>
 
-
+                {/** Ip adreess */}
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex items-center justify-between mb-4">
                         <div>
@@ -2198,7 +2273,7 @@ export default function ConfiguracionMikrotikPage() {
                         </table>
                     </div>
                 </div>
-
+                {/** nat */}
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex items-center justify-between mb-4">
                         <div>
@@ -2381,7 +2456,7 @@ export default function ConfiguracionMikrotikPage() {
                         </div>
                     )}
                 </div>
-
+                {/** firewall */}
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex items-center justify-between mb-4">
                         <div>
@@ -2509,7 +2584,7 @@ export default function ConfiguracionMikrotikPage() {
                         </div>
                     </div>
                 </div>
-
+                {/** Address Lists */}
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex items-center justify-between mb-4">
                         <div>
@@ -2577,13 +2652,14 @@ export default function ConfiguracionMikrotikPage() {
                                         <th className="text-left py-2">Creado</th>
                                         <th className="text-left py-2">Timeout</th>
                                         <th className="text-left py-2">Estado</th>
+                                        <th className="text-right py-2">Acciones</th>
                                     </tr>
                                 </thead>
 
                                 <tbody>
                                     {addressLists.length === 0 && (
                                         <tr>
-                                            <td colSpan={6} className="py-4 text-center text-slate-500">
+                                            <td colSpan={7} className="py-4 text-center text-slate-500">
                                                 No hay Address Lists cargadas
                                             </td>
                                         </tr>
@@ -2605,6 +2681,30 @@ export default function ConfiguracionMikrotikPage() {
                                                         {desactivado ? "Desactivado" : "Activo"}
                                                     </span>
                                                 </td>
+                                                <td className="py-2 text-right space-x-2">
+                                                    <button
+                                                        onClick={() =>
+                                                            cambiarEstadoAddressList(
+                                                                id,
+                                                                item.disabled
+                                                            )
+                                                        }
+                                                        className={
+                                                            desactivado
+                                                                ? "bg-green-600 hover:bg-green-700 rounded-lg px-3 py-1 text-xs"
+                                                                : "bg-yellow-600 hover:bg-yellow-700 rounded-lg px-3 py-1 text-xs"
+                                                        }
+                                                    >
+                                                        {desactivado ? "Activar" : "Desactivar"}
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() => eliminarAddressList(id)}
+                                                        className="bg-red-600 hover:bg-red-700 rounded-lg px-3 py-1 text-xs"
+                                                    >
+                                                        Eliminar
+                                                    </button>
+                                                </td>
                                             </tr>
                                         );
                                     })}
@@ -2614,7 +2714,7 @@ export default function ConfiguracionMikrotikPage() {
                     </div>
                 </div>
 
-
+                {/** Web Proxy Corte */}
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex items-center justify-between mb-4">
                         <div>
@@ -2805,7 +2905,7 @@ export default function ConfiguracionMikrotikPage() {
                         </div>
                     )}
                 </div>
-
+                {/** IP Pool */}
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex items-center justify-between mb-4">
                         <div>
@@ -2935,7 +3035,7 @@ export default function ConfiguracionMikrotikPage() {
                         </div>
                     )}
                 </div>
-
+                {/** IP Routes*/}
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex items-center justify-between mb-4">
                         <div>
@@ -3121,7 +3221,7 @@ export default function ConfiguracionMikrotikPage() {
                         </div>
                     )}
                 </div>
-
+                {/** Backup MikroTik */}
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
                         <div>
@@ -3250,6 +3350,7 @@ export default function ConfiguracionMikrotikPage() {
                         Los archivos .rsc son exportaciones de configuración y por ahora solo se crean/listan.
                     </div>
                 </div>
+                {/** Usuarios del Sistema MikroTik */}
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
                         <div>
@@ -3384,8 +3485,7 @@ export default function ConfiguracionMikrotikPage() {
                     </div>
                 </div>
 
-
-
+                {/** IP ARP */}
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex items-center justify-between mb-4">
                         <div>
@@ -3482,9 +3582,7 @@ export default function ConfiguracionMikrotikPage() {
                     </div>
                 </div>
 
-
-
-
+                {/** IP Neighbor List */}
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex items-center justify-between mb-4">
                         <div>
@@ -3612,7 +3710,7 @@ export default function ConfiguracionMikrotikPage() {
                 </div>
 
 
-
+                {/** Tráfico de Interfaces */}
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
                         <div>

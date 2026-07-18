@@ -277,6 +277,7 @@ export default function MikroTikDashboardPageInterno({
                                     onAbrirmikroikconfiguracion();
                                     return;
                                 }
+
                                 router.push(item.ruta);
                             }}
                         >
