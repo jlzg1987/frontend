@@ -22,6 +22,8 @@ type CorteCliente = {
     disabled: string;
 };
 
+type FiltroEstado = '' | CorteCliente['estado'];
+
 export default function MikrotikCortesPage() {
     const [routers, setRouters] = useState<RouterMikrotik[]>([]);
     const [routerId, setRouterId] = useState<number | ''>('');
@@ -33,6 +35,7 @@ export default function MikrotikCortesPage() {
 
     const [sshActivo, setSshActivo] = useState<boolean | null>(null);
     const [busqueda, setBusqueda] = useState('');
+    const [estadoFiltro, setEstadoFiltro] = useState<FiltroEstado>('');
 
     const token = getToken;
 
@@ -387,45 +390,32 @@ export default function MikrotikCortesPage() {
         }
     }, [routerId]);
 
-    const cortesFiltrados = cortes.filter((c: any) => {
-
+    const cortesFiltrados = cortes.filter((c) => {
         const coincideRouter =
             !routerId ||
             c.routerId === Number(routerId);
 
+        const coincideEstado =
+            !estadoFiltro ||
+            c.estado === estadoFiltro;
+
         const texto = busqueda.trim().toLowerCase();
 
-        const ip = String(
-            c.address ||
-            c.ipCliente ||
-            c.ip ||
-            ''
-        ).toLowerCase();
-
-        const comentario = String(
-            c.comment ??
-            c.comentario ??
-            c.Comentario ??
-            c.COMMENT ??
-            c['comment'] ??
-            c['comentario'] ??
-            ''
-        ).toLowerCase();
-
-        const cliente = String(
-            c.cliente ||
-            c.nombreCliente ||
-            c.nombre ||
-            ''
-        ).toLowerCase();
+        const datosBusqueda = [
+            c.comentarioMikrotik,
+            c.ipCliente,
+            c.routerNombre,
+            c.parroquia,
+            c.sector,
+        ]
+            .map((valor) => String(valor || '').toLowerCase())
+            .join(' ');
 
         const coincideBusqueda =
             !texto ||
-            ip.includes(texto) ||
-            comentario.includes(texto) ||
-            cliente.includes(texto);
+            datosBusqueda.includes(texto);
 
-        return coincideRouter && coincideBusqueda;
+        return coincideRouter && coincideEstado && coincideBusqueda;
     });
 
     return (
@@ -515,17 +505,47 @@ export default function MikrotikCortesPage() {
             </div>
 
             <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden">
-                <div className="p-5 border-b border-slate-800 flex justify-between">
-                    <h2 className="text-lg font-semibold">Clientes sincronizados</h2>
-                    <input
-                        type="text"
-                        placeholder="Buscar por IP..."
-                        value={busqueda}
-                        onChange={(e) => setBusqueda(e.target.value)}
-                        className="w-full rounded-xl border border-slate-600 bg-slate-800 px-4 py-3 text-white"
-                    />
-                    <div className="text-sm text-slate-400" style={{ marginLeft: 20 }}>
-                        Mostrando {cortesFiltrados.length} registros
+                <div className="p-5 border-b border-slate-800">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                        <div>
+                            <h2 className="text-lg font-semibold">Clientes sincronizados</h2>
+                            <p className="mt-1 text-sm text-slate-400">
+                                Mostrando {cortesFiltrados.length} de {cortes.length} registros
+                            </p>
+                        </div>
+
+                        <div className="flex w-full flex-col gap-3 sm:flex-row xl:max-w-3xl">
+                            <input
+                                type="search"
+                                placeholder="Buscar cliente, comentario, IP, router o sector..."
+                                value={busqueda}
+                                onChange={(e) => setBusqueda(e.target.value)}
+                                className="w-full rounded-xl border border-slate-600 bg-slate-800 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                            />
+
+                            <select
+                                value={estadoFiltro}
+                                onChange={(e) => setEstadoFiltro(e.target.value as FiltroEstado)}
+                                className="rounded-xl border border-slate-600 bg-slate-800 px-4 py-3 text-white outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 sm:min-w-44"
+                            >
+                                <option value="">Todos los estados</option>
+                                <option value="ACTIVO">Activos</option>
+                                <option value="CORTADO">Cortados</option>
+                            </select>
+
+                            {(busqueda || estadoFiltro) && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setBusqueda('');
+                                        setEstadoFiltro('');
+                                    }}
+                                    className="rounded-xl border border-slate-600 bg-slate-800 px-4 py-3 font-semibold text-slate-300 transition hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-300"
+                                >
+                                    Limpiar
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
 
@@ -597,7 +617,9 @@ export default function MikrotikCortesPage() {
                                 {cortesFiltrados.length === 0 && (
                                     <tr>
                                         <td colSpan={6} className="p-5 text-center text-slate-400">
-                                            No hay clientes sincronizados.
+                                            {busqueda || estadoFiltro || routerId
+                                                ? 'No se encontraron clientes con los filtros seleccionados.'
+                                                : 'No hay clientes sincronizados.'}
                                         </td>
                                     </tr>
                                 )}
