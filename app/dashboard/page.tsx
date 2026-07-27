@@ -81,6 +81,15 @@ import PedidoTiendaPage from '../inventario/tienda/[pedidoId]/page';
 import VentasTiendaPage from '../inventario/ventas-tienda/page';
 import MonitoreoNodosPage from '../mikrotik/monitoreo-nodos/page';
 import RedesInternasPage from '../mikrotik/redes-internas/page';
+import DesarrolloSoftwareDashboardPageInterno from '../DesarrolloSoftwareDashboardPageInterno/page';
+import NuevaSolicitudDesarrolloPageInterno from '../DesarrolloSoftwareDashboardPageInterno/nuevaSolicitud/page';
+import DetalleDesarrolloPageInterno from '../DesarrolloSoftwareDashboardPageInterno/detalleDesarrollo/page';
+import SolicitudesDesarrolloPageInterno from '../DesarrolloSoftwareDashboardPageInterno/solicitudDesarrollo/page';
+import DesarrollosEnProcesoPageInterno from '../DesarrolloSoftwareDashboardPageInterno/desarrolloenProceso/page';
+import PendientesClienteDesarrolloPageInterno from '../DesarrolloSoftwareDashboardPageInterno/pendientesCliente/page';
+import ResponsablesEquiposDesarrolloPageInterno from '../DesarrolloSoftwareDashboardPageInterno/responsablesEquiposDesarrollo/page';
+import ProyectosEntregadosDesarrolloPageInterno from '../DesarrolloSoftwareDashboardPageInterno/proyectoEntregadis/page';
+import ProformasPageInterno from '../proforma/page';
 
 
 type DashboardResponse = {
@@ -108,6 +117,7 @@ export default function DashboardPage() {
     const [DetalleClienteId, setDetalleClienteId] = useState<string | null>(null);
     const [ticketsIdSeleccionadoId, setticketsIdSeleccionadoId] = useState<string | null>(null);
     const [servicioIdPerfil, setServicioIdPerfil] = useState<string>('');
+    const [SolicitudDesarrolloId, setSolicitudDesarrolloId] = useState<string>('');
     const [CarritoId, setCarritoId] = useState<string>('');
 
     const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
@@ -125,7 +135,9 @@ export default function DashboardPage() {
         | 'AbrirReportes' | 'AbrirReporteAdmin' | 'mikrotikCortes' | 'mikroikconfiguracion' | 'pagos' | 'EquiposWireless'
         | 'enlaces' | 'CPEClientes' | 'AlertasWireless' | 'MonitoreoWireless' | 'EquiposOffline' | 'listaNotificacion'
         | 'PerfilAdministrativo' | 'Publicidad' | 'ReportesISP' | 'SpeedTestAnalytics' | 'TiendaOnline' | 'ImportarPDF'
-        | 'AbrirCArrrito' | 'Ventas' | 'Monitoreonodos' | 'Redesinternas'
+        | 'AbrirCArrrito' | 'Ventas' | 'Monitoreonodos' | 'Redesinternas' | 'DesarrolloSistema' | 'CrearSolicitud'
+        | 'DETALLE' | 'EDITAR_SOLICITUD' | 'SOLICITUDES' | 'EN_PROCESO' | 'PENDIENTES_CLIENTE' | 'RESPONSABLES'
+        | 'ENTREGADOS' | 'PROFORMAS'
     >('dashboard');
 
 
@@ -310,6 +322,33 @@ export default function DashboardPage() {
     }
 
     function getHeaderInfo() {
+
+
+        if (vistaActual === 'EN_PROCESO') {
+            return {
+                titulo: 'Desarrollo de Software',
+                subtitulo: 'Visualiza en qué etapa se encuentra cada proyecto activo y detecta retrasos o bloqueos.',
+            };
+        }
+        if (vistaActual === 'SOLICITUDES') {
+            return {
+                titulo: 'Desarrollo de Software',
+                subtitulo: 'Consulta, busca y administra todos los proyectos solicitados por los clientes.',
+            };
+        }
+
+        if (vistaActual === 'CrearSolicitud') {
+            return {
+                titulo: 'Desarrollo de Software',
+                subtitulo: 'Registra el desarrollo solicitado por el cliente y define sus condiciones iniciales.',
+            };
+        }
+        if (vistaActual === 'DesarrolloSistema') {
+            return {
+                titulo: 'Desarrollo de Software',
+                subtitulo: 'Solicitudes, avances y seguimiento de los proyectos de nuestros clientes',
+            };
+        }
 
         if (vistaActual === 'Redesinternas') {
             return {
@@ -756,7 +795,12 @@ export default function DashboardPage() {
                             active={vistaActual === 'facturacion'}
                             onClick={() => setVistaActual('facturacion')}
                         />
+                        <MenuItem
+                            label="Proforma"
+                            active={vistaActual === 'PROFORMAS'}
+                            onClick={() => setVistaActual('PROFORMAS')}
 
+                        />
                         <MenuItem
                             label="MikroTik"
                             active={vistaActual === 'mikrotik'}
@@ -792,7 +836,8 @@ export default function DashboardPage() {
 
                         <MenuItem
                             label="Desarrollo Sistema"
-                            href="/desarrollo-sistema"
+                            active={vistaActual === 'DesarrolloSistema'}
+                            onClick={() => setVistaActual('DesarrolloSistema')}
                         />
                         <MenuItem
                             label="Configuración"
@@ -943,6 +988,95 @@ export default function DashboardPage() {
                             <MensualidadesPage />
                         )}
 
+                        {vistaActual === 'DesarrolloSistema' && (
+                            <DesarrolloSoftwareDashboardPageInterno
+
+                                onVolver={() => setVistaActual('dashboard')}
+                                onAbrirSolicitudes={() => setVistaActual('SOLICITUDES')}
+                                onCrearSolicitud={() => setVistaActual('CrearSolicitud')}
+                                onAbrirDesarrollos={() => setVistaActual('EN_PROCESO')}
+                                onAbrirPendientesCliente={() => setVistaActual('PENDIENTES_CLIENTE')}
+                                onAbrirResponsables={() => setVistaActual('RESPONSABLES')}
+                                onAbrirEntregados={() => setVistaActual('ENTREGADOS')}
+                                onAbrirProyecto={() => setVistaActual('dashboard')}
+                            />
+                        )}
+
+                        {vistaActual === 'CrearSolicitud' && (
+                            <NuevaSolicitudDesarrolloPageInterno
+                                onVolver={() => setVistaActual('dashboard')}
+                                onSolicitudCreada={(solicitudId) => {
+                                    setSolicitudDesarrolloId(solicitudId);
+                                    setVistaActual('DETALLE');
+                                }}
+                            />
+                        )}
+
+                        {vistaActual === 'DETALLE' && SolicitudDesarrolloId && (
+                            <DetalleDesarrolloPageInterno
+                                solicitudId={SolicitudDesarrolloId}
+                                onVolver={() => {
+                                    setVistaActual('dashboard');
+                                }}
+                                onEditarSolicitud={(solicitudId) => {
+                                    setSolicitudDesarrolloId(solicitudId);
+                                    setVistaActual('EDITAR_SOLICITUD');
+                                }}
+                            />
+                        )}
+
+                        {vistaActual === 'SOLICITUDES' && (
+                            <SolicitudesDesarrolloPageInterno
+                                onVolver={() => setVistaActual('dashboard')}
+                                onNuevaSolicitud={() => setVistaActual('CrearSolicitud')}
+                                onAbrirSolicitud={(solicitudId) => {
+                                    setSolicitudDesarrolloId(solicitudId);
+                                    setVistaActual('DETALLE');
+                                }}
+                            />
+                        )}
+
+                        {vistaActual === 'EN_PROCESO' && (
+                            <DesarrollosEnProcesoPageInterno
+                                onVolver={() => setVistaActual('dashboard')}
+                                onNuevaSolicitud={() => setVistaActual('CrearSolicitud')}
+                                onAbrirSolicitud={(solicitudId) => {
+                                    setSolicitudDesarrolloId(solicitudId);
+                                    setVistaActual('DETALLE');
+                                }}
+                            />
+                        )}
+
+                        {vistaActual === 'PENDIENTES_CLIENTE' && (
+                            <PendientesClienteDesarrolloPageInterno
+                                onVolver={() => setVistaActual('dashboard')}
+                                onAbrirSolicitud={(solicitudId) => {
+                                    setSolicitudDesarrolloId(solicitudId);
+                                    setVistaActual('DETALLE');
+                                }}
+                            />
+                        )}
+
+                        {vistaActual === 'RESPONSABLES' && (
+                            <ResponsablesEquiposDesarrolloPageInterno
+                                onVolver={() => setVistaActual('dashboard')}
+                            />
+                        )}
+
+                        {vistaActual === 'ENTREGADOS' && (
+                            <ProyectosEntregadosDesarrolloPageInterno
+                                onVolver={() => setVistaActual('dashboard')}
+                                onAbrirSolicitud={(solicitudId) => {
+                                    setSolicitudDesarrolloId(solicitudId);
+                                    setVistaActual('DETALLE');
+                                }}
+                            />
+                        )}
+                        {vistaActual === 'PROFORMAS' && (
+                            <ProformasPageInterno
+                                onVolver={() => setVistaActual('dashboard')}
+                            />
+                        )}
                         {vistaActual === 'AtencionCampo' && (
                             <AtencionCampoPage
                                 onVolver={() => setVistaActual('dashboard')}

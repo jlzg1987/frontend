@@ -63,6 +63,12 @@ const equipoInicial: EquipoWireless = {
     routerNombre: 'ACTIVO',
     routerSector: 'ACTIVO',
 };
+type RespuestaSesionWebEquipo = {
+    ok: boolean;
+    url: string;
+    proxyPath?: string;
+    expiresAt?: string;
+};
 
 export default function EquiposWirelessPage() {
     const [routers, setRouters] = useState<RouterMikrotik[]>([]);
@@ -146,6 +152,13 @@ export default function EquiposWirelessPage() {
     const [modalPortForward, setModalPortForward] = useState(false);
     const [aplicandoPortForward, setAplicandoPortForward] = useState(false);
 
+    const [modalInterfazWeb, setModalInterfazWeb] = useState(false);
+    const [cargandoInterfazWeb, setCargandoInterfazWeb] = useState(false);
+    const [cargandoIframe, setCargandoIframe] = useState(false);
+    const [urlInterfazWeb, setUrlInterfazWeb] = useState("");
+    const [equipoInterfazWeb, setEquipoInterfazWeb] = useState<EquipoWireless | null>(null);
+    const [errorInterfazWeb, setErrorInterfazWeb] = useState("");
+
     const [portForwardConfig, setPortForwardConfig] = useState({
         nombre: "NETCOMP_FORWARD",
         protocolo: "tcp",
@@ -156,6 +169,8 @@ export default function EquiposWirelessPage() {
         clave: "",
         puerto: 22,
     });
+    const [filtroEquipos, setFiltroEquipos] = useState('');
+
 
     const token = getToken();
 
@@ -174,7 +189,26 @@ export default function EquiposWirelessPage() {
         }
     }
 
-    const equiposOrdenados = [...equipos].sort((a, b) => {
+    const textoFiltro = filtroEquipos.trim().toLowerCase();
+
+    const equiposFiltrados = equipos.filter((equipo) => {
+        if (!textoFiltro) return true;
+
+        const datosEquipo = [
+            equipo.routerNombre,
+            equipo.routerSector,
+            equipo.nombre,
+            equipo.marca,
+            equipo.tipoEquipo,
+            equipo.ipGestion,
+        ]
+            .map((valor) => String(valor || '').toLowerCase())
+            .join(' ');
+
+        return datosEquipo.includes(textoFiltro);
+    });
+
+    const equiposOrdenados = [...equiposFiltrados].sort((a, b) => {
         if (ordenCampo === "ipGestion") {
             const valorA = ipToNumber(a.ipGestion);
             const valorB = ipToNumber(b.ipGestion);
@@ -1201,6 +1235,157 @@ export default function EquiposWirelessPage() {
         }
     }
 
+
+    async function crearSesionWebEquipo(
+        equipoId: string
+    ): Promise<RespuestaSesionWebEquipo> {
+        const res = await fetch(
+            `${API_BASE}/wireless/equipos/${equipoId}/sesion-web`,
+            {
+                method: "POST",
+                headers: {
+                    Authorization: `Bearer ${getToken()}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({}),
+            }
+        );
+
+        const data = await res.json().catch(() => null);
+
+        if (!res.ok || !data?.ok) {
+            throw new Error(
+                data?.mensaje ||
+                data?.message ||
+                "No se pudo crear la sesión web del equipo"
+            );
+        }
+
+        const url =
+            data.url ||
+            data.proxyUrl ||
+            data.interfazUrl ||
+            data.sesion?.url;
+
+        if (!url || typeof url !== "string") {
+            throw new Error(
+                "El backend no devolvió la URL de la interfaz"
+            );
+        }
+
+        return {
+            ok: true,
+            url,
+            proxyPath: data.proxyPath,
+            expiresAt: data.expiresAt,
+        };
+    }
+
+    async function abrirInterfazWeb(equipo: EquipoWireless) {
+        const nuevaVentana = window.open("", "_blank");
+
+        if (!nuevaVentana) {
+            alert(
+                "El navegador bloqueó la nueva pestaña. " +
+                "Permite las ventanas emergentes para este sitio."
+            );
+            return;
+        }
+
+        nuevaVentana.opener = null;
+
+        try {
+            setEquipoInterfazWeb(equipo);
+            setCargandoInterfazWeb(true);
+            setErrorInterfazWeb("");
+
+            nuevaVentana.document.title =
+                "Cargando interfaz del equipo...";
+
+            nuevaVentana.document.body.innerHTML = `
+            <div style="
+                height:100vh;
+                margin:0;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                background:#020617;
+                color:white;
+                font-family:Arial,sans-serif;
+            ">
+                <div style="text-align:center">
+                    <h2>Creando sesión segura...</h2>
+                    <p>Conectando con ${equipo.nombre || "el equipo"
+                }</p>
+                </div>
+            </div>
+        `;
+
+            const equipoId = equipo.equipoId;
+
+            if (!equipoId) {
+                throw new Error(
+                    "El equipo seleccionado no tiene un identificador válido"
+                );
+            }
+
+            const respuesta =
+                await crearSesionWebEquipo(equipoId);
+
+            nuevaVentana.location.replace(respuesta.url);
+        } catch (error) {
+            console.error(
+                "Error abriendo interfaz web:",
+                error
+            );
+
+            const mensaje =
+                error instanceof Error
+                    ? error.message
+                    : "No se pudo abrir la interfaz del equipo";
+
+            nuevaVentana.document.body.innerHTML = `
+            <div style="
+                height:100vh;
+                margin:0;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                background:#020617;
+                color:white;
+                font-family:Arial,sans-serif;
+                padding:24px;
+                box-sizing:border-box;
+            ">
+                <div style="
+                    max-width:600px;
+                    padding:24px;
+                    border:1px solid #b91c1c;
+                    border-radius:16px;
+                    background:#450a0a;
+                    text-align:center;
+                ">
+                    <h2>No se pudo abrir la interfaz</h2>
+                    <p>${mensaje}</p>
+                </div>
+            </div>
+        `;
+
+            setErrorInterfazWeb(mensaje);
+        } finally {
+            setCargandoInterfazWeb(false);
+        }
+    }
+
+    function cerrarInterfazWeb() {
+        setModalInterfazWeb(false);
+        setUrlInterfazWeb("");
+        setEquipoInterfazWeb(null);
+        setErrorInterfazWeb("");
+        setCargandoInterfazWeb(false);
+        setCargandoIframe(false);
+    }
+
     return (
         <div className="p-6 text-white">
 
@@ -1366,8 +1551,74 @@ export default function EquiposWirelessPage() {
             </div>
 
             <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
-                <h2 className="text-lg font-bold mb-4">Listado de equipos</h2>
+                <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                        <h2 className="text-lg font-bold">
+                            Listado de equipos
+                        </h2>
 
+                        <p className="mt-1 text-sm text-slate-400">
+                            Mostrando {equiposOrdenados.length} de {equipos.length} equipos
+                        </p>
+                    </div>
+
+                    <div className="flex w-full gap-2 lg:max-w-xl">
+                        <input
+                            type="search"
+                            value={filtroEquipos}
+                            onChange={(e) => setFiltroEquipos(e.target.value)}
+                            placeholder="Buscar nodo, nombre, marca, tipo o IP..."
+                            className="
+                w-full
+                rounded-xl
+                border border-slate-700
+                bg-slate-800
+                px-4 py-3
+                text-sm text-white
+                outline-none
+                transition
+                placeholder:text-slate-500
+                focus:border-cyan-500
+                focus:ring-2
+                focus:ring-cyan-500/20
+            "
+                        />
+
+                        {filtroEquipos && (
+                            <button
+                                type="button"
+                                onClick={() => setFiltroEquipos('')}
+                                className="
+                    rounded-xl
+                    border border-slate-700
+                    bg-slate-800
+                    px-4 py-2
+                    text-sm font-semibold
+                    text-slate-300
+                    transition
+                    hover:border-red-500/50
+                    hover:bg-red-500/10
+                    hover:text-red-300
+                "
+                            >
+                                Limpiar
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {equiposOrdenados.length === 0 && (
+                    <tr>
+                        <td
+                            colSpan={8}
+                            className="py-10 text-center text-slate-400"
+                        >
+                            {filtroEquipos
+                                ? `No se encontraron equipos con “${filtroEquipos}”.`
+                                : 'No existen equipos registrados.'}
+                        </td>
+                    </tr>
+                )}
                 {cargando ? (
                     <p className="text-slate-400">Cargando equipos...</p>
                 ) : (
@@ -1389,7 +1640,7 @@ export default function EquiposWirelessPage() {
                                     </th>
                                     <th className="w-[80px]">Estado</th>
                                     <th className="w-[100px]">Ping</th>
-                                    <th className="w-[220px]">Acciones</th>
+                                    <th className="w-[350px]">Acciones</th>
                                 </tr>
                             </thead>
 
@@ -1460,7 +1711,17 @@ export default function EquiposWirelessPage() {
                                                 ? `${Number(eq.ultimoPingMs).toFixed(2)} ms`
                                                 : "-"}
                                         </td>
-                                        <td className="w-[300px]">
+                                        <td className="w-[350px]">
+                                            <button
+                                                type="button"
+                                                onClick={() => abrirInterfazWeb(eq)}
+                                                disabled={cargandoInterfazWeb}
+                                                className="rounded-xl bg-cyan-600 px-4 py-2 font-bold text-white hover:bg-cyan-700 disabled:opacity-50"
+                                            >
+                                                {cargandoInterfazWeb
+                                                    ? "Conectando..."
+                                                    : "Abrir interfaz"}
+                                            </button>
                                             <button
                                                 onClick={() => probarSsh(eq.equipoId)}
                                                 className="bg-green-600 hover:bg-green-700 rounded-lg px-3 py-1 mr-2"
@@ -1503,6 +1764,98 @@ export default function EquiposWirelessPage() {
                     </div>
                 )}
             </div>
+            {modalInterfazWeb && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-3">
+                    {/* Modal casi al tamaño completo de la ventana */}
+                    <div className="flex h-[calc(100dvh-24px)] w-[calc(100vw-24px)] max-w-none flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl">
+
+                        {/* Encabezado fijo */}
+                        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-slate-700 bg-slate-900 px-4 py-3">
+                            <div>
+                                <h2 className="text-lg font-bold text-white">
+                                    Interfaz web del equipo
+                                </h2>
+
+                                <p className="text-sm text-slate-400">
+                                    {equipoInterfazWeb?.nombre || "Equipo"} —{" "}
+                                    {equipoInterfazWeb?.ipGestion || "-"}
+                                </p>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                {urlInterfazWeb && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setCargandoIframe(true);
+
+                                            setUrlInterfazWeb((url) => {
+                                                const separador = url.includes("?")
+                                                    ? "&"
+                                                    : "?";
+
+                                                return `${url}${separador}_recarga=${Date.now()}`;
+                                            });
+                                        }}
+                                        className="rounded-xl bg-cyan-600 px-4 py-2 font-bold text-white hover:bg-cyan-700"
+                                    >
+                                        Recargar
+                                    </button>
+                                )}
+
+                                <button
+                                    type="button"
+                                    onClick={cerrarInterfazWeb}
+                                    className="rounded-xl bg-red-600 px-4 py-2 font-bold text-white hover:bg-red-700"
+                                >
+                                    Cerrar
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Área que ocupa toda la altura restante */}
+                        <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
+                            {(cargandoInterfazWeb || cargandoIframe) && (
+                                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-slate-950 text-white">
+                                    <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-600 border-t-cyan-400" />
+
+                                    <p>
+                                        {cargandoInterfazWeb
+                                            ? "Creando sesión segura..."
+                                            : "Cargando interfaz del equipo..."}
+                                    </p>
+                                </div>
+                            )}
+
+                            {errorInterfazWeb ? (
+                                <div className="flex h-full items-center justify-center bg-slate-950 p-6">
+                                    <div className="max-w-xl rounded-2xl border border-red-700 bg-red-950/50 p-6 text-center">
+                                        <h3 className="mb-2 text-lg font-bold text-red-300">
+                                            No se pudo abrir la interfaz
+                                        </h3>
+
+                                        <p className="text-red-100">
+                                            {errorInterfazWeb}
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : urlInterfazWeb ? (
+                                <iframe
+                                    key={urlInterfazWeb}
+                                    src={urlInterfazWeb}
+                                    title={`Interfaz web de ${equipoInterfazWeb?.nombre ||
+                                        "equipo wireless"
+                                        }`}
+                                    onLoad={() => setCargandoIframe(false)}
+                                    className="block h-full w-full border-0 bg-white"
+                                    allow="clipboard-read; clipboard-write"
+                                    referrerPolicy="no-referrer"
+                                />
+                            ) : null}
+                        </div>
+                    </div>
+                </div>
+            )}
             {modalMetricas && (
                 <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
                     <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-7xl max-h-[95vh] overflow-auto">
