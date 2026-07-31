@@ -26,9 +26,7 @@ export default function NetcomprfPage() {
                         <img
                             src="/netcomp-logo.png"
                             alt="Netcomp R.F. S.A.S."
-                            className="h-14 w-60
-    drop-shadow-[0_0_8px_rgba(34,197,94,0.6)]
-    hover:drop-shadow-[0_0_12px_rgba(255,255,255,0.6)]"
+                            className="h-14 w-60"
                         />
                     </a>
                     <nav className="hidden gap-6 text-sm text-slate-300 md:flex">

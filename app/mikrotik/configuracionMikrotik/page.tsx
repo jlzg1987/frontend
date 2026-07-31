@@ -178,6 +178,33 @@ export default function ConfiguracionMikrotikPage() {
         estado: 'ACTIVO',
     });
     const [equipos, setEquipos] = useState<EquipoWireless[]>([]);
+
+    const [firewallRules, setFirewallRules] = useState<any[]>([]);
+    const [cargandoFirewallRules, setCargandoFirewallRules] = useState(false);
+    const [guardandoFirewallRule, setGuardandoFirewallRule] = useState(false);
+    const [modalFirewallRule, setModalFirewallRule] = useState(false);
+    const [firewallEditandoId, setFirewallEditandoId] = useState<string | null>(null);
+
+    const [firewallForm, setFirewallForm] = useState({
+        chain: 'input',
+        action: 'accept',
+        protocol: '',
+        srcAddress: '',
+        dstAddress: '',
+        srcAddressList: '',
+        dstAddressList: '',
+        srcPort: '',
+        dstPort: '',
+        inInterface: '',
+        outInterface: '',
+        connectionState: '',
+        comment: '',
+        log: false,
+        logPrefix: '',
+        disabled: false,
+    });
+
+
     async function cargarEquipos() {
         try {
             const res = await fetch(`${API_BASE}/wireless/equipos`, {
@@ -1973,6 +2000,276 @@ export default function ConfiguracionMikrotikPage() {
         }
     }
 
+    function limpiarFormularioFirewall() {
+        setFirewallEditandoId(null);
+
+        setFirewallForm({
+            chain: 'input',
+            action: 'accept',
+            protocol: '',
+            srcAddress: '',
+            dstAddress: '',
+            srcAddressList: '',
+            dstAddressList: '',
+            srcPort: '',
+            dstPort: '',
+            inInterface: '',
+            outInterface: '',
+            connectionState: '',
+            comment: '',
+            log: false,
+            logPrefix: '',
+            disabled: false,
+        });
+    }
+
+    function abrirModalCrearFirewall() {
+        if (!routerId) {
+            alert('Seleccione un router');
+            return;
+        }
+
+        limpiarFormularioFirewall();
+        setModalFirewallRule(true);
+    }
+
+    function abrirModalEditarFirewall(item: any) {
+        setFirewallEditandoId(item['.id']);
+
+        setFirewallForm({
+            chain: item.chain || 'input',
+            action: item.action || 'accept',
+            protocol: item.protocol || '',
+            srcAddress: item['src-address'] || '',
+            dstAddress: item['dst-address'] || '',
+            srcAddressList: item['src-address-list'] || '',
+            dstAddressList: item['dst-address-list'] || '',
+            srcPort: item['src-port'] || '',
+            dstPort: item['dst-port'] || '',
+            inInterface: item['in-interface'] || '',
+            outInterface: item['out-interface'] || '',
+            connectionState: item['connection-state'] || '',
+            comment: item.comment || '',
+            log: item.log === 'true' || item.log === 'yes',
+            logPrefix: item['log-prefix'] || '',
+            disabled:
+                item.disabled === 'true' ||
+                item.disabled === 'yes',
+        });
+
+        setModalFirewallRule(true);
+    }
+
+    function actualizarCampoFirewall(
+        campo: keyof typeof firewallForm,
+        valor: string | boolean
+    ) {
+        setFirewallForm((actual) => ({
+            ...actual,
+            [campo]: valor,
+        }));
+    }
+
+    async function cargarFirewallRules() {
+        if (!routerId) {
+            alert('Seleccione un router');
+            return;
+        }
+
+        setCargandoFirewallRules(true);
+
+        try {
+            const res = await fetch(
+                `${API_BASE}/mikrotik-conf/routers/${routerId}/firewall-filter`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${getToken()}`,
+                    },
+                }
+            );
+
+            const data = await res.json();
+
+            if (!res.ok || !data.ok) {
+                alert(data.message || 'Error cargando Firewall Filter');
+                return;
+            }
+
+            setFirewallRules(
+                Array.isArray(data.datos) ? data.datos : []
+            );
+        } catch (error) {
+            console.error('Error cargarFirewallRules:', error);
+            alert('Error conectando con el backend');
+        } finally {
+            setCargandoFirewallRules(false);
+        }
+    }
+
+    async function guardarFirewallRule() {
+        if (!routerId) {
+            alert('Seleccione un router');
+            return;
+        }
+
+        if (!firewallForm.chain || !firewallForm.action) {
+            alert('Chain y Action son obligatorios');
+            return;
+        }
+
+        setGuardandoFirewallRule(true);
+
+        try {
+            const esEdicion = Boolean(firewallEditandoId);
+
+            const endpoint = esEdicion
+                ? `${API_BASE}/mikrotik-conf/routers/${routerId}/firewall-filter/update`
+                : `${API_BASE}/mikrotik-conf/routers/${routerId}/firewall-filter`;
+
+            const body = esEdicion
+                ? {
+                    id: firewallEditandoId,
+                    ...firewallForm,
+                }
+                : firewallForm;
+
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${getToken()}`,
+                },
+                body: JSON.stringify(body),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok || !data.ok) {
+                alert(
+                    data.message ||
+                    `Error ${esEdicion ? 'actualizando' : 'creando'} la regla`
+                );
+                return;
+            }
+
+            setModalFirewallRule(false);
+            limpiarFormularioFirewall();
+            await cargarFirewallRules();
+
+            alert(
+                data.message ||
+                `Regla ${esEdicion ? 'actualizada' : 'creada'} correctamente`
+            );
+        } catch (error) {
+            console.error('Error guardarFirewallRule:', error);
+            alert('Error conectando con el backend');
+        } finally {
+            setGuardandoFirewallRule(false);
+        }
+    }
+
+    async function cambiarEstadoFirewallRule(item: any) {
+        if (!routerId) return;
+
+        const id = item['.id'];
+
+        if (!id) {
+            alert('La regla no tiene ID');
+            return;
+        }
+
+        const estaDeshabilitada =
+            item.disabled === 'true' ||
+            item.disabled === 'yes';
+
+        try {
+            const res = await fetch(
+                `${API_BASE}/mikrotik-conf/routers/${routerId}/firewall-filter/disabled`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${getToken()}`,
+                    },
+                    body: JSON.stringify({
+                        id,
+                        disabled: !estaDeshabilitada,
+                    }),
+                }
+            );
+
+            const data = await res.json();
+
+            if (!res.ok || !data.ok) {
+                alert(data.message || 'Error cambiando el estado');
+                return;
+            }
+
+            // Actualización inmediata sin recargar manualmente
+            setFirewallRules((actuales) =>
+                actuales.map((regla) =>
+                    regla['.id'] === id
+                        ? {
+                            ...regla,
+                            disabled: !estaDeshabilitada
+                                ? 'true'
+                                : 'false',
+                        }
+                        : regla
+                )
+            );
+        } catch (error) {
+            console.error('Error cambiarEstadoFirewallRule:', error);
+            alert('Error conectando con el backend');
+        }
+    }
+
+    async function eliminarFirewallRule(item: any) {
+        if (!routerId) return;
+
+        const id = item['.id'];
+
+        if (!id) {
+            alert('La regla no tiene ID');
+            return;
+        }
+
+        const confirmar = window.confirm(
+            `¿Eliminar esta regla Firewall?\n\n${item.comment || item.chain || id}`
+        );
+
+        if (!confirmar) return;
+
+        try {
+            const res = await fetch(
+                `${API_BASE}/mikrotik-conf/routers/${routerId}/firewall-filter/remove`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${getToken()}`,
+                    },
+                    body: JSON.stringify({ id }),
+                }
+            );
+
+            const data = await res.json();
+
+            if (!res.ok || !data.ok) {
+                alert(data.message || 'Error eliminando la regla');
+                return;
+            }
+
+            // La elimina inmediatamente de la tabla
+            setFirewallRules((actuales) =>
+                actuales.filter((regla) => regla['.id'] !== id)
+            );
+        } catch (error) {
+            console.error('Error eliminarFirewallRule:', error);
+            alert('Error conectando con el backend');
+        }
+    }
+
     useEffect(() => {
         cargarRouters();
         cargarEquipos();
@@ -2067,6 +2364,7 @@ export default function ConfiguracionMikrotikPage() {
                                 : 'Activar SSH'}
                     </button>
                 </div>
+
                 {/** Firewall ssh Seguro */}
                 <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <h2 className="text-lg font-bold mb-2">Firewall SSH Seguro</h2>
@@ -2121,6 +2419,7 @@ export default function ConfiguracionMikrotikPage() {
                                 : "Proteger API por Firewall"}
                     </button>
                 </div>
+
                 {/** ping */}
                 <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <h2 className="text-lg font-bold mb-2">Ping Cliente</h2>
@@ -2152,6 +2451,246 @@ export default function ConfiguracionMikrotikPage() {
                             <p>Perdidos: {resultadoPing.perdidos ?? 0}</p>
                         </div>
                     )}
+                </div>
+
+                {/* IP → Firewall → Filter Rules */}
+                <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
+                        <div>
+                            <h2 className="text-lg font-bold">
+                                Firewall Filter Rules
+                            </h2>
+
+                            <p className="text-sm text-slate-400">
+                                Administra las reglas de IP → Firewall → Filter Rules
+                                del MikroTik.
+                            </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                onClick={cargarFirewallRules}
+                                disabled={!routerId || cargandoFirewallRules}
+                                className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                {cargandoFirewallRules
+                                    ? 'Cargando...'
+                                    : 'Cargar Firewall'}
+                            </button>
+
+                            <button
+                                onClick={abrirModalCrearFirewall}
+                                disabled={!routerId}
+                                className="bg-green-600 hover:bg-green-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                Agregar regla
+                            </button>
+
+                            <button
+                                onClick={() =>
+                                    exportarExcel(
+                                        'firewall-filter-mikrotik',
+                                        firewallRules
+                                    )
+                                }
+                                disabled={firewallRules.length === 0}
+                                className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                Exportar Excel
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 p-3">
+                            <p className="text-xs text-slate-400">Total reglas</p>
+                            <p className="text-xl font-bold text-cyan-400">
+                                {firewallRules.length}
+                            </p>
+                        </div>
+
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 p-3">
+                            <p className="text-xs text-slate-400">Activas</p>
+                            <p className="text-xl font-bold text-green-400">
+                                {firewallRules.filter(
+                                    (x) =>
+                                        x.disabled !== 'true' &&
+                                        x.disabled !== 'yes'
+                                ).length}
+                            </p>
+                        </div>
+
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 p-3">
+                            <p className="text-xs text-slate-400">Deshabilitadas</p>
+                            <p className="text-xl font-bold text-red-400">
+                                {firewallRules.filter(
+                                    (x) =>
+                                        x.disabled === 'true' ||
+                                        x.disabled === 'yes'
+                                ).length}
+                            </p>
+                        </div>
+
+                        <div className="rounded-xl bg-slate-950 border border-slate-700 p-3">
+                            <p className="text-xs text-slate-400">Reglas Drop</p>
+                            <p className="text-xl font-bold text-yellow-400">
+                                {firewallRules.filter(
+                                    (x) => x.action === 'drop'
+                                ).length}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <div className="max-h-[500px] overflow-y-auto">
+                            <table className="w-full min-w-[1250px] text-sm">
+                                <thead className="sticky top-0 bg-slate-900 z-10">
+                                    <tr className="border-b border-slate-700 text-slate-400">
+                                        <th className="text-left py-2 px-2">Chain</th>
+                                        <th className="text-left py-2 px-2">Action</th>
+                                        <th className="text-left py-2 px-2">Protocolo</th>
+                                        <th className="text-left py-2 px-2">Origen</th>
+                                        <th className="text-left py-2 px-2">Destino</th>
+                                        <th className="text-left py-2 px-2">Puerto</th>
+                                        <th className="text-left py-2 px-2">Interfaz entrada</th>
+                                        <th className="text-left py-2 px-2">Comentario</th>
+                                        <th className="text-left py-2 px-2">Estado</th>
+                                        <th className="text-right py-2 px-2">Acciones</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    {firewallRules.length === 0 && (
+                                        <tr>
+                                            <td
+                                                colSpan={10}
+                                                className="py-8 text-center text-slate-500"
+                                            >
+                                                No hay reglas Firewall cargadas
+                                            </td>
+                                        </tr>
+                                    )}
+
+                                    {firewallRules.map((item, index) => {
+                                        const id = item['.id'] || String(index);
+
+                                        const deshabilitada =
+                                            item.disabled === 'true' ||
+                                            item.disabled === 'yes';
+
+                                        return (
+                                            <tr
+                                                key={id}
+                                                className="border-b border-slate-800 hover:bg-slate-800/40"
+                                            >
+                                                <td className="py-3 px-2 font-semibold">
+                                                    {item.chain || '-'}
+                                                </td>
+
+                                                <td className="py-3 px-2">
+                                                    <span
+                                                        className={
+                                                            item.action === 'accept'
+                                                                ? 'text-green-400 font-semibold'
+                                                                : item.action === 'drop' ||
+                                                                    item.action === 'reject'
+                                                                    ? 'text-red-400 font-semibold'
+                                                                    : 'text-yellow-400 font-semibold'
+                                                        }
+                                                    >
+                                                        {item.action || '-'}
+                                                    </span>
+                                                </td>
+
+                                                <td className="py-3 px-2">
+                                                    {item.protocol || 'all'}
+                                                </td>
+
+                                                <td className="py-3 px-2">
+                                                    {item['src-address'] ||
+                                                        item['src-address-list'] ||
+                                                        '-'}
+                                                </td>
+
+                                                <td className="py-3 px-2">
+                                                    {item['dst-address'] ||
+                                                        item['dst-address-list'] ||
+                                                        '-'}
+                                                </td>
+
+                                                <td className="py-3 px-2">
+                                                    {item['dst-port'] ||
+                                                        item['src-port'] ||
+                                                        '-'}
+                                                </td>
+
+                                                <td className="py-3 px-2">
+                                                    {item['in-interface'] ||
+                                                        item['in-interface-list'] ||
+                                                        '-'}
+                                                </td>
+
+                                                <td className="py-3 px-2 max-w-[240px] truncate">
+                                                    {item.comment || '-'}
+                                                </td>
+
+                                                <td className="py-3 px-2">
+                                                    <span
+                                                        className={
+                                                            deshabilitada
+                                                                ? 'text-red-400 font-semibold'
+                                                                : 'text-green-400 font-semibold'
+                                                        }
+                                                    >
+                                                        {deshabilitada
+                                                            ? 'Deshabilitada'
+                                                            : 'Activa'}
+                                                    </span>
+                                                </td>
+
+                                                <td className="py-3 px-2">
+                                                    <div className="flex justify-end gap-2">
+                                                        <button
+                                                            onClick={() =>
+                                                                abrirModalEditarFirewall(item)
+                                                            }
+                                                            className="bg-blue-600 hover:bg-blue-700 rounded-lg px-3 py-1.5 text-xs font-semibold"
+                                                        >
+                                                            Editar
+                                                        </button>
+
+                                                        <button
+                                                            onClick={() =>
+                                                                cambiarEstadoFirewallRule(item)
+                                                            }
+                                                            className={
+                                                                deshabilitada
+                                                                    ? 'bg-green-600 hover:bg-green-700 rounded-lg px-3 py-1.5 text-xs font-semibold'
+                                                                    : 'bg-amber-600 hover:bg-amber-700 rounded-lg px-3 py-1.5 text-xs font-semibold'
+                                                            }
+                                                        >
+                                                            {deshabilitada
+                                                                ? 'Habilitar'
+                                                                : 'Deshabilitar'}
+                                                        </button>
+
+                                                        <button
+                                                            onClick={() =>
+                                                                eliminarFirewallRule(item)
+                                                            }
+                                                            className="bg-red-600 hover:bg-red-700 rounded-lg px-3 py-1.5 text-xs font-semibold"
+                                                        >
+                                                            Eliminar
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
 
                 {/** Ip adreess */}
@@ -2273,6 +2812,7 @@ export default function ConfiguracionMikrotikPage() {
                         </table>
                     </div>
                 </div>
+
                 {/** nat */}
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex items-center justify-between mb-4">
@@ -2456,6 +2996,7 @@ export default function ConfiguracionMikrotikPage() {
                         </div>
                     )}
                 </div>
+
                 {/** firewall */}
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex items-center justify-between mb-4">
@@ -2584,6 +3125,7 @@ export default function ConfiguracionMikrotikPage() {
                         </div>
                     </div>
                 </div>
+
                 {/** Address Lists */}
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex items-center justify-between mb-4">
@@ -3221,6 +3763,7 @@ export default function ConfiguracionMikrotikPage() {
                         </div>
                     )}
                 </div>
+
                 {/** Backup MikroTik */}
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
@@ -3350,6 +3893,7 @@ export default function ConfiguracionMikrotikPage() {
                         Los archivos .rsc son exportaciones de configuración y por ahora solo se crean/listan.
                     </div>
                 </div>
+
                 {/** Usuarios del Sistema MikroTik */}
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
@@ -3709,7 +4253,6 @@ export default function ConfiguracionMikrotikPage() {
                     </div>
                 </div>
 
-
                 {/** Tráfico de Interfaces */}
                 <div className="md:col-span-3 w-full rounded-2xl border border-slate-700 bg-slate-900 p-5">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
@@ -3851,6 +4394,7 @@ export default function ConfiguracionMikrotikPage() {
                         )}
                     </div>
                 </div>
+
             </section>
 
             {modalMangle && (
@@ -3999,6 +4543,7 @@ export default function ConfiguracionMikrotikPage() {
                     </div>
                 </div>
             )}
+
             {modalAgregarLista && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
                     <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6">
@@ -4195,6 +4740,213 @@ export default function ConfiguracionMikrotikPage() {
                                 className="bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
                             >
                                 {creandoEquipoNeighbor ? "Guardando..." : "Crear equipo"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {modalFirewallRule && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+                    <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+                        <div className="flex items-center justify-between mb-5">
+                            <div>
+                                <h3 className="text-lg font-bold">
+                                    {firewallEditandoId
+                                        ? 'Editar regla Firewall'
+                                        : 'Agregar regla Firewall'}
+                                </h3>
+
+                                <p className="text-sm text-slate-400">
+                                    Configuración de IP Firewall Filter Rules.
+                                </p>
+                            </div>
+
+                            <button
+                                onClick={() => setModalFirewallRule(false)}
+                                className="rounded-lg bg-slate-800 hover:bg-slate-700 px-3 py-2"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <label className="text-sm">
+                                <span className="block mb-1 text-slate-400">
+                                    Chain *
+                                </span>
+
+                                <select
+                                    value={firewallForm.chain}
+                                    onChange={(e) =>
+                                        actualizarCampoFirewall(
+                                            'chain',
+                                            e.target.value
+                                        )
+                                    }
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none"
+                                >
+                                    <option value="input">input</option>
+                                    <option value="forward">forward</option>
+                                    <option value="output">output</option>
+                                </select>
+                            </label>
+
+                            <label className="text-sm">
+                                <span className="block mb-1 text-slate-400">
+                                    Action *
+                                </span>
+
+                                <select
+                                    value={firewallForm.action}
+                                    onChange={(e) =>
+                                        actualizarCampoFirewall(
+                                            'action',
+                                            e.target.value
+                                        )
+                                    }
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none"
+                                >
+                                    <option value="accept">accept</option>
+                                    <option value="drop">drop</option>
+                                    <option value="reject">reject</option>
+                                    <option value="jump">jump</option>
+                                    <option value="log">log</option>
+                                    <option value="passthrough">passthrough</option>
+                                    <option value="return">return</option>
+                                    <option value="tarpit">tarpit</option>
+                                    <option value="fasttrack-connection">
+                                        fasttrack-connection
+                                    </option>
+                                </select>
+                            </label>
+
+                            <label className="text-sm">
+                                <span className="block mb-1 text-slate-400">
+                                    Protocolo
+                                </span>
+
+                                <select
+                                    value={firewallForm.protocol}
+                                    onChange={(e) =>
+                                        actualizarCampoFirewall(
+                                            'protocol',
+                                            e.target.value
+                                        )
+                                    }
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none"
+                                >
+                                    <option value="">Todos</option>
+                                    <option value="tcp">TCP</option>
+                                    <option value="udp">UDP</option>
+                                    <option value="icmp">ICMP</option>
+                                    <option value="gre">GRE</option>
+                                </select>
+                            </label>
+
+                            <label className="text-sm">
+                                <span className="block mb-1 text-slate-400">
+                                    Connection State
+                                </span>
+
+                                <input
+                                    value={firewallForm.connectionState}
+                                    onChange={(e) =>
+                                        actualizarCampoFirewall(
+                                            'connectionState',
+                                            e.target.value
+                                        )
+                                    }
+                                    placeholder="established,related"
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none"
+                                />
+                            </label>
+
+                            {[
+                                ['srcAddress', 'Dirección origen', '192.168.1.0/24'],
+                                ['dstAddress', 'Dirección destino', '10.10.10.1'],
+                                ['srcAddressList', 'Address List origen', 'MOROSOS'],
+                                ['dstAddressList', 'Address List destino', 'SERVIDORES'],
+                                ['srcPort', 'Puerto origen', '1024-65535'],
+                                ['dstPort', 'Puerto destino', '8291,8728'],
+                                ['inInterface', 'Interfaz entrada', 'ether1'],
+                                ['outInterface', 'Interfaz salida', 'WAN'],
+                                ['logPrefix', 'Prefijo del log', 'FIREWALL-DROP'],
+                                ['comment', 'Comentario', 'Descripción de la regla'],
+                            ].map(([campo, titulo, placeholder]) => (
+                                <label key={campo} className="text-sm">
+                                    <span className="block mb-1 text-slate-400">
+                                        {titulo}
+                                    </span>
+
+                                    <input
+                                        value={
+                                            firewallForm[
+                                            campo as keyof typeof firewallForm
+                                            ] as string
+                                        }
+                                        onChange={(e) =>
+                                            actualizarCampoFirewall(
+                                                campo as keyof typeof firewallForm,
+                                                e.target.value
+                                            )
+                                        }
+                                        placeholder={placeholder}
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 outline-none"
+                                    />
+                                </label>
+                            ))}
+                        </div>
+
+                        <div className="flex flex-wrap gap-5 mt-5">
+                            <label className="flex items-center gap-2 text-sm">
+                                <input
+                                    type="checkbox"
+                                    checked={firewallForm.log}
+                                    onChange={(e) =>
+                                        actualizarCampoFirewall(
+                                            'log',
+                                            e.target.checked
+                                        )
+                                    }
+                                />
+                                Activar log
+                            </label>
+
+                            <label className="flex items-center gap-2 text-sm">
+                                <input
+                                    type="checkbox"
+                                    checked={firewallForm.disabled}
+                                    onChange={(e) =>
+                                        actualizarCampoFirewall(
+                                            'disabled',
+                                            e.target.checked
+                                        )
+                                    }
+                                />
+                                Crear deshabilitada
+                            </label>
+                        </div>
+
+                        <div className="flex justify-end gap-2 mt-6">
+                            <button
+                                onClick={() => setModalFirewallRule(false)}
+                                disabled={guardandoFirewallRule}
+                                className="bg-slate-700 hover:bg-slate-600 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                Cancelar
+                            </button>
+
+                            <button
+                                onClick={guardarFirewallRule}
+                                disabled={guardandoFirewallRule}
+                                className="bg-green-600 hover:bg-green-700 disabled:bg-slate-700 rounded-xl px-4 py-2 text-sm font-semibold"
+                            >
+                                {guardandoFirewallRule
+                                    ? 'Guardando...'
+                                    : firewallEditandoId
+                                        ? 'Guardar cambios'
+                                        : 'Crear regla'}
                             </button>
                         </div>
                     </div>
