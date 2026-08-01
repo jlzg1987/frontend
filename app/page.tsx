@@ -153,6 +153,7 @@ export default function NetcomprfPage() {
                     ))}
                 </div>
             </section>
+
             {/* tienda online*/}
             <section id="tienda" className="px-6 py-20 border-cyan-400/30 bg-cyan-400/10">
                 <ProductosDestacados />

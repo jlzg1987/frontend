@@ -20,12 +20,19 @@ export default function ProductosDestacados() {
 
             const data = await res.json();
 
-            setProductos(data.productos || []);
+            setProductos(
+                (data.productos || [])
+                    .filter((producto: any) =>
+                        producto.disponible === true ||
+                        producto.disponible === 1 ||
+                        Number(producto.stock) > 0
+                    )
+                    .slice(0, 4)
+            );
         } catch (error) {
             console.error(error);
         }
     }
-
     return (
         <section className="py-20 px-6">
             <div className="mx-auto max-w-7xl">
