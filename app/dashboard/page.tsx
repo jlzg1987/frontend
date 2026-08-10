@@ -90,6 +90,12 @@ import PendientesClienteDesarrolloPageInterno from '../DesarrolloSoftwareDashboa
 import ResponsablesEquiposDesarrolloPageInterno from '../DesarrolloSoftwareDashboardPageInterno/responsablesEquiposDesarrollo/page';
 import ProyectosEntregadosDesarrolloPageInterno from '../DesarrolloSoftwareDashboardPageInterno/proyectoEntregadis/page';
 import ProformasPageInterno from '../proforma/page';
+import UsuariosDashboardPage from '../usuarios/page';
+import ListaUsuariosPage from '../usuarios/lista/page';
+import PermisosUsuariosPage from '../usuarios/permisos/page';
+import AdministrarRolesPage from '../usuarios/roles/page';
+import AdministrarMenuPage from '../usuarios/administrar-menu/page';
+import RegisterPage from '../register/page';
 
 
 type DashboardResponse = {
@@ -107,10 +113,40 @@ type DashboardResponse = {
     ultimosTickets: any[];
 };
 
+interface ModuloPermitido {
+    id: number;
+    codigo: string;
+    nombre: string;
+    descripcion?: string | null;
+    orden: number;
+}
+
+const VISTAS_POR_MODULO = {
+    GESTION_ISP: 'gestionisp',
+    PAGOS: 'pagos',
+    AREA_TECNICA: 'tecnico',
+    SOPORTE_TECNICO: 'soporteTecnico',
+    FACTURACION: 'facturacion',
+    PROFORMAS: 'PROFORMAS',
+    MIKROTIK: 'mikrotik',
+    INFRAESTRUCTURA: 'infraestructura',
+    TICKETS: 'tickets',
+    ADMINISTRACION_ISP: 'administracion',
+    USUARIOS: 'usuarios',
+    INVENTARIO: 'inventario',
+    PORTAL_CLIENTE: 'Portalcliente',
+    DESARROLLO_SISTEMA: 'DesarrolloSistema',
+    CONFIGURACION: 'confg',
+    NOTIFICACIONES: 'listaNotificacion',
+} as const;
 
 export default function DashboardPage() {
     const router = useRouter();
     const [usuario, setUsuario] = useState<any>(null);
+
+    const [permisos, setPermisos] = useState<Set<string>>(new Set());
+    const [esAdmin, setEsAdmin] = useState(false);
+    const [cargandoAccesos, setCargandoAccesos] = useState(true);
     const [extra, setExtra] = useState<any>({});
     const [clientesActivos, setClientesActivos] = useState(0);
     const [tecnicoSeleccionadoId, setTecnicoSeleccionadoId] = useState<string | null>(null);
@@ -121,6 +157,8 @@ export default function DashboardPage() {
     const [CarritoId, setCarritoId] = useState<string>('');
 
     const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
+
+    const [modulosPermitidos, setModulosPermitidos] = useState<ModuloPermitido[]>([]);
 
     const [vistaActual, setVistaActual] = useState<
         'dashboard' | 'perfil' | 'mikrotik' | 'mikrotikRouters' | 'administracion' | 'PlanInternet'
@@ -137,9 +175,22 @@ export default function DashboardPage() {
         | 'PerfilAdministrativo' | 'Publicidad' | 'ReportesISP' | 'SpeedTestAnalytics' | 'TiendaOnline' | 'ImportarPDF'
         | 'AbrirCArrrito' | 'Ventas' | 'Monitoreonodos' | 'Redesinternas' | 'DesarrolloSistema' | 'CrearSolicitud'
         | 'DETALLE' | 'EDITAR_SOLICITUD' | 'SOLICITUDES' | 'EN_PROCESO' | 'PENDIENTES_CLIENTE' | 'RESPONSABLES'
-        | 'ENTREGADOS' | 'PROFORMAS'
+        | 'ENTREGADOS' | 'PROFORMAS' | 'usuarios' | 'ListdoUsuario' | 'PermisosUsuarios' | 'Administrarroles'
+        | 'Menulateral' | 'Portalcliente' | 'Crearusuario'
     >('dashboard');
 
+    function normalizarCodigo(codigo: string) {
+        return String(codigo || '')
+            .trim()
+            .toUpperCase();
+    }
+
+    function tienePermiso(codigo?: string) {
+        if (!codigo) return true;
+        if (esAdmin) return true;
+
+        return permisos.has(normalizarCodigo(codigo));
+    }
 
     const cargarResumenClientes = async () => {
         try {
@@ -223,6 +274,75 @@ export default function DashboardPage() {
         } finally {
         }
     };
+
+    async function cargarMisPermisos() {
+        try {
+            setCargandoAccesos(true);
+
+            const token = getToken();
+
+            if (!token) {
+                router.replace('/login');
+                return;
+            }
+
+            const response = await fetch(
+                `${API_BASE}/permisos/mis-permisos`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                    cache: 'no-store',
+                }
+            );
+
+            const data = await response.json();
+
+            if (response.status === 401) {
+                localStorage.removeItem('isp_token');
+                localStorage.removeItem('isp_usuario');
+                router.replace('/login');
+                return;
+            }
+
+            if (!response.ok || !data.ok) {
+                throw new Error(
+                    data.message ||
+                    'No se pudieron consultar los permisos'
+                );
+            }
+
+            const codigos = Array.isArray(data.permisos)
+                ? data.permisos.map((codigo: string) =>
+                    normalizarCodigo(codigo)
+                )
+                : [];
+            const modulos: ModuloPermitido[] =
+                Array.isArray(data.modulos)
+                    ? data.modulos
+                    : [];
+
+            setModulosPermitidos(modulos);
+
+            setEsAdmin(Boolean(data.esAdmin));
+            setPermisos(new Set(codigos));
+        } catch (error) {
+            console.error(
+                'Error cargando permisos del dashboard:',
+                error
+            );
+
+            setEsAdmin(false);
+            setPermisos(new Set());
+        } finally {
+            setCargandoAccesos(false);
+        }
+    }
+
+    useEffect(() => {
+        cargarMisPermisos();
+    }, []);
+
     useEffect(() => {
         cargarDashboardMensualidades();
         cargarDashboard();
@@ -261,29 +381,29 @@ export default function DashboardPage() {
 
 
     const cards = [
-
         {
             title: 'Clientes',
             desc: 'Registrar, buscar y administrar clientes ISP.',
             icon: '👥',
             href: '/Clientes',
             color: 'bg-blue-600',
+            permiso: 'CLIENTES',
         },
-
         {
             title: 'Contratos Servicios',
             desc: 'Administrar servicios de internet, planes, PPPoE, GPON y estados.',
             icon: '📡',
             href: '/contratos-servicios',
             color: 'bg-cyan-600',
+            permiso: 'CONTRATOS_SERVICIOS',
         },
-
         {
             title: 'Pagos',
             desc: 'Control de mensualidades, deudas y cortes.',
             icon: '💳',
             href: '/pagos',
             color: 'bg-green-600',
+            permiso: 'PAGOS',
         },
         {
             title: 'Facturación',
@@ -291,13 +411,15 @@ export default function DashboardPage() {
             icon: '🧾',
             href: '/facturacion',
             color: 'bg-indigo-600',
+            permiso: 'FACTURACION',
         },
         {
             title: 'MikroTik',
             desc: 'Control de cortes, perfiles y clientes activos.',
             icon: '📡',
-            color: 'bg-orange-600',
             href: '/mikrotik',
+            color: 'bg-orange-600',
+            permiso: 'MIKROTIK',
         },
         {
             title: 'Tickets',
@@ -305,6 +427,7 @@ export default function DashboardPage() {
             icon: '🛠️',
             href: '/tickets',
             color: 'bg-red-600',
+            permiso: 'TICKETS',
         },
         {
             title: 'Usuarios',
@@ -312,6 +435,7 @@ export default function DashboardPage() {
             icon: '🔐',
             href: '/usuarios',
             color: 'bg-slate-700',
+            permiso: 'USUARIOS',
         },
     ];
 
@@ -743,7 +867,40 @@ export default function DashboardPage() {
         };
     }
 
+    function abrirVista(
+        vista: typeof vistaActual,
+        codigoPermiso?: string
+    ) {
+        if (
+            codigoPermiso &&
+            !tienePermiso(codigoPermiso)
+        ) {
+            console.warn(
+                `Acceso denegado al módulo ${codigoPermiso}`
+            );
+
+            setVistaActual('dashboard');
+            return;
+        }
+
+        setVistaActual(vista);
+    }
+
     const headerInfo = getHeaderInfo();
+
+    if (cargandoAccesos) {
+        return (
+            <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
+                <div className="text-center">
+                    <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-cyan-400/20 border-t-cyan-400" />
+
+                    <p className="mt-4 text-sm font-bold text-slate-300">
+                        Cargando accesos...
+                    </p>
+                </div>
+            </main>
+        );
+    }
 
     return (
         <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-950 to-blue-950">
@@ -758,104 +915,50 @@ export default function DashboardPage() {
                             Sistema Web ISP
                         </p>
                     </div>
-
-                    <nav className="space-y-3 flex-1">
-
+                    <nav>
+                        {/* Siempre visible */}
                         <MenuItem
                             label="Dashboard"
                             active={vistaActual === 'dashboard'}
                             onClick={() => setVistaActual('dashboard')}
                         />
 
-                        <MenuItem
-                            label="Gestión ISP"
-                            active={vistaActual === 'gestionisp'}
-                            onClick={() => setVistaActual('gestionisp')}
-                        />
+                        {modulosPermitidos.map((modulo) => {
+                            const codigo =
+                                modulo.codigo.trim().toUpperCase();
 
-                        <MenuItem
-                            label="Pagos"
-                            active={vistaActual === 'pagos'}
-                            onClick={() => setVistaActual('pagos')}
-                        />
-                        <MenuItem
-                            label="Aréa Técnica"
-                            active={vistaActual === 'tecnico'}
-                            onClick={() => setVistaActual('tecnico')}
-                        />
-                        <MenuItem
-                            label="Soporte Técnica"
-                            active={vistaActual === 'soporteTecnico'}
-                            onClick={() => setVistaActual('soporteTecnico')}
-                        />
+                            const vista =
+                                VISTAS_POR_MODULO[
+                                codigo as keyof typeof VISTAS_POR_MODULO
+                                ];
 
+                            // El módulo existe en la base, pero todavía
+                            // no tiene una vista implementada en el frontend.
+                            if (!vista) {
+                                console.warn(
+                                    `El módulo ${codigo} no tiene una vista configurada`
+                                );
 
-                        <MenuItem
-                            label="Facturación"
-                            active={vistaActual === 'facturacion'}
-                            onClick={() => setVistaActual('facturacion')}
-                        />
-                        <MenuItem
-                            label="Proforma"
-                            active={vistaActual === 'PROFORMAS'}
-                            onClick={() => setVistaActual('PROFORMAS')}
+                                return null;
+                            }
 
-                        />
-                        <MenuItem
-                            label="MikroTik"
-                            active={vistaActual === 'mikrotik'}
-                            onClick={() => setVistaActual('mikrotik')}
-                        />
-                        <MenuItem
-                            label="Infraestructura"
-                            active={vistaActual === 'infraestructura'}
-                            onClick={() => setVistaActual('infraestructura')}
-
-                        />
-                        <MenuItem
-                            label="Tickets"
-                            active={vistaActual === 'tickets'}
-                            onClick={() => setVistaActual('tickets')}
-                        />
-                        <MenuItem
-                            label="Administración"
-                            active={vistaActual === 'administracion'}
-                            onClick={() => setVistaActual('administracion')}
-                        />
-
-                        <MenuItem
-                            label="Usuarios"
-                            href="/usuarios"
-                        />
-
-                        <MenuItem
-                            label="Inventario"
-                            active={vistaActual === 'inventario'}
-                            onClick={() => setVistaActual('inventario')}
-                        />
-
-                        <MenuItem
-                            label="Desarrollo Sistema"
-                            active={vistaActual === 'DesarrolloSistema'}
-                            onClick={() => setVistaActual('DesarrolloSistema')}
-                        />
-                        <MenuItem
-                            label="Configuración"
-                            active={vistaActual === 'confg'}
-                            onClick={() => setVistaActual('confg')}
-                        />
-                        <MenuItem
-                            label="Notificaciones"
-                            active={vistaActual === 'listaNotificacion'}
-                            onClick={() => setVistaActual('listaNotificacion')}
-
-                        />
-
+                            return (
+                                <MenuItem
+                                    key={modulo.id}
+                                    label={modulo.nombre}
+                                    active={vistaActual === vista}
+                                    onClick={() =>
+                                        abrirVista(vista, codigo)
+                                    }
+                                />
+                            );
+                        })}
                     </nav>
 
                     <button
                         onClick={cerrarSesion}
                         className="rounded-xl bg-red-600 px-4 py-3 text-white font-bold hover:bg-red-700"
+                        style={{ marginTop: 20 }}
                     >
                         Cerrar sesión
                     </button>
@@ -919,63 +1022,90 @@ export default function DashboardPage() {
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                                    {cards.map((item) => (
-                                        <button
-                                            key={item.title}
-                                            onClick={() => {
-                                                if (item.title === 'MikroTik') {
-                                                    setVistaActual('mikrotik');
-                                                    return;
-                                                }
-                                                if (item.title === 'Clientes') {
-                                                    setVistaActual('Clientes');
-                                                    return;
-                                                }
-                                                if (item.title === 'Contratos Servicios') {
-                                                    setVistaActual('contratosServicios');
-                                                    return;
-                                                }
-                                                if (item.title === 'Contratos ISP') {
-                                                    setVistaActual('contratospdf');
-                                                    return;
-                                                }
-                                                if (item.title === 'Facturación') {
-                                                    setVistaActual('facturamanual');
-                                                    return;
-                                                }
-                                                if (item.title === 'Tickets') {
-                                                    setVistaActual('tickets');
-                                                    return;
-                                                }
-                                                if (item.title === 'Pagos') {
-                                                    setVistaActual('pagos');
-                                                    return;
-                                                }
-                                                if (item.title === 'Perfil Administrativo') {
-                                                    setVistaActual('PerfilAdministrativo');
-                                                    return;
-                                                }
+                                    {cards
+                                        .filter((item) => tienePermiso(item.permiso))
+                                        .map((item) => (
+                                            <button
+                                                key={item.title}
+                                                onClick={() => {
+                                                    if (item.title === 'MikroTik') {
+                                                        setVistaActual('mikrotik');
+                                                        return;
+                                                    }
+                                                    if (item.title === 'Clientes') {
+                                                        setVistaActual('Clientes');
+                                                        return;
+                                                    }
+                                                    if (item.title === 'Contratos Servicios') {
+                                                        setVistaActual('contratosServicios');
+                                                        return;
+                                                    }
+                                                    if (item.title === 'Contratos ISP') {
+                                                        setVistaActual('contratospdf');
+                                                        return;
+                                                    }
+                                                    if (item.title === 'Facturación') {
+                                                        setVistaActual('facturamanual');
+                                                        return;
+                                                    }
+                                                    if (item.title === 'Tickets') {
+                                                        setVistaActual('tickets');
+                                                        return;
+                                                    }
+                                                    if (item.title === 'Pagos') {
+                                                        setVistaActual('pagos');
+                                                        return;
+                                                    }
+                                                    if (item.title === 'Perfil Administrativo') {
+                                                        setVistaActual('PerfilAdministrativo');
+                                                        return;
+                                                    }
 
 
-                                                router.push(item.href);
-                                            }}
-                                            className="text-left rounded-3xl bg-slate-900/95 p-6 shadow-xl shadow-cyan-500/10 hover:scale-[1.02] transition border border-cyan-500/25 hover:border-cyan-400/60"
-                                        >
-                                            <div className={`w-14 h-14 ${item.color} rounded-2xl flex items-center justify-center text-2xl mb-5`}>
-                                                {item.icon}
-                                            </div>
+                                                    router.push(item.href);
+                                                }}
+                                                className="text-left rounded-3xl bg-slate-900/95 p-6 shadow-xl shadow-cyan-500/10 hover:scale-[1.02] transition border border-cyan-500/25 hover:border-cyan-400/60"
+                                            >
+                                                <div className={`w-14 h-14 ${item.color} rounded-2xl flex items-center justify-center text-2xl mb-5`}>
+                                                    {item.icon}
+                                                </div>
 
-                                            <h3 className="text-xl font-black text-white">
-                                                {item.title}
-                                            </h3>
+                                                <h3 className="text-xl font-black text-white">
+                                                    {item.title}
+                                                </h3>
 
-                                            <p className="text-cyan-100/70 mt-2 text-sm leading-6">
-                                                {item.desc}
-                                            </p>
-                                        </button>
-                                    ))}
+                                                <p className="text-cyan-100/70 mt-2 text-sm leading-6">
+                                                    {item.desc}
+                                                </p>
+                                            </button>
+                                        ))}
                                 </div>
                             </>
+                        )}
+                        {vistaActual === 'usuarios' && (
+                            <UsuariosDashboardPage
+
+                                onAbrirListado={() => setVistaActual('ListdoUsuario')}
+                                onAbrirPermisosUsuarios={() => setVistaActual('PermisosUsuarios')}
+                                onAbrirAdministrarroles={() => setVistaActual('Administrarroles')}
+                                onAbrirMenulateral={() => setVistaActual('Menulateral')}
+                                onAbrirCrearusuario={() => setVistaActual('Crearusuario')}
+                            />
+                        )}
+                        {vistaActual === 'Crearusuario' && (
+                            <RegisterPage />
+                        )}
+                        {vistaActual === 'Menulateral' && (
+                            <AdministrarMenuPage />
+                        )}
+                        {vistaActual === 'ListdoUsuario' && (
+                            <ListaUsuariosPage />
+                        )}
+                        {vistaActual === 'PermisosUsuarios' && (
+                            <PermisosUsuariosPage />
+                        )}
+                        {vistaActual === 'Administrarroles' && (
+                            <AdministrarRolesPage />
                         )}
 
                         {vistaActual === 'PerfilAdministrativo' && servicioIdPerfil && (
