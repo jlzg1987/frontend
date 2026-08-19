@@ -1,6 +1,15 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import {
+    ArrowRight,
+    ClipboardList,
+    Printer,
+    ReceiptText,
+    Users,
+    Wifi,
+    Wrench,
+} from 'lucide-react';
 
 export default function GestionIspPage({
     onVolver,
@@ -25,111 +34,131 @@ export default function GestionIspPage({
         {
             title: 'Clientes',
             desc: 'Registrar, buscar y administrar clientes ISP.',
-            icon: '👥',
+            icon: Users,
             href: '/Clientes',
             color: '#2563EB',
         },
         {
             title: 'Contratos de Servicio',
             desc: 'Crear servicios, planes, contrato, suspensión y reconexión.',
-            icon: '📡',
+            icon: Wifi,
             href: '/contratos-servicios',
             color: '#7C3AED',
         },
         {
             title: 'Imprimir ISP',
             desc: 'Generar documentos PDF para cliente y técnicos.',
-            icon: '🖨️',
+            icon: Printer,
             href: '/contratos-pdf',
             color: '#16A34A',
         },
         {
             title: 'Autorizaciones',
             desc: 'Listado y reimpresión de autorizaciones de instalación.',
-            icon: '🛠️',
+            icon: Wrench,
             href: '/autorizaciones-instalacion',
             color: '#EA580C',
         },
         {
             title: 'Fichas Cliente',
             desc: 'Listado y reimpresión de fichas técnicas para instalación.',
-            icon: '📋',
+            icon: ClipboardList,
             href: '/fichas-tecnicas',
             color: '#0891B2',
         },
         {
             title: 'Clientes Externos',
             desc: 'Gestiona clientes externos para facturación interna, recibos y ventas rápidas.',
-            icon: '🧾',
+            icon: ReceiptText,
             href: '/facturacion-interna/clientes-externos',
-            color: '#480ee9',
+            color: '#480EE9',
         },
     ];
 
     return (
         <main style={styles.page}>
-            <section style={styles.hero}>
-                <div>
-                    <span style={styles.badge}>NETCOMP RF</span>
 
-                </div>
-
-                <div style={styles.heroIcon}>🌐</div>
-            </section>
 
             <section style={styles.grid}>
-                {cards.map((card) => (
-                    <button
-                        key={card.title}
-                        style={styles.card}
-                        onClick={() => {
-                            if (card.title === 'Clientes') {
-                                onAbrirCliente();
-                                return;
-                            }
-                            if (card.title === 'Contratos de Servicio') {
-                                onAbrirServicioCliente();
-                                return;
-                            }
-                            if (card.title === 'Imprimir ISP') {
-                                onAbrirImprimirServicioCliente();
-                                return;
-                            }
-                            if (card.title === 'Autorizaciones') {
-                                onAbrirImprimirAutorizacionCliente();
-                                return;
-                            }
-                            if (card.title === 'Fichas Cliente') {
-                                onAbrirImprimirfichaCliente();
-                                return;
-                            }
-                            if (card.title === 'Clientes Externos') {
-                                onAbrirclientesexternos();
-                                return;
-                            }
+                {cards.map((card) => {
+                    const Icono = card.icon;
 
+                    return (
+                        <button
+                            key={card.title}
+                            style={styles.card}
+                            onClick={() => {
+                                if (card.title === 'Clientes') {
+                                    onAbrirCliente();
+                                    return;
+                                }
 
-                            router.push(card.href)
-                        }}
-                    >
-                        <div
-                            style={{
-                                ...styles.iconBox,
-                                background: card.color,
-                                boxShadow: `0 18px 40px ${card.color}55`,
+                                if (card.title === 'Contratos de Servicio') {
+                                    onAbrirServicioCliente();
+                                    return;
+                                }
+
+                                if (card.title === 'Imprimir ISP') {
+                                    onAbrirImprimirServicioCliente();
+                                    return;
+                                }
+
+                                if (card.title === 'Autorizaciones') {
+                                    onAbrirImprimirAutorizacionCliente();
+                                    return;
+                                }
+
+                                if (card.title === 'Fichas Cliente') {
+                                    onAbrirImprimirfichaCliente();
+                                    return;
+                                }
+
+                                if (card.title === 'Clientes Externos') {
+                                    onAbrirclientesexternos();
+                                    return;
+                                }
+
+                                router.push(card.href);
                             }}
                         >
-                            {card.icon}
-                        </div>
+                            <div
+                                style={{
+                                    ...styles.iconBox,
+                                    background: `linear-gradient(
+                        135deg,
+                        ${card.color},
+                        ${card.color}BB
+                    )`,
+                                    boxShadow: `0 18px 40px ${card.color}55`,
+                                }}
+                            >
+                                <Icono
+                                    size={29}
+                                    strokeWidth={2.2}
+                                    color="#FFFFFF"
+                                    aria-hidden="true"
+                                />
+                            </div>
 
-                        <div style={styles.cardContent}>
-                            <h2 style={styles.cardTitle}>{card.title}</h2>
-                            <p style={styles.cardDesc}>{card.desc}</p>
-                        </div>
+                            <div style={styles.cardContent}>
+                                <h2 style={styles.cardTitle}>
+                                    {card.title}
+                                </h2>
 
-                        <span style={styles.arrow}>→</span>
-                    </button>
-                ))}
+                                <p style={styles.cardDesc}>
+                                    {card.desc}
+                                </p>
+                            </div>
+
+                            <ArrowRight
+                                size={23}
+                                strokeWidth={2.3}
+                                color="#94A3B8"
+                                aria-hidden="true"
+                            />
+                        </button>
+                    );
+                })}
             </section>
         </main>
     );
@@ -218,7 +247,6 @@ const styles: Record<string, React.CSSProperties> = {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: '28px',
         flexShrink: 0,
     },
     cardContent: {

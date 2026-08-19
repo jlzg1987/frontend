@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -96,6 +97,16 @@ import PermisosUsuariosPage from '../usuarios/permisos/page';
 import AdministrarRolesPage from '../usuarios/roles/page';
 import AdministrarMenuPage from '../usuarios/administrar-menu/page';
 import RegisterPage from '../register/page';
+import MonitoreoClientePage from '../soporte-tecnico/MonitoreoCliente/page';
+import {
+    CreditCard,
+    ReceiptText,
+    Router,
+    ShieldCheck,
+    Users,
+    Wifi,
+    Wrench,
+} from 'lucide-react';
 
 
 type DashboardResponse = {
@@ -131,7 +142,7 @@ const VISTAS_POR_MODULO = {
     MIKROTIK: 'mikrotik',
     INFRAESTRUCTURA: 'infraestructura',
     TICKETS: 'tickets',
-    ADMINISTRACION_ISP: 'administracion',
+    ADMINISTRACION: 'administracion',
     USUARIOS: 'usuarios',
     INVENTARIO: 'inventario',
     PORTAL_CLIENTE: 'Portalcliente',
@@ -139,6 +150,56 @@ const VISTAS_POR_MODULO = {
     CONFIGURACION: 'confg',
     NOTIFICACIONES: 'listaNotificacion',
 } as const;
+
+const NOMBRES_MODULOS: Record<keyof typeof VISTAS_POR_MODULO, string> = {
+    GESTION_ISP: 'Gestión ISP',
+    PAGOS: 'Pagos',
+    AREA_TECNICA: 'Área técnica',
+    SOPORTE_TECNICO: 'Soporte técnico',
+    FACTURACION: 'Facturación',
+    PROFORMAS: 'Proformas',
+    MIKROTIK: 'MikroTik',
+    INFRAESTRUCTURA: 'Infraestructura',
+    TICKETS: 'Tickets',
+    ADMINISTRACION: 'administracion',
+    USUARIOS: 'Usuarios',
+    INVENTARIO: 'Inventario',
+    PORTAL_CLIENTE: 'Portal cliente',
+    DESARROLLO_SISTEMA: 'Desarrollo de software',
+    CONFIGURACION: 'Configuración',
+    NOTIFICACIONES: 'Notificaciones',
+};
+
+function completarModulosAdministrador(
+    modulosBackend: ModuloPermitido[]
+): ModuloPermitido[] {
+    const modulosNormalizados = modulosBackend.map((modulo) => ({
+        ...modulo,
+        codigo: String(modulo.codigo || '').trim().toUpperCase(),
+    }));
+
+    const codigosExistentes = new Set(
+        modulosNormalizados.map((modulo) => modulo.codigo)
+    );
+
+    const modulosFaltantes = (
+        Object.keys(VISTAS_POR_MODULO) as Array<
+            keyof typeof VISTAS_POR_MODULO
+        >
+    )
+        .filter((codigo) => !codigosExistentes.has(codigo))
+        .map((codigo, index) => ({
+            id: -(index + 1),
+            codigo,
+            nombre: NOMBRES_MODULOS[codigo],
+            descripcion: null,
+            orden: modulosNormalizados.length + index + 1,
+        }));
+
+    return [...modulosNormalizados, ...modulosFaltantes].sort(
+        (a, b) => Number(a.orden || 0) - Number(b.orden || 0)
+    );
+}
 
 export default function DashboardPage() {
     const router = useRouter();
@@ -176,7 +237,7 @@ export default function DashboardPage() {
         | 'AbrirCArrrito' | 'Ventas' | 'Monitoreonodos' | 'Redesinternas' | 'DesarrolloSistema' | 'CrearSolicitud'
         | 'DETALLE' | 'EDITAR_SOLICITUD' | 'SOLICITUDES' | 'EN_PROCESO' | 'PENDIENTES_CLIENTE' | 'RESPONSABLES'
         | 'ENTREGADOS' | 'PROFORMAS' | 'usuarios' | 'ListdoUsuario' | 'PermisosUsuarios' | 'Administrarroles'
-        | 'Menulateral' | 'Portalcliente' | 'Crearusuario'
+        | 'Menulateral' | 'Portalcliente' | 'Crearusuario' | 'monitoreoCliente'
     >('dashboard');
 
     function normalizarCodigo(codigo: string) {
@@ -322,9 +383,15 @@ export default function DashboardPage() {
                     ? data.modulos
                     : [];
 
-            setModulosPermitidos(modulos);
+            const usuarioEsAdmin = Boolean(data.esAdmin);
 
-            setEsAdmin(Boolean(data.esAdmin));
+            setModulosPermitidos(
+                usuarioEsAdmin
+                    ? completarModulosAdministrador(modulos)
+                    : modulos
+            );
+
+            setEsAdmin(usuarioEsAdmin);
             setPermisos(new Set(codigos));
         } catch (error) {
             console.error(
@@ -384,7 +451,7 @@ export default function DashboardPage() {
         {
             title: 'Clientes',
             desc: 'Registrar, buscar y administrar clientes ISP.',
-            icon: '👥',
+            icon: Users,
             href: '/Clientes',
             color: 'bg-blue-600',
             permiso: 'CLIENTES',
@@ -392,7 +459,7 @@ export default function DashboardPage() {
         {
             title: 'Contratos Servicios',
             desc: 'Administrar servicios de internet, planes, PPPoE, GPON y estados.',
-            icon: '📡',
+            icon: Wifi,
             href: '/contratos-servicios',
             color: 'bg-cyan-600',
             permiso: 'CONTRATOS_SERVICIOS',
@@ -400,7 +467,7 @@ export default function DashboardPage() {
         {
             title: 'Pagos',
             desc: 'Control de mensualidades, deudas y cortes.',
-            icon: '💳',
+            icon: CreditCard,
             href: '/pagos',
             color: 'bg-green-600',
             permiso: 'PAGOS',
@@ -408,7 +475,7 @@ export default function DashboardPage() {
         {
             title: 'Facturación',
             desc: 'Facturas, notas de venta y comprobantes.',
-            icon: '🧾',
+            icon: ReceiptText,
             href: '/facturacion',
             color: 'bg-indigo-600',
             permiso: 'FACTURACION',
@@ -416,7 +483,7 @@ export default function DashboardPage() {
         {
             title: 'MikroTik',
             desc: 'Control de cortes, perfiles y clientes activos.',
-            icon: '📡',
+            icon: Router,
             href: '/mikrotik',
             color: 'bg-orange-600',
             permiso: 'MIKROTIK',
@@ -424,7 +491,7 @@ export default function DashboardPage() {
         {
             title: 'Tickets',
             desc: 'Soporte técnico y atención al cliente.',
-            icon: '🛠️',
+            icon: Wrench,
             href: '/tickets',
             color: 'bg-red-600',
             permiso: 'TICKETS',
@@ -432,7 +499,7 @@ export default function DashboardPage() {
         {
             title: 'Usuarios',
             desc: 'Administrar técnicos, cajeros y administradores.',
-            icon: '🔐',
+            icon: ShieldCheck,
             href: '/usuarios',
             color: 'bg-slate-700',
             permiso: 'USUARIOS',
@@ -447,6 +514,20 @@ export default function DashboardPage() {
 
     function getHeaderInfo() {
 
+
+        if (vistaActual === 'confg') {
+            return {
+                titulo: 'Configuración de Facturación',
+                subtitulo: '  Configura los datos base que utilizará el sistem para generar facturas internas.',
+            };
+        }
+
+        if (vistaActual === 'monitoreoCliente') {
+            return {
+                titulo: '       Monitoreo de cliente',
+                subtitulo: ' Consumo, latencia, pérdidas y estabilidad en tiempo real.',
+            };
+        }
 
         if (vistaActual === 'EN_PROCESO') {
             return {
@@ -1009,76 +1090,124 @@ export default function DashboardPage() {
                         {vistaActual === 'dashboard' && (
                             <>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-5 mb-8">
-                                    <StatCard title="Clientes activos" value={String(clientesActivos)} />
-                                    <StatCard title="Pagos pendientes" value={String(dashboardMensualidades.pendientes)} />
-                                    <StatCard title="Pagadas" value={String(dashboardMensualidades.pagadas)} />
-                                    <StatCard title="Vencidas" value={String(dashboardMensualidades.vencidas)} />
-                                    <StatCard title="Cortadas" value={String(dashboardMensualidades.cortadas)} />
-                                    <StatCard title="Por cobrar" value={`$${String(dashboardMensualidades.totalPorCobrar.toFixed(2))}`} />
-                                    <StatCard title="Cobrado" value={`$${String(dashboardMensualidades.totalCobrado.toFixed(2))}`} />
-                                    <StatCard title="Tickets abiertos" value={String(dashboard?.resumen?.tecnicosActivos)} />
+                                    {esAdmin && (
+                                        <StatCard
+                                            title="Clientes activos"
+                                            value={String(clientesActivos)}
+                                        />
+                                    )}
 
-                                    <StatCard title="Equipos online" value="0" />
+                                    <StatCard
+                                        title="Pagos pendientes"
+                                        value={String(dashboardMensualidades.pendientes)}
+                                    />
+
+                                    <StatCard
+                                        title="Pagadas"
+                                        value={String(dashboardMensualidades.pagadas)}
+                                    />
+
+                                    <StatCard
+                                        title="Vencidas"
+                                        value={String(dashboardMensualidades.vencidas)}
+                                    />
+
+                                    <StatCard
+                                        title="Cortadas"
+                                        value={String(dashboardMensualidades.cortadas)}
+                                    />
+
+                                    {esAdmin && (
+                                        <>
+                                            <StatCard
+                                                title="Por cobrar"
+                                                value={`$${dashboardMensualidades.totalPorCobrar.toFixed(2)}`}
+                                            />
+
+                                            <StatCard
+                                                title="Cobrado"
+                                                value={`$${dashboardMensualidades.totalCobrado.toFixed(2)}`}
+                                            />
+                                        </>
+                                    )}
+
+                                    <StatCard
+                                        title="Tickets abiertos"
+                                        value={String(dashboard?.resumen?.tecnicosActivos ?? 0)}
+                                    />
+
+                                    <StatCard
+                                        title="Equipos online"
+                                        value="0"
+                                    />
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                                     {cards
                                         .filter((item) => tienePermiso(item.permiso))
-                                        .map((item) => (
-                                            <button
-                                                key={item.title}
-                                                onClick={() => {
-                                                    if (item.title === 'MikroTik') {
-                                                        setVistaActual('mikrotik');
-                                                        return;
-                                                    }
-                                                    if (item.title === 'Clientes') {
-                                                        setVistaActual('Clientes');
-                                                        return;
-                                                    }
-                                                    if (item.title === 'Contratos Servicios') {
-                                                        setVistaActual('contratosServicios');
-                                                        return;
-                                                    }
-                                                    if (item.title === 'Contratos ISP') {
-                                                        setVistaActual('contratospdf');
-                                                        return;
-                                                    }
-                                                    if (item.title === 'Facturación') {
-                                                        setVistaActual('facturamanual');
-                                                        return;
-                                                    }
-                                                    if (item.title === 'Tickets') {
-                                                        setVistaActual('tickets');
-                                                        return;
-                                                    }
-                                                    if (item.title === 'Pagos') {
-                                                        setVistaActual('pagos');
-                                                        return;
-                                                    }
-                                                    if (item.title === 'Perfil Administrativo') {
-                                                        setVistaActual('PerfilAdministrativo');
-                                                        return;
-                                                    }
+                                        .map((item) => {
+                                            const Icono = item.icon;
+
+                                            return (
+                                                <button
+                                                    key={item.title}
+                                                    onClick={() => {
+                                                        if (item.title === 'MikroTik') {
+                                                            setVistaActual('mikrotik');
+                                                            return;
+                                                        }
+                                                        if (item.title === 'Clientes') {
+                                                            setVistaActual('Clientes');
+                                                            return;
+                                                        }
+                                                        if (item.title === 'Contratos Servicios') {
+                                                            setVistaActual('contratosServicios');
+                                                            return;
+                                                        }
+                                                        if (item.title === 'Contratos ISP') {
+                                                            setVistaActual('contratospdf');
+                                                            return;
+                                                        }
+                                                        if (item.title === 'Facturación') {
+                                                            setVistaActual('facturamanual');
+                                                            return;
+                                                        }
+                                                        if (item.title === 'Tickets') {
+                                                            setVistaActual('tickets');
+                                                            return;
+                                                        }
+                                                        if (item.title === 'Pagos') {
+                                                            setVistaActual('pagos');
+                                                            return;
+                                                        }
+                                                        if (item.title === 'Perfil Administrativo') {
+                                                            setVistaActual('PerfilAdministrativo');
+                                                            return;
+                                                        }
 
 
-                                                    router.push(item.href);
-                                                }}
-                                                className="text-left rounded-3xl bg-slate-900/95 p-6 shadow-xl shadow-cyan-500/10 hover:scale-[1.02] transition border border-cyan-500/25 hover:border-cyan-400/60"
-                                            >
-                                                <div className={`w-14 h-14 ${item.color} rounded-2xl flex items-center justify-center text-2xl mb-5`}>
-                                                    {item.icon}
-                                                </div>
+                                                        router.push(item.href);
+                                                    }}
+                                                    className="text-left rounded-3xl bg-slate-900/95 p-6 shadow-xl shadow-cyan-500/10 hover:scale-[1.02] transition border border-cyan-500/25 hover:border-cyan-400/60"
+                                                >
+                                                    <div className={`w-14 h-14 ${item.color} rounded-2xl flex items-center justify-center mb-5 text-white shadow-lg`}>
+                                                        <Icono
+                                                            className="h-7 w-7"
+                                                            strokeWidth={2.2}
+                                                            aria-hidden="true"
+                                                        />
+                                                    </div>
 
-                                                <h3 className="text-xl font-black text-white">
-                                                    {item.title}
-                                                </h3>
+                                                    <h3 className="text-xl font-black text-white">
+                                                        {item.title}
+                                                    </h3>
 
-                                                <p className="text-cyan-100/70 mt-2 text-sm leading-6">
-                                                    {item.desc}
-                                                </p>
-                                            </button>
-                                        ))}
+                                                    <p className="text-cyan-100/70 mt-2 text-sm leading-6">
+                                                        {item.desc}
+                                                    </p>
+                                                </button>
+                                            );
+                                        })}
                                 </div>
                             </>
                         )}
@@ -1245,9 +1374,15 @@ export default function DashboardPage() {
                                     setTecnicoSeleccionadoId(usuarioId);
                                     setVistaActual('AbrirReportes');
                                 }}
-
+                                onAbrirMonitoreoCliente={() => setVistaActual('monitoreoCliente')}
                             />
                         )}
+                        {vistaActual === 'monitoreoCliente' && (
+                            <MonitoreoClientePage
+                                onVolver={() => setVistaActual('soporteTecnico')}
+                            />
+                        )}
+
                         {vistaActual === 'AbrirReportes' && tecnicoSeleccionadoId && (
                             <MisReportesTecnicoPage tecnicoId={tecnicoSeleccionadoId} />
                         )}

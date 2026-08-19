@@ -1,8 +1,28 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { createElement, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { API_BASE } from '@/src/lib/api';
+import {
+    Barcode,
+    CircleCheck,
+    CirclePlus,
+    CircleX,
+    ClipboardList,
+    FileSpreadsheet,
+    FileText,
+    Layers3,
+    Package,
+    PackageOpen,
+    PackageX,
+    RefreshCcw,
+    RefreshCw,
+    ShoppingBag,
+    ShoppingCart,
+    TriangleAlert,
+    Wrench,
+    type LucideIcon,
+} from 'lucide-react';
 
 
 
@@ -136,95 +156,121 @@ export default function DashboardInventarioPage({
         {
             title: 'Crear productos y servicios',
             desc: 'Registrar productos, servicios, precios, stock y código de barra.',
-            icon: '➕',
+            icon: CirclePlus,
             href: '/inventario/productos',
-            color: 'from-cyan-500 to-blue-600',
+            gradient: 'linear-gradient(90deg, #06b6d4, #2563eb)',
+            accent: '#22d3ee',
         },
         {
             title: 'Catálogo e Inventario',
             desc: 'Ver stock, buscar, filtrar, editar y eliminar productos o servicios.',
-            icon: '🧾',
+            icon: ClipboardList,
             href: '/inventario/catalogo',
-            color: 'from-emerald-500 to-green-600',
+            gradient: 'linear-gradient(90deg, #10b981, #16a34a)',
+            accent: '#34d399',
         },
         {
             title: 'Importar Inventario',
             desc: 'Subir productos y servicios desde Excel con plantilla automática.',
-            icon: '📊',
+            icon: FileSpreadsheet,
             href: '/inventario/importar',
-            color: 'from-purple-500 to-fuchsia-600',
+            gradient: 'linear-gradient(90deg, #a855f7, #c026d3)',
+            accent: '#c084fc',
         },
         {
             title: 'Movimientos de Stock',
             desc: 'Entradas, salidas, ajustes y trazabilidad del inventario.',
-            icon: '🔄',
+            icon: RefreshCcw,
             href: '/inventario/movimientos',
-            color: 'from-orange-500 to-red-600',
+            gradient: 'linear-gradient(90deg, #f97316, #dc2626)',
+            accent: '#fb923c',
             disabled: false,
         },
         {
             title: 'Códigos de Barra',
             desc: 'Imprimir etiquetas de productos y servicios para lectura rápida.',
-            icon: '🏷️',
+            icon: Barcode,
             href: '/inventario/codigos-barra',
-            color: 'from-slate-500 to-slate-700',
+            gradient: 'linear-gradient(90deg, #64748b, #334155)',
+            accent: '#94a3b8',
             disabled: false,
         },
         {
             title: 'Kits de Instalación',
             desc: 'Crear kits con router, cable, conectores, ONU, antenas y servicios.',
-            icon: '🧰',
+            icon: PackageOpen,
             href: '/inventario/kits',
-            color: 'from-yellow-500 to-amber-600',
+            gradient: 'linear-gradient(90deg, #eab308, #d97706)',
+            accent: '#facc15',
             disabled: false,
         },
         {
             title: 'Tienda Online',
             desc: 'Catálogo público de productos tecnológicos, carrito de compras y ventas web.',
-            icon: '🛒',
+            icon: ShoppingCart,
             href: '/tienda-online',
-            color: 'from-cyan-500 to-blue-700',
+            gradient: 'linear-gradient(90deg, #06b6d4, #1d4ed8)',
+            accent: '#22d3ee',
             disabled: false,
         },
         {
             title: 'Ventas Tienda',
             desc: 'Monitorea las ventas realizadas desde la tienda online, consulta pedidos pagados y visualiza el detalle de cada compra.',
-            icon: '🛍️',
+            icon: ShoppingBag,
             href: '/inventario/tienda/ventas',
-            color: 'from-emerald-500 to-cyan-600',
+            gradient: 'linear-gradient(90deg, #10b981, #0891b2)',
+            accent: '#34d399',
         },
         {
             title: 'Importar PDF',
             desc: 'Subir listas de precios PDF y crear productos automáticamente.',
-            icon: '📄',
+            icon: FileText,
             href: '/inventario/importar-pdf',
-            color: 'from-red-500 to-orange-500',
+            gradient: 'linear-gradient(90deg, #ef4444, #f97316)',
+            accent: '#fb7185',
         },
-
     ];
 
     return (
-        <main className="min-h-screen bg-slate-950 text-white p-5 md:p-8">
+        <main
+            className="min-h-screen p-5 text-white md:p-8"
+            style={{
+                background: 'radial-gradient(circle at top left, rgba(6,182,212,0.14), transparent 30%), linear-gradient(135deg, #020617, #0f172a)',
+            }}
+        >
             <section className="flex flex-col lg:flex-row lg:items-center justify-between gap-5 mb-8">
 
 
                 <button
                     onClick={cargarProductos}
-                    className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black px-5 py-3 rounded-xl shadow-lg shadow-cyan-500/20"
+                    className="flex items-center gap-2 rounded-xl px-5 py-3 font-black text-slate-950 shadow-lg"
+                    style={{
+                        background: 'linear-gradient(135deg, #22d3ee, #06b6d4)',
+                        boxShadow: '0 12px 30px rgba(6,182,212,0.22)',
+                    }}
                 >
+                    <RefreshCw size={18} strokeWidth={2.5} />
                     {loading ? 'Actualizando...' : 'Actualizar datos'}
                 </button>
             </section>
 
-            <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-                <StatCard titulo="Total ítems" valor={stats.totalItems} icono="🧾" color="cyan" />
-                <StatCard titulo="Productos" valor={stats.productos} icono="📦" color="emerald" />
-                <StatCard titulo="Servicios" valor={stats.servicios} icono="🛠️" color="purple" />
-                <StatCard titulo="Stock total" valor={stats.stockTotal} icono="📚" color="blue" />
-                <StatCard titulo="Stock bajo" valor={stats.stockBajo} icono="⚠️" color="red" />
-                <StatCard titulo="Sin stock" valor={stats.sinStock} icono="⛔" color="orange" />
-                <StatCard titulo="Activos" valor={stats.activos} icono="✅" color="emerald" />
-                <StatCard titulo="Inactivos" valor={stats.inactivos} icono="🚫" color="slate" />
+            <section
+                className="mb-8"
+                style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(8, minmax(0, 1fr))",
+                    gap: "10px",
+                    width: "100%",
+                }}
+            >
+                <StatCard titulo="Total ítems" valor={stats.totalItems} icono={ClipboardList} color="#22d3ee" />
+                <StatCard titulo="Productos" valor={stats.productos} icono={Package} color="#34d399" />
+                <StatCard titulo="Servicios" valor={stats.servicios} icono={Wrench} color="#c084fc" />
+                <StatCard titulo="Stock total" valor={stats.stockTotal} icono={Layers3} color="#60a5fa" />
+                <StatCard titulo="Stock bajo" valor={stats.stockBajo} icono={TriangleAlert} color="#f87171" />
+                <StatCard titulo="Sin stock" valor={stats.sinStock} icono={PackageX} color="#fb923c" />
+                <StatCard titulo="Activos" valor={stats.activos} icono={CircleCheck} color="#34d399" />
+                <StatCard titulo="Inactivos" valor={stats.inactivos} icono={CircleX} color="#94a3b8" />
             </section>
 
             <section className="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-8">
@@ -343,9 +389,25 @@ export default function DashboardInventarioPage({
                                 : 'bg-slate-900 border-slate-700 hover:border-cyan-400 hover:-translate-y-1'
                                 }`}
                         >
-                            <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${card.color}`} />
+                            <div
+                                className="absolute inset-x-0 top-0 h-1"
+                                style={{ background: card.gradient }}
+                            />
 
-                            <div className="text-4xl mb-4">{card.icon}</div>
+                            <div
+                                className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl"
+                                style={{
+                                    color: card.accent,
+                                    background: `linear-gradient(135deg, ${card.accent}2e, ${card.accent}0d)`,
+                                    border: `1px solid ${card.accent}4d`,
+                                    boxShadow: `0 10px 28px ${card.accent}1f`,
+                                }}
+                            >
+                                {createElement(card.icon, {
+                                    size: 27,
+                                    strokeWidth: 2.2,
+                                })}
+                            </div>
 
                             <h3 className="text-xl font-black">
                                 {card.title}
@@ -443,26 +505,40 @@ function StatCard({
 }: {
     titulo: string;
     valor: number;
-    icono: string;
-    color: 'cyan' | 'emerald' | 'purple' | 'blue' | 'red' | 'orange' | 'slate';
+    icono: LucideIcon;
+    color: string;
 }) {
-    const colors: any = {
-        cyan: 'border-cyan-500/30 text-cyan-300',
-        emerald: 'border-emerald-500/30 text-emerald-300',
-        purple: 'border-purple-500/30 text-purple-300',
-        blue: 'border-blue-500/30 text-blue-300',
-        red: 'border-red-500/30 text-red-300',
-        orange: 'border-orange-500/30 text-orange-300',
-        slate: 'border-slate-600 text-slate-300',
-    };
-
     return (
-        <div className={`bg-slate-900 border rounded-2xl p-5 ${colors[color]}`}>
-            <div className="text-3xl">{icono}</div>
-            <p className="text-slate-400 text-sm mt-3">{titulo}</p>
-            <h3 className="text-3xl font-black mt-1">
-                {valor}
-            </h3>
+        <div
+            className="min-w-0 rounded-xl border px-3 py-2.5"
+            style={{
+                color,
+                background: `linear-gradient(145deg, ${color}18, rgba(15,23,42,0.96) 58%)`,
+                borderColor: `${color}40`,
+                boxShadow: `0 8px 24px ${color}12`,
+
+            }}
+        >
+            <div className="flex items-center gap-2">
+                <div
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                    style={{
+                        background: `linear-gradient(135deg, ${color}30, ${color}0d)`,
+                        border: `1px solid ${color}40`, marginTop: 10,
+                    }}
+                >
+                    {createElement(icono, {
+                        size: 18,
+                        strokeWidth: 2.3,
+                    })}
+                </div>
+                <h3 className="truncate text-xl font-black leading-none text-white">
+                    {valor}
+                </h3>
+            </div>
+            <p className="mt-2 truncate text-[11px] font-bold text-slate-400">
+                {titulo}
+            </p>
         </div>
     );
 }

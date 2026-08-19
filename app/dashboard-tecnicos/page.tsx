@@ -1,6 +1,7 @@
 'use client';
 
 import { API_BASE, getToken } from '@/src/lib/api';
+import { ClipboardList, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -34,6 +35,65 @@ export default function DashboardTecnicosPage({
         useState<DashboardResponse | null>(null);
 
     const [loading, setLoading] = useState(true);
+
+    const [busquedaTicket, setBusquedaTicket] = useState('');
+    const [estadoTicket, setEstadoTicket] = useState('TODOS');
+    const [asignacionTicket, setAsignacionTicket] = useState('TODOS');
+
+    const estadosTickets = Array.from(
+        new Set(
+            (dashboard?.ultimosTickets || [])
+                .map((ticket: any) =>
+                    String(ticket.estado || '').trim()
+                )
+                .filter(Boolean)
+        )
+    );
+
+    const ticketsFiltrados = (
+        dashboard?.ultimosTickets || []
+    ).filter((ticket: any) => {
+        const textoBusqueda = busquedaTicket
+            .trim()
+            .toLowerCase();
+
+        const coincideBusqueda =
+            !textoBusqueda ||
+            String(ticket.codigoTicket || '')
+                .toLowerCase()
+                .includes(textoBusqueda) ||
+            String(ticket.titulo || '')
+                .toLowerCase()
+                .includes(textoBusqueda) ||
+            String(ticket.tecnicoNombre || '')
+                .toLowerCase()
+                .includes(textoBusqueda);
+
+        const coincideEstado =
+            estadoTicket === 'TODOS' ||
+            String(ticket.estado || '') === estadoTicket;
+
+        const tieneTecnico = Boolean(
+            ticket.tecnicoAsignadoId
+        );
+
+        const coincideAsignacion =
+            asignacionTicket === 'TODOS' ||
+            (
+                asignacionTicket === 'ASIGNADOS' &&
+                tieneTecnico
+            ) ||
+            (
+                asignacionTicket === 'SIN_ASIGNAR' &&
+                !tieneTecnico
+            );
+
+        return (
+            coincideBusqueda &&
+            coincideEstado &&
+            coincideAsignacion
+        );
+    });
 
     const cargarDashboard = async () => {
         try {
@@ -91,7 +151,13 @@ export default function DashboardTecnicosPage({
                     onClick={() => { onAbrirReporteAdmin(); }}
                     className="cursor-pointer bg-white rounded-3xl shadow-lg p-6 hover:shadow-2xl transition"
                 >
-                    <div className="text-4xl mb-3">📋</div>
+                    <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600/10 text-blue-600 shadow-sm ring-1 ring-blue-600/15">
+                        <ClipboardList
+                            className="h-8 w-8"
+                            strokeWidth={2.2}
+                            aria-hidden="true"
+                        />
+                    </div>
 
                     <h3 className="text-xl font-bold text-slate-900">
                         Reportes Técnicos
@@ -299,14 +365,81 @@ export default function DashboardTecnicosPage({
             {/* Últimos Tickets */}
 
             <div className="bg-white rounded-3xl border shadow-sm p-6">
+                <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center">
+                    <div>
+                        <h2 className="text-xl font-bold text-slate-900">
+                            Últimos Tickets
+                        </h2>
 
-                <h2 className="text-xl font-bold mb-5">
-                    Últimos Tickets
-                </h2>
+                        <p className="mt-1 text-sm text-slate-500">
+                            {ticketsFiltrados.length} de{' '}
+                            {dashboard?.ultimosTickets?.length || 0} tickets
+                        </p>
+                    </div>
 
+                    <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row">
+                        {/* Buscador */}
+                        <label className="h-11 min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10">
+                            <Search
+                                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                                aria-hidden="true"
+                            />
+
+                            <input
+                                type="search"
+                                value={busquedaTicket}
+                                onChange={(event) =>
+                                    setBusquedaTicket(event.target.value)
+                                }
+                                placeholder="Código, título o técnico..."
+                                className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-4 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                            />
+                        </label>
+
+                        {/* Estado */}
+                        <select
+                            value={estadoTicket}
+                            onChange={(event) =>
+                                setEstadoTicket(event.target.value)
+                            }
+                            className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                        >
+                            <option value="TODOS">
+                                Todos los estados
+                            </option>
+
+                            {estadosTickets.map((estado) => (
+                                <option key={estado} value={estado}>
+                                    {estado.replaceAll('_', ' ')}
+                                </option>
+                            ))}
+                        </select>
+
+                        {/* Técnico asignado */}
+                        <select
+                            value={asignacionTicket}
+                            onChange={(event) =>
+                                setAsignacionTicket(event.target.value)
+                            }
+                            className="h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
+                        >
+                            <option value="TODOS">
+                                Todos los técnicos
+                            </option>
+
+                            <option value="ASIGNADOS">
+                                Asignados
+                            </option>
+
+                            <option value="SIN_ASIGNAR">
+                                Sin asignar
+                            </option>
+                        </select>
+                    </div>
+                </div>
                 <div className="space-y-4">
 
-                    {dashboard?.ultimosTickets?.map((t) => (
+                    {ticketsFiltrados.map((t: any) => (
 
                         <div
                             key={t.ticketId}
@@ -343,11 +476,23 @@ export default function DashboardTecnicosPage({
 
                     ))}
 
+                    {ticketsFiltrados.length === 0 && (
+                        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
+                            <p className="font-bold text-slate-700">
+                                No se encontraron tickets
+                            </p>
+
+                            <p className="mt-1 text-sm text-slate-500">
+                                Cambia la búsqueda o selecciona otros filtros.
+                            </p>
+                        </div>
+                    )}
+
                 </div>
 
             </div>
 
-        </div>
+        </div >
     );
 }
 

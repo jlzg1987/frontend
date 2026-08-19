@@ -1,6 +1,20 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import {
+    ArrowRight,
+    Banknote,
+    BarChart3,
+    CircleSlash2,
+    FileDown,
+    Gauge,
+    Megaphone,
+    ReceiptText,
+    Settings,
+    Users,
+    Wifi,
+    type LucideIcon,
+} from 'lucide-react';
 import ImportarClientesInterno from '../dashboard/components/ImportarClientesInterno';
 
 export default function AdminIspPageInterno({
@@ -33,70 +47,70 @@ export default function AdminIspPageInterno({
     const cards: {
         titulo: string;
         descripcion: string;
-        icono: string;
+        icono: LucideIcon;
         ruta: string;
         color: string;
     }[] = [
             {
                 titulo: 'Planes de Internet',
                 descripcion: 'Crear, editar y administrar planes, velocidades y precios.',
-                icono: '📡',
+                icono: Wifi,
                 ruta: '/adnib-isp/planes-internet',
                 color: '#06b6d4',
             },
             {
                 titulo: 'Clientes',
                 descripcion: 'Registrar clientes, dirección, coordenadas y estado del servicio.',
-                icono: '👥',
+                icono: Users,
                 ruta: '/clientes',
                 color: '#22c55e',
             },
             {
                 titulo: 'Pagos y mensualidades',
                 descripcion: 'Control de pagos, deudas, mensualidades pendientes e historial.',
-                icono: '💵',
+                icono: Banknote,
                 ruta: '/pagos',
                 color: '#f59e0b',
             },
             {
                 titulo: 'Facturas internas',
                 descripcion: 'Generación y consulta de comprobantes internos del ISP.',
-                icono: '🧾',
+                icono: ReceiptText,
                 ruta: '/facturas-internas',
                 color: '#a855f7',
             },
             {
                 titulo: 'Publicidad',
                 descripcion: 'Administrar banners, anuncios y promociones del sistema.',
-                icono: '📢',
+                icono: Megaphone,
                 ruta: '/publicidad',
                 color: '#ec4899',
             },
             {
                 titulo: 'Cortes por mora',
                 descripcion: 'Control automático de suspensión y reconexión por deuda.',
-                icono: '⛔',
+                icono: CircleSlash2,
                 ruta: '/cortes-mora',
                 color: '#ef4444',
             },
             {
                 titulo: 'Reportes ISP',
                 descripcion: 'Ingresos, clientes activos, morosos, suspendidos y estadísticas.',
-                icono: '📊',
+                icono: BarChart3,
                 ruta: '/reportes-isp',
                 color: '#38bdf8',
             },
             {
                 titulo: 'Configuración ISP',
                 descripcion: 'Parámetros generales del negocio, cobros, avisos y reglas.',
-                icono: '⚙️',
+                icono: Settings,
                 ruta: '/configuracion-isp',
                 color: '#64748b',
             },
             {
                 titulo: 'Importar clientes',
                 descripcion: 'Descargar formato Excel y cargar clientes masivamente.',
-                icono: '📥',
+                icono: FileDown,
                 ruta: '/dashboard/components/importarClientesInterno',
                 color: '#14b8a6',
             },
@@ -104,7 +118,7 @@ export default function AdminIspPageInterno({
             {
                 titulo: "SpeedTest Analytics",
                 descripcion: "Estadísticas del servidor de velocidad Netcomprf.",
-                icono: "🚀",
+                icono: Gauge,
                 ruta: "/speedtest",
                 color: "#06b6d4",
             }
@@ -116,7 +130,7 @@ export default function AdminIspPageInterno({
             <section style={styles.statsGrid}>
                 <div style={styles.statCard}>
                     <span style={styles.statLabel}>Módulos</span>
-                    <strong style={styles.statValue}>8</strong>
+                    <strong style={styles.statValue}>{cards.length}</strong>
                     <small style={styles.statText}>Administrativos</small>
                 </div>
 
@@ -134,88 +148,95 @@ export default function AdminIspPageInterno({
             </section>
 
             <section style={styles.cardsGrid}>
-                {cards.map((card) => (
-                    <article
-                        key={card.titulo}
-                        style={{
-                            ...styles.card,
-                            boxShadow: `0 18px 45px ${card.color}22`,
-                            border: `1px solid ${card.color}44`,
-                        }}
+                {cards.map((card) => {
+                    const Icono = card.icono;
 
-                        onClick={() => {
-                            if (card.titulo === 'Planes de Internet') {
-                                onAbrirAdministracion();
-                                return;
-                            }
-                            if (card.titulo === 'Clientes') {
-                                onAbrirClientes();
-                                return;
-                            }
-                            if (card.titulo === 'Importar clientes') {
-                                onAbrirImportarclientes();
-                                return;
-                            }
-                            if (card.titulo === 'Pagos y mensualidades') {
-                                onAbrirPagosmensuales();
-                                return;
-                            }
-                            if (card.titulo === 'Facturas internas') {
-                                onAbrirFacturacion();
-                                return;
-                            }
-                            if (card.titulo === 'Cortes por mora') {
-                                onAbrirCortespormora();
-                                return;
-                            }
-                            if (card.titulo === 'Configuración ISP') {
-                                onAbrirConfiguraciónISP();
-                                return;
-                            }
-                            if (card.titulo === 'Publicidad') {
-                                onAbrirPublicidad();
-                                return;
-                            }
-
-                            if (card.titulo === 'Reportes ISP') {
-                                onAbrirReportesISP();
-                                return;
-                            }
-
-                            if (card.titulo === "SpeedTest Analytics") {
-                                onAbrirSpeedTestAnalytics();
-                                return;
-                            }
-
-                            router.push(card.ruta);
-                        }}
-                    >
-
-                        <div
+                    return (
+                        <article
+                            key={card.titulo}
                             style={{
-                                ...styles.iconBox,
-                                background: `${card.color}22`,
-                                color: card.color,
+                                ...styles.card,
+                                boxShadow: `0 18px 45px ${card.color}22`,
+                                border: `1px solid ${card.color}44`,
+                            }}
+
+                            onClick={() => {
+                                if (card.titulo === 'Planes de Internet') {
+                                    onAbrirAdministracion();
+                                    return;
+                                }
+                                if (card.titulo === 'Clientes') {
+                                    onAbrirClientes();
+                                    return;
+                                }
+                                if (card.titulo === 'Importar clientes') {
+                                    onAbrirImportarclientes();
+                                    return;
+                                }
+                                if (card.titulo === 'Pagos y mensualidades') {
+                                    onAbrirPagosmensuales();
+                                    return;
+                                }
+                                if (card.titulo === 'Facturas internas') {
+                                    onAbrirFacturacion();
+                                    return;
+                                }
+                                if (card.titulo === 'Cortes por mora') {
+                                    onAbrirCortespormora();
+                                    return;
+                                }
+                                if (card.titulo === 'Configuración ISP') {
+                                    onAbrirConfiguraciónISP();
+                                    return;
+                                }
+                                if (card.titulo === 'Publicidad') {
+                                    onAbrirPublicidad();
+                                    return;
+                                }
+
+                                if (card.titulo === 'Reportes ISP') {
+                                    onAbrirReportesISP();
+                                    return;
+                                }
+
+                                if (card.titulo === "SpeedTest Analytics") {
+                                    onAbrirSpeedTestAnalytics();
+                                    return;
+                                }
+
+                                router.push(card.ruta);
                             }}
                         >
-                            {card.icono}
-                        </div>
 
-                        <div>
-                            <h2 style={styles.cardTitle}>{card.titulo}</h2>
-                            <p style={styles.cardDescription}>{card.descripcion}</p>
-                        </div>
+                            <div
+                                style={{
+                                    ...styles.iconBox,
+                                    background: `linear-gradient(135deg, ${card.color}35, ${card.color}12)`,
+                                    color: card.color,
+                                    border: `1px solid ${card.color}38`,
+                                }}
+                            >
+                                <Icono size={29} strokeWidth={2.2} aria-hidden="true" />
+                            </div>
 
-                        <button
-                            style={{
-                                ...styles.cardButton,
-                                background: card.color,
-                            }}
-                        >
-                            Entrar
-                        </button>
-                    </article>
-                ))}
+                            <div>
+                                <h2 style={styles.cardTitle}>{card.titulo}</h2>
+                                <p style={styles.cardDescription}>{card.descripcion}</p>
+                            </div>
+
+                            <button
+                                type="button"
+                                style={{
+                                    ...styles.cardButton,
+                                    background: `linear-gradient(135deg, ${card.color}, ${card.color}BB)`,
+                                }}
+                            >
+                                Entrar
+                                <ArrowRight size={17} strokeWidth={2.4} aria-hidden="true" />
+                            </button>
+                        </article>
+                    );
+                })}
             </section>
         </main>
     );
@@ -224,7 +245,10 @@ export default function AdminIspPageInterno({
 const styles: { [key: string]: React.CSSProperties } = {
     page: {
         minHeight: '100vh',
-        background: '#020617',
+        background:
+            'radial-gradient(circle at top right, rgba(6,182,212,0.16), transparent 34%), radial-gradient(circle at bottom left, rgba(37,99,235,0.12), transparent 38%), linear-gradient(135deg, #020617 0%, #0f172a 52%, #082f49 100%)',
+        backgroundRepeat: 'no-repeat',
+        backgroundSize: 'cover',
         color: '#fff',
         padding: '28px',
     },
@@ -325,6 +349,10 @@ const styles: { [key: string]: React.CSSProperties } = {
         marginTop: '9px',
     },
     cardButton: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '7px',
         border: 'none',
         color: '#020617',
         padding: '11px 14px',

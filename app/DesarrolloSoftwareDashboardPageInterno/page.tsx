@@ -1,6 +1,21 @@
 'use client';
 
 import { API_BASE, getToken } from '@/src/lib/api';
+import {
+    ArrowRight,
+    BadgeCheck,
+    Blocks,
+    ClipboardList,
+    Code2,
+    Eye,
+    FileText,
+    Flag,
+    Hourglass,
+    Mail,
+    Plus,
+    Rocket,
+    Users,
+} from 'lucide-react';
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 
 type Props = {
@@ -155,49 +170,55 @@ export default function DesarrolloSoftwareDashboardPageInterno({
     }, [cargarDashboard]);
 
     const stats = [
-        { titulo: 'Solicitudes registradas', valor: cargando ? '...' : resumen.solicitudes, icono: '📝', color: '#38bdf8' },
-        { titulo: 'Desarrollos activos', valor: cargando ? '...' : resumen.activos, icono: '💻', color: '#22c55e' },
-        { titulo: 'Esperando al cliente', valor: cargando ? '...' : resumen.esperandoCliente, icono: '⏳', color: '#f59e0b' },
-        { titulo: 'En revisión del cliente', valor: cargando ? '...' : resumen.enRevision, icono: '👀', color: '#a855f7' },
-        { titulo: 'Próximos a entregar', valor: cargando ? '...' : resumen.proximosEntrega, icono: '🚀', color: '#f97316' },
-        { titulo: 'Proyectos entregados', valor: cargando ? '...' : resumen.entregados, icono: '✅', color: '#14b8a6' },
+        { titulo: 'Solicitudes registradas', valor: cargando ? '...' : resumen.solicitudes, icono: FileText, color: '#38bdf8' },
+        { titulo: 'Desarrollos activos', valor: cargando ? '...' : resumen.activos, icono: Code2, color: '#22c55e' },
+        { titulo: 'Esperando al cliente', valor: cargando ? '...' : resumen.esperandoCliente, icono: Hourglass, color: '#f59e0b' },
+        { titulo: 'En revisión del cliente', valor: cargando ? '...' : resumen.enRevision, icono: Eye, color: '#a855f7' },
+        { titulo: 'Próximos a entregar', valor: cargando ? '...' : resumen.proximosEntrega, icono: Rocket, color: '#f97316' },
+        { titulo: 'Proyectos entregados', valor: cargando ? '...' : resumen.entregados, icono: BadgeCheck, color: '#14b8a6' },
     ];
 
     const accesos = [
         {
             titulo: 'Solicitudes de desarrollo',
             descripcion: 'Consultar y administrar todas las solicitudes de los clientes',
-            icono: '📋',
+            icono: ClipboardList,
+            color: '#38bdf8',
             accion: onAbrirSolicitudes,
         },
         {
             titulo: 'Nueva solicitud',
             descripcion: 'Registrar una página web, aplicación, sistema u otro desarrollo',
-            icono: '➕',
+            icono: Plus,
+            color: '#22c55e',
             accion: onCrearSolicitud,
         },
         {
             titulo: 'Desarrollos en proceso',
             descripcion: 'Revisar etapas, avances y fechas estimadas de entrega',
-            icono: '🧩',
+            icono: Blocks,
+            color: '#a855f7',
             accion: onAbrirDesarrollos,
         },
         {
             titulo: 'Pendientes del cliente',
             descripcion: 'Controlar información, archivos y aprobaciones solicitadas',
-            icono: '📨',
+            icono: Mail,
+            color: '#f59e0b',
             accion: onAbrirPendientesCliente,
         },
         {
             titulo: 'Responsables y equipos',
             descripcion: 'Administrar personas o grupos asignados a cada desarrollo',
-            icono: '👥',
+            icono: Users,
+            color: '#06b6d4',
             accion: onAbrirResponsables,
         },
         {
             titulo: 'Proyectos entregados',
             descripcion: 'Consultar el historial de aplicaciones y sistemas finalizados',
-            icono: '🏁',
+            icono: Flag,
+            color: '#14b8a6',
             accion: onAbrirEntregados,
         },
     ];
@@ -220,7 +241,8 @@ export default function DesarrolloSoftwareDashboardPageInterno({
 
             <header style={styles.header}>
                 <button type="button" style={styles.primaryButton} onClick={onCrearSolicitud}>
-                    + Nueva solicitud
+                    <Plus size={18} strokeWidth={2.4} aria-hidden="true" />
+                    Nueva solicitud
                 </button>
             </header>
 
@@ -237,31 +259,41 @@ export default function DesarrolloSoftwareDashboardPageInterno({
             )}
 
             <section style={styles.statsGrid}>
-                {stats.map((item) => (
-                    <div key={item.titulo} style={styles.statCard}>
-                        <div style={{ ...styles.iconBox, boxShadow: `0 0 18px ${item.color}55` }}>
-                            <span>{item.icono}</span>
-                        </div>
+                {stats.map((item) => {
+                    const Icono = item.icono;
 
-                        <div>
-                            <p style={styles.statTitle}>{item.titulo}</p>
-                            <h2 style={{ ...styles.statValue, color: item.color }}>{item.valor}</h2>
+                    return (
+                        <div key={item.titulo} style={styles.statCard}>
+                            <div style={{ ...styles.iconBox, color: item.color, boxShadow: `0 0 18px ${item.color}45` }}>
+                                <Icono size={22} strokeWidth={2.2} aria-hidden="true" />
+                            </div>
+
+                            <div>
+                                <p style={styles.statTitle}>{item.titulo}</p>
+                                <h2 style={{ ...styles.statValue, color: item.color }}>{item.valor}</h2>
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </section>
 
             <section style={styles.section}>
                 <h2 style={styles.sectionTitle}>Accesos rápidos</h2>
 
                 <div style={styles.accessGrid}>
-                    {accesos.map((item) => (
-                        <button key={item.titulo} type="button" style={styles.accessCard} onClick={item.accion}>
-                            <div style={styles.accessIcon}>{item.icono}</div>
-                            <h3 style={styles.accessTitle}>{item.titulo}</h3>
-                            <p style={styles.accessDescription}>{item.descripcion}</p>
-                        </button>
-                    ))}
+                    {accesos.map((item) => {
+                        const Icono = item.icono;
+
+                        return (
+                            <button key={item.titulo} type="button" style={styles.accessCard} onClick={item.accion}>
+                                <div style={{ ...styles.accessIcon, color: item.color, background: `${item.color}18`, border: `1px solid ${item.color}30` }}>
+                                    <Icono size={27} strokeWidth={2.2} aria-hidden="true" />
+                                </div>
+                                <h3 style={styles.accessTitle}>{item.titulo}</h3>
+                                <p style={styles.accessDescription}>{item.descripcion}</p>
+                            </button>
+                        );
+                    })}
                 </div>
             </section>
 
@@ -279,11 +311,14 @@ export default function DesarrolloSoftwareDashboardPageInterno({
 
                 {!cargando && !error && proyectosRecientes.length === 0 && (
                     <div style={styles.emptyBox}>
-                        <span style={styles.emptyIcon}>🧩</span>
+                        <div style={styles.emptyIcon}>
+                            <Blocks size={34} strokeWidth={2} aria-hidden="true" />
+                        </div>
                         <h3 style={styles.emptyTitle}>Todavía no hay desarrollos registrados</h3>
                         <p style={styles.emptyText}>Crea la primera solicitud para comenzar su seguimiento.</p>
                         <button type="button" style={styles.primaryButton} onClick={onCrearSolicitud}>
-                            + Crear primera solicitud
+                            <Plus size={18} strokeWidth={2.4} aria-hidden="true" />
+                            Crear primera solicitud
                         </button>
                     </div>
                 )}
@@ -339,7 +374,8 @@ export default function DesarrolloSoftwareDashboardPageInterno({
                                     style={styles.openProjectButton}
                                     onClick={() => onAbrirProyecto?.(proyecto.id)}
                                 >
-                                    Ver seguimiento →
+                                    Ver seguimiento
+                                    <ArrowRight size={17} strokeWidth={2.2} aria-hidden="true" />
                                 </button>
                             </article>
                         );
@@ -393,6 +429,10 @@ const styles: Record<string, CSSProperties> = {
         fontSize: 15,
     },
     primaryButton: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
         background: 'linear-gradient(135deg, #0284c7, #2563eb)',
         color: '#fff',
         border: 'none',
@@ -431,39 +471,42 @@ const styles: Record<string, CSSProperties> = {
     },
     statsGrid: {
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: 18,
+        gridTemplateColumns: 'repeat(6, minmax(145px, 1fr))',
+        gap: 10,
         marginBottom: 32,
+        overflowX: 'auto',
+        paddingBottom: 4,
     },
     statCard: {
         background: 'rgba(15,23,42,0.9)',
         border: '1px solid rgba(148,163,184,0.18)',
-        borderRadius: 18,
-        padding: 20,
+        borderRadius: 16,
+        padding: 13,
         display: 'flex',
-        gap: 16,
+        gap: 10,
         alignItems: 'center',
         boxShadow: '0 15px 35px rgba(0,0,0,0.25)',
+        minWidth: 0,
     },
     iconBox: {
-        width: 52,
-        height: 52,
+        width: 40,
+        height: 40,
         flexShrink: 0,
-        borderRadius: 16,
+        borderRadius: 12,
         background: '#020617',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: 24,
     },
     statTitle: {
         margin: 0,
         color: '#94a3b8',
-        fontSize: 14,
+        fontSize: 12,
+        lineHeight: 1.25,
     },
     statValue: {
         margin: '4px 0 0',
-        fontSize: 30,
+        fontSize: 24,
         fontWeight: 800,
     },
     section: {
@@ -497,7 +540,12 @@ const styles: Record<string, CSSProperties> = {
         boxShadow: '0 15px 35px rgba(0,0,0,0.25)',
     },
     accessIcon: {
-        fontSize: 34,
+        width: 50,
+        height: 50,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 15,
         marginBottom: 14,
     },
     accessTitle: {
@@ -544,9 +592,16 @@ const styles: Record<string, CSSProperties> = {
         textAlign: 'center',
     },
     emptyIcon: {
-        display: 'block',
-        fontSize: 40,
-        marginBottom: 10,
+        width: 58,
+        height: 58,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        margin: '0 auto 12px',
+        borderRadius: 18,
+        color: '#a855f7',
+        background: 'rgba(168,85,247,0.12)',
+        border: '1px solid rgba(168,85,247,0.22)',
     },
     emptyTitle: {
         margin: 0,
@@ -651,6 +706,10 @@ const styles: Record<string, CSSProperties> = {
     },
     openProjectButton: {
         width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 7,
         marginTop: 18,
         padding: '10px 14px',
         borderRadius: 11,

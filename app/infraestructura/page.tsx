@@ -1,21 +1,36 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { createElement, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { API_BASE, getToken } from '@/src/lib/api';
+import { API_BASE } from '@/src/lib/api';
+import {
+    Antenna,
+    ArrowRight,
+    Boxes,
+    Cable,
+    ChartNoAxesCombined,
+    CircleOff,
+    HouseWifi,
+    Link2,
+    RadioTower,
+    RefreshCw,
+    Siren,
+    Wifi,
+    type LucideIcon,
+} from 'lucide-react';
 
 
 type StatItem = {
     title: string;
     value: string;
-    icon: string;
+    icon: LucideIcon;
     color: string;
 };
 
 type ModuleItem = {
     title: string;
     desc: string;
-    icon: string;
+    icon: LucideIcon;
     href: string;
     color: string;
 };
@@ -24,73 +39,73 @@ const modules: ModuleItem[] = [
     {
         title: 'Torres WISP',
         desc: 'Registrar y administrar torres inalámbricas.',
-        icon: '🗼',
+        icon: RadioTower,
         href: '/infraestructura/torres-wisp',
-        color: 'bg-orange-600',
+        color: '#f97316',
     },
 
     {
         title: 'Equipos Wireless',
         desc: 'Administrar equipos Ubiquiti, TP-Link, enlaces y CPE.',
-        icon: '📡',
+        icon: Antenna,
         href: '/wireless/equipos',
-        color: 'bg-sky-600',
+        color: '#0ea5e9',
     },
     {
         title: 'Sectoriales WISP',
         desc: 'Gestionar sectoriales, SSID, frecuencia e IP.',
-        icon: '📶',
+        icon: Wifi,
         href: '/wireless/sectoriales',
-        color: 'bg-cyan-600',
+        color: '#06b6d4',
     },
     {
         title: 'Enlaces Wireless',
         desc: 'Monitorear enlaces punto a punto y backbone.',
-        icon: '🔗',
+        icon: Link2,
         href: '/wireless/enlaces',
-        color: 'bg-violet-600',
+        color: '#8b5cf6',
     },
     {
         title: 'CPE Clientes',
         desc: 'Gestionar LiteBeam, NanoBeam y equipos de abonados.',
-        icon: '🏠',
+        icon: HouseWifi,
         href: '/wireless/cpe-clientes',
-        color: 'bg-blue-600',
+        color: '#2563eb',
     },
     {
         title: 'Monitoreo Wireless',
         desc: 'Ver señal, CCQ, tráfico y estado de los equipos.',
-        icon: '📊',
+        icon: ChartNoAxesCombined,
         href: '/wireless/monitoreo',
-        color: 'bg-green-600',
+        color: '#16a34a',
     },
     {
         title: 'Equipos Offline',
         desc: 'Visualizar equipos sin respuesta o fuera de línea.',
-        icon: '🔴',
+        icon: CircleOff,
         href: '/wireless/offline',
-        color: 'bg-red-600',
+        color: '#dc2626',
     },
     {
         title: 'Alertas Wireless',
         desc: 'Gestionar alertas de señal, CCQ y disponibilidad.',
-        icon: '🚨',
+        icon: Siren,
         href: '/wireless/alertas',
-        color: 'bg-pink-600',
+        color: '#db2777',
     },
     {
         title: 'Nodos Fibra',
         desc: 'Administrar nodos principales de fibra óptica.',
-        icon: '🔌',
+        icon: Cable,
         href: '/infraestructura/nodos-fibra',
-        color: 'bg-emerald-600',
+        color: '#059669',
     },
     {
         title: 'NAP / Splitter',
         desc: 'Controlar cajas NAP, splitters y distribución GPON.',
-        icon: '📦',
+        icon: Boxes,
         href: '/infraestructura/nap-splitter',
-        color: 'bg-violet-600',
+        color: '#7c3aed',
     },
 
 ];
@@ -128,7 +143,7 @@ export default function InfraestructuraPage({
     const [totalNap, setTotalNap] = useState(0);
     const [totalNatRedes, setTotalNatRedes] = useState(0);
     const [loading, setLoading] = useState(true);
-
+    const [totalEquiposWireless, setTotalEquiposWireless] = useState(0);
 
     const cargarResumenInfraestructura = async () => {
         try {
@@ -138,23 +153,27 @@ export default function InfraestructuraPage({
                 resTorres,
                 resSectoriales,
                 resNodosFibra,
-                resNapSplitter
+                resNapSplitter,
+                resEquiposWireless
             ] = await Promise.all([
                 fetch(`${API_BASE}/torres-wisp`),
                 fetch(`${API_BASE}/sectoriales-wisp`),
                 fetch(`${API_BASE}/nodos-fibra`),
                 fetch(`${API_BASE}/nap-splitter`),
+                fetch(`${API_BASE}/wireless/equipos`),
             ]);
 
             const torresData = await resTorres.json();
             const sectorialesData = await resSectoriales.json();
             const nodosFibraData = await resNodosFibra.json();
             const napSplitterData = await resNapSplitter.json();
+            const equiposWirelessData = await resEquiposWireless.json();
 
             setTotalTorres(torresData.torres?.length || 0);
             setTotalSectoriales(sectorialesData.sectoriales?.length || 0);
             setTotalNodosFibra(nodosFibraData.nodos?.length || 0);
             setTotalNap(napSplitterData.naps?.length || 0);
+            setTotalEquiposWireless(equiposWirelessData.equipos?.length || 0);
 
             // Este queda en 0 hasta crear NAT / Redes
             setTotalNatRedes(0);
@@ -176,31 +195,31 @@ export default function InfraestructuraPage({
         {
             title: 'Total torres',
             value: String(totalTorres),
-            icon: '🗼',
+            icon: RadioTower,
             color: '#f97316',
         },
         {
             title: 'Total sectoriales',
             value: String(totalSectoriales),
-            icon: '📶',
+            icon: Wifi,
             color: '#06b6d4',
         },
         {
             title: 'Equipos Wireless',
-            value: String(),
-            icon: '📡',
+            value: loading ? '...' : String(totalEquiposWireless),
+            icon: Antenna,
             color: '#06b6d4',
         },
         {
             title: 'Nodos de fibra',
             value: String(totalNodosFibra),
-            icon: '🔌',
+            icon: Cable,
             color: '#10b981',
         },
         {
             title: 'NAP / Splitter',
             value: String(totalNap),
-            icon: '📦',
+            icon: Boxes,
             color: '#8b5cf6',
         },
 
@@ -218,6 +237,10 @@ export default function InfraestructuraPage({
                     style={styles.refreshButton}
                     onClick={cargarResumenInfraestructura}
                 >
+                    <RefreshCw
+                        size={18}
+                        strokeWidth={2.4}
+                    />
                     {loading ? 'Actualizando...' : 'Actualizar resumen'}
                 </button>
             </section>
@@ -228,11 +251,16 @@ export default function InfraestructuraPage({
                         <div
                             style={{
                                 ...styles.statIcon,
-                                background: `${stat.color}22`,
+                                color: stat.color,
+                                background: `linear-gradient(135deg, ${stat.color}2e, ${stat.color}0d)`,
                                 borderColor: `${stat.color}66`,
+                                boxShadow: `0 10px 28px ${stat.color}22`,
                             }}
                         >
-                            {stat.icon}
+                            {createElement(stat.icon, {
+                                size: 27,
+                                strokeWidth: 2.2,
+                            })}
                         </div>
 
                         <div>
@@ -298,10 +326,23 @@ export default function InfraestructuraPage({
                         }}
                     >
                         <div style={styles.moduleTop}>
-                            <div style={styles.moduleIcon}>{mod.icon}</div>
+                            <div
+                                style={{
+                                    ...styles.moduleIcon,
+                                    color: mod.color,
+                                    background: `linear-gradient(135deg, ${mod.color}30, ${mod.color}0d)`,
+                                    borderColor: `${mod.color}55`,
+                                    boxShadow: `0 10px 30px ${mod.color}20`,
+                                }}
+                            >
+                                {createElement(mod.icon, {
+                                    size: 30,
+                                    strokeWidth: 2.1,
+                                })}
+                            </div>
 
                             <div style={styles.moduleArrow}>
-                                →
+                                <ArrowRight size={19} strokeWidth={2.5} />
                             </div>
                         </div>
 
@@ -363,6 +404,10 @@ const styles: { [key: string]: React.CSSProperties } = {
         fontWeight: 900,
         cursor: 'pointer',
         boxShadow: '0 14px 34px rgba(37,99,235,0.28)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
     },
     statsGrid: {
         display: 'grid',
@@ -388,7 +433,6 @@ const styles: { [key: string]: React.CSSProperties } = {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: '25px',
     },
     statTitle: {
         margin: 0,
@@ -443,12 +487,10 @@ const styles: { [key: string]: React.CSSProperties } = {
         width: '58px',
         height: '58px',
         borderRadius: '18px',
-        background: 'rgba(14,165,233,0.13)',
         border: '1px solid rgba(34,211,238,0.22)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: '30px',
     },
     moduleArrow: {
         width: '36px',

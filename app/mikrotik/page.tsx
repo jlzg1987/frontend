@@ -1,8 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { createElement, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { API_BASE } from '@/src/lib/api';
+import {
+    ChartNoAxesCombined,
+    CircleCheck,
+    CircleX,
+    Globe2,
+    Network,
+    RadioTower,
+    ShieldAlert,
+    ShieldCheck,
+    UserRoundX,
+    UsersRound,
+    Wrench,
+    type LucideIcon,
+} from 'lucide-react';
 
 
 
@@ -162,78 +176,94 @@ export default function MikroTikDashboardPageInterno({
         cargarResumenMikrotik();
     }, []);
 
-    const stats = [
-        {
-            titulo: 'Nodos registrados',
-            valor: loadingStats ? '...' : String(resumen.total),
-            icono: '📡',
-            color: '#38bdf8'
-        },
-        {
-            titulo: 'Nodos en línea',
-            valor: loadingStats ? '...' : String(resumen.enLinea),
-            icono: '🟢',
-            color: '#22c55e'
-        },
-        {
-            titulo: 'Nodos inactivos',
-            valor: loadingStats ? '...' : String(resumen.inactivos),
-            icono: '🔴',
-            color: '#ef4444'
-        },
-        {
-            titulo: 'Agent / WireGuard',
-            valor: loadingStats ? '...' : String(resumen.wireguard),
-            icono: '🔐',
-            color: '#a855f7'
-        },
-        {
-            titulo: 'API pública',
-            valor: loadingStats ? '...' : String(resumen.apiPublica),
-            icono: '🌐',
-            color: '#f59e0b'
-        },
-        {
-            titulo: 'Clientes MOROSOS',
-            valor: '0',
-            icono: '🚫',
-            color: '#f97316'
-        },
-    ];
+    const stats: Array<{
+        titulo: string;
+        valor: string;
+        icono: LucideIcon;
+        color: string;
+    }> = [
+            {
+                titulo: 'Nodos registrados',
+                valor: loadingStats ? '...' : String(resumen.total),
+                icono: RadioTower,
+                color: '#38bdf8'
+            },
+            {
+                titulo: 'Nodos en línea',
+                valor: loadingStats ? '...' : String(resumen.enLinea),
+                icono: CircleCheck,
+                color: '#22c55e'
+            },
+            {
+                titulo: 'Nodos inactivos',
+                valor: loadingStats ? '...' : String(resumen.inactivos),
+                icono: CircleX,
+                color: '#ef4444'
+            },
+            {
+                titulo: 'Agent / WireGuard',
+                valor: loadingStats ? '...' : String(resumen.wireguard),
+                icono: ShieldCheck,
+                color: '#a855f7'
+            },
+            {
+                titulo: 'API pública',
+                valor: loadingStats ? '...' : String(resumen.apiPublica),
+                icono: Globe2,
+                color: '#f59e0b'
+            },
+            {
+                titulo: 'Clientes MOROSOS',
+                valor: '0',
+                icono: UserRoundX,
+                color: '#f97316'
+            },
+        ];
 
-    const accesos = [
-        {
-            titulo: 'Administrar nodos',
-            descripcion: 'Registrar, editar y probar conexión MikroTik',
-            icono: '🛠️',
-            ruta: '/mikrotik/routers',
-        },
-        {
-            titulo: 'Cortes de clientes',
-            descripcion: 'Cortar, restaurar y consultar estado por cliente',
-            icono: '👥',
-            ruta: '/mikrotik/clientes',
-        },
-        {
-            titulo: 'Monitoreo de nodos',
-            descripcion: 'CPU, RAM, uptime y estado general',
-            icono: '📊',
-            ruta: '/mikrotik/monitoreo',
-        },
-        {
-            titulo: 'IP / Firewall',
-            descripcion: 'Listas, reglas y bloqueo automático',
-            icono: '🧱',
-            ruta: '/mikrotik/firewall',
-        },
-        {
-            titulo: 'Redes internas',
-            descripcion: 'Redes LAN por nodo y rutas internas',
-            icono: '🌍',
-            ruta: '/mikrotik/redes',
-        },
+    const accesos: Array<{
+        titulo: string;
+        descripcion: string;
+        icono: LucideIcon;
+        color: string;
+        ruta: string;
+    }> = [
+            {
+                titulo: 'Administrar nodos',
+                descripcion: 'Registrar, editar y probar conexión MikroTik',
+                icono: Wrench,
+                color: '#38bdf8',
+                ruta: '/mikrotik/routers',
+            },
+            {
+                titulo: 'Cortes de clientes',
+                descripcion: 'Cortar, restaurar y consultar estado por cliente',
+                icono: UsersRound,
+                color: '#a78bfa',
+                ruta: '/mikrotik/clientes',
+            },
+            {
+                titulo: 'Monitoreo de nodos',
+                descripcion: 'CPU, RAM, uptime y estado general',
+                icono: ChartNoAxesCombined,
+                color: '#22c55e',
+                ruta: '/mikrotik/monitoreo',
+            },
+            {
+                titulo: 'IP / Firewall',
+                descripcion: 'Listas, reglas y bloqueo automático',
+                icono: ShieldAlert,
+                color: '#f97316',
+                ruta: '/mikrotik/firewall',
+            },
+            {
+                titulo: 'Redes internas',
+                descripcion: 'Redes LAN por nodo y rutas internas',
+                icono: Network,
+                color: '#06b6d4',
+                ruta: '/mikrotik/redes',
+            },
 
-    ];
+        ];
 
     return (
         <main style={styles.page}>
@@ -241,8 +271,19 @@ export default function MikroTikDashboardPageInterno({
             <section style={styles.statsGrid}>
                 {stats.map((item, index) => (
                     <div key={index} style={styles.statCard}>
-                        <div style={{ ...styles.iconBox, boxShadow: `0 0 18px ${item.color}` }}>
-                            <span>{item.icono}</span>
+                        <div
+                            style={{
+                                ...styles.iconBox,
+                                color: item.color,
+                                background: `linear-gradient(135deg, ${item.color}24, ${item.color}0d)`,
+                                border: `1px solid ${item.color}40`,
+                                boxShadow: `0 0 18px ${item.color}35`,
+                            }}
+                        >
+                            {createElement(item.icono, {
+                                size: 26,
+                                strokeWidth: 2.2,
+                            })}
                         </div>
 
                         <div>
@@ -290,7 +331,20 @@ export default function MikroTikDashboardPageInterno({
                                 router.push(item.ruta);
                             }}
                         >
-                            <div style={styles.accessIcon}>{item.icono}</div>
+                            <div
+                                style={{
+                                    ...styles.accessIcon,
+                                    color: item.color,
+                                    background: `linear-gradient(135deg, ${item.color}24, ${item.color}0d)`,
+                                    border: `1px solid ${item.color}40`,
+                                    boxShadow: `0 8px 24px ${item.color}20`,
+                                }}
+                            >
+                                {createElement(item.icono, {
+                                    size: 28,
+                                    strokeWidth: 2.1,
+                                })}
+                            </div>
                             <h3 style={styles.accessTitle}>{item.titulo}</h3>
                             <p style={styles.accessDescription}>{item.descripcion}</p>
                         </button>
@@ -373,11 +427,9 @@ const styles: { [key: string]: React.CSSProperties } = {
         width: 52,
         height: 52,
         borderRadius: 16,
-        background: '#020617',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: 24,
     },
     statTitle: {
         margin: 0,
@@ -415,7 +467,12 @@ const styles: { [key: string]: React.CSSProperties } = {
         boxShadow: '0 15px 35px rgba(0,0,0,0.25)',
     },
     accessIcon: {
-        fontSize: 34,
+        width: 50,
+        height: 50,
+        borderRadius: 15,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         marginBottom: 14,
     },
     accessTitle: {

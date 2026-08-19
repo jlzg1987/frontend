@@ -2,6 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { API_BASE, getToken } from "@/src/lib/api";
+import {
+    Activity,
+    ArrowDownToLine,
+    ArrowUpFromLine,
+    CheckCircle2,
+    Gauge,
+    Globe2,
+    LoaderCircle,
+    RefreshCw,
+    Search,
+    Users,
+    type LucideIcon,
+} from "lucide-react";
 
 type PruebaVelocidad = {
     id: number;
@@ -85,54 +98,109 @@ export default function SpeedTestAnalyticsPage() {
     }
 
     return (
-        <main className="min-h-screen bg-slate-950 p-6 text-white">
+        <main
+            className="min-h-screen p-6 text-white"
+            style={{
+                background:
+                    "radial-gradient(circle at top left, rgba(6,182,212,0.13), transparent 30%), radial-gradient(circle at bottom right, rgba(37,99,235,0.10), transparent 34%), #020617",
+            }}
+        >
             <div className="mx-auto max-w-7xl">
                 <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div>
-                        <h1 className="text-3xl font-black md:text-4xl">
-                            🚀 SpeedTest Analytics
-                        </h1>
-                        <p className="mt-2 text-slate-400">
-                            Estadísticas del servidor de velocidad Netcomprf.
-                        </p>
+                    <div className="flex items-center gap-4">
+                        <div
+                            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl"
+                            style={{
+                                background: "linear-gradient(135deg, #06b6d4, #2563eb)",
+                                boxShadow: "0 12px 30px rgba(6,182,212,0.28)",
+                            }}
+                        >
+                            <Gauge className="h-8 w-8 text-white" strokeWidth={2.2} />
+                        </div>
+
+                        <div>
+                            <h1
+                                className="text-3xl font-black md:text-4xl"
+                                style={{
+                                    background: "linear-gradient(90deg, #ffffff, #a5f3fc, #60a5fa)",
+                                    WebkitBackgroundClip: "text",
+                                    WebkitTextFillColor: "transparent",
+                                }}
+                            >
+                                SpeedTest Analytics
+                            </h1>
+                            <p className="mt-2 text-slate-400">
+                                Estadísticas del servidor de velocidad Netcomprf.
+                            </p>
+                        </div>
                     </div>
 
                     <button
+                        type="button"
                         onClick={cargarDatos}
-                        className="rounded-xl bg-cyan-400 px-5 py-3 font-bold text-slate-950 transition hover:bg-cyan-300"
+                        disabled={loading}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 font-bold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                        style={{
+                            background: "linear-gradient(90deg, #06b6d4, #2563eb)",
+                            boxShadow: "0 10px 25px rgba(6,182,212,0.22)",
+                        }}
                     >
+                        <RefreshCw className={`h-5 w-5 ${loading ? "animate-spin" : ""}`} />
                         Actualizar
                     </button>
                 </div>
 
                 {loading ? (
-                    <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center text-slate-300">
-                        Cargando estadísticas...
+                    <div
+                        className="flex min-h-52 flex-col items-center justify-center rounded-3xl border p-8 text-center text-slate-300"
+                        style={{
+                            borderColor: "rgba(34,211,238,0.18)",
+                            background: "linear-gradient(145deg, rgba(15,23,42,0.96), rgba(8,15,30,0.96))",
+                        }}
+                    >
+                        <LoaderCircle className="mb-3 h-9 w-9 animate-spin text-cyan-400" />
+                        <span className="font-semibold">Cargando estadísticas...</span>
                     </div>
                 ) : (
                     <>
                         <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-                            <Card titulo="Total pruebas" valor={estadisticas?.totalPruebas || 0} icono="📊" />
-                            <Card titulo="Prom. descarga" valor={`${formatoNumero(estadisticas?.promedioDescarga)} Mbps`} icono="⬇️" />
-                            <Card titulo="Prom. subida" valor={`${formatoNumero(estadisticas?.promedioSubida)} Mbps`} icono="⬆️" />
-                            <Card titulo="Prom. ping" valor={`${formatoNumero(estadisticas?.promedioPing)} ms`} icono="📡" />
-                            <Card titulo="Clientes Netcomprf" valor={estadisticas?.clientesNetcomp || 0} icono="✅" />
-                            <Card titulo="Usuarios externos" valor={estadisticas?.externos || 0} icono="🌎" />
+                            <Card titulo="Total pruebas" valor={estadisticas?.totalPruebas || 0} icono={Activity} color="#22d3ee" colorFinal="#2563eb" />
+                            <Card titulo="Prom. descarga" valor={`${formatoNumero(estadisticas?.promedioDescarga)} Mbps`} icono={ArrowDownToLine} color="#10b981" colorFinal="#22c55e" />
+                            <Card titulo="Prom. subida" valor={`${formatoNumero(estadisticas?.promedioSubida)} Mbps`} icono={ArrowUpFromLine} color="#38bdf8" colorFinal="#6366f1" />
+                            <Card titulo="Prom. ping" valor={`${formatoNumero(estadisticas?.promedioPing)} ms`} icono={Gauge} color="#f59e0b" colorFinal="#f97316" />
+                            <Card titulo="Clientes Netcomprf" valor={estadisticas?.clientesNetcomp || 0} icono={CheckCircle2} color="#34d399" colorFinal="#059669" />
+                            <Card titulo="Usuarios externos" valor={estadisticas?.externos || 0} icono={Globe2} color="#a78bfa" colorFinal="#7c3aed" />
                         </section>
 
-                        <section className="mt-8 rounded-3xl border border-slate-800 bg-slate-900 p-5">
+                        <section
+                            className="mt-8 rounded-3xl border p-5"
+                            style={{
+                                borderColor: "rgba(34,211,238,0.16)",
+                                background: "linear-gradient(145deg, rgba(15,23,42,0.98), rgba(8,15,30,0.97))",
+                                boxShadow: "0 22px 55px rgba(2,6,23,0.38)",
+                            }}
+                        >
                             <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                                <h2 className="text-xl font-black">
-                                    Últimas pruebas realizadas
-                                </h2>
+                                <div className="flex items-center gap-3">
+                                    <div
+                                        className="flex h-10 w-10 items-center justify-center rounded-xl"
+                                        style={{ background: "linear-gradient(135deg, #06b6d4, #2563eb)" }}
+                                    >
+                                        <Users className="h-5 w-5 text-white" />
+                                    </div>
+                                    <h2 className="text-xl font-black">Últimas pruebas realizadas</h2>
+                                </div>
 
                                 <div className="flex flex-col gap-3 md:flex-row">
-                                    <input
-                                        value={busqueda}
-                                        onChange={(e) => setBusqueda(e.target.value)}
-                                        placeholder="Buscar IP, proveedor o navegador..."
-                                        className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-cyan-400 md:w-80"
-                                    />
+                                    <div className="relative w-full md:w-80">
+                                        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                                        <input
+                                            value={busqueda}
+                                            onChange={(e) => setBusqueda(e.target.value)}
+                                            placeholder="Buscar IP, proveedor o navegador..."
+                                            className="w-full rounded-xl border border-slate-700 bg-slate-950 py-3 pl-11 pr-4 text-sm outline-none transition focus:border-cyan-400"
+                                        />
+                                    </div>
 
                                     <select
                                         value={filtro}
@@ -232,16 +300,37 @@ function Card({
     titulo,
     valor,
     icono,
+    color,
+    colorFinal,
 }: {
     titulo: string;
     valor: string | number;
-    icono: string;
+    icono: LucideIcon;
+    color: string;
+    colorFinal: string;
 }) {
+    const Icono = icono;
+
     return (
-        <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
-            <div className="mb-3 text-3xl">{icono}</div>
-            <p className="text-sm text-slate-400">{titulo}</p>
-            <h3 className="mt-2 text-2xl font-black text-white">{valor}</h3>
+        <div
+            className="group min-w-0 rounded-3xl border p-4 transition duration-300 hover:-translate-y-1"
+            style={{
+                borderColor: `${color}35`,
+                background: `radial-gradient(circle at top right, ${color}22, transparent 45%), linear-gradient(145deg, rgba(15,23,42,0.98), rgba(8,15,30,0.96))`,
+                boxShadow: `0 16px 38px ${color}12`,
+            }}
+        >
+            <div
+                className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl transition duration-300 group-hover:scale-110"
+                style={{
+                    background: `linear-gradient(135deg, ${color}, ${colorFinal})`,
+                    boxShadow: `0 10px 24px ${color}35`,
+                }}
+            >
+                <Icono className="h-5 w-5 text-white" strokeWidth={2.3} />
+            </div>
+            <p className="truncate text-xs font-semibold uppercase tracking-wide text-slate-400">{titulo}</p>
+            <h3 className="mt-2 truncate text-xl font-black text-white" title={String(valor)}>{valor}</h3>
         </div>
     );
 }
