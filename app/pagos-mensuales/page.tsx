@@ -25,8 +25,14 @@ type Mensualidad = {
     nombreRouter: string;
 };
 
-export default function MensualidadesPage() {
+type FacturacionInternaProps = {
+    onAbrirFacturasinternas: () => void;
+};
+export default function MensualidadesPage({
+    onAbrirFacturasinternas,
+}: FacturacionInternaProps) {
     const [mensualidades, setMensualidades] = useState<Mensualidad[]>([]);
+    const [filtroEstado, setFiltroEstado] = useState<'TODAS' | Mensualidad['estado']>('TODAS');
     const [loading, setLoading] = useState(false);
     const [mensaje, setMensaje] = useState('');
     const [pagoSeleccionado, setPagoSeleccionado] = useState<Mensualidad | null>(null);
@@ -53,22 +59,65 @@ export default function MensualidadesPage() {
         cargarMensualidades();
     }, []);
 
-    async function requestApi(url: string, options: RequestInit = {}) {
+    async function requestApi(
+        url: string,
+        options: RequestInit = {}
+    ) {
         const token = getToken();
+        const direccion = `${API_BASE}${url}`;
 
-        const res = await fetch(`${API_BASE}${url}`, {
+        console.log("Consultando API:", direccion);
+
+        if (!token) {
+            throw new Error(
+                "No se encontró el token de autenticación"
+            );
+        }
+
+        const res = await fetch(direccion, {
             ...options,
             headers: {
-                'Content-Type': 'application/json',
+                "Content-Type": "application/json",
+                Accept: "application/json",
                 Authorization: `Bearer ${token}`,
                 ...(options.headers || {}),
             },
         });
 
-        const data = await res.json();
+        const contentType =
+            res.headers.get("content-type") || "";
+
+        const texto = await res.text();
+
+        if (!contentType.includes("application/json")) {
+            console.error("Respuesta no JSON:", {
+                direccion,
+                estado: res.status,
+                contentType,
+                respuesta: texto.slice(0, 300),
+            });
+
+            throw new Error(
+                `La ruta ${direccion} respondió HTTP ${res.status} y no devolvió JSON`
+            );
+        }
+
+        let data: any;
+
+        try {
+            data = texto ? JSON.parse(texto) : {};
+        } catch {
+            throw new Error(
+                "El backend devolvió un JSON inválido"
+            );
+        }
 
         if (!res.ok || data.ok === false) {
-            throw new Error(data.message || 'Error en la petición');
+            throw new Error(
+                data.mensaje ||
+                data.message ||
+                `Error HTTP ${res.status}`
+            );
         }
 
         return data;
@@ -77,13 +126,22 @@ export default function MensualidadesPage() {
     async function cargarMensualidades() {
         try {
             setLoading(true);
-            setMensaje('');
+            setMensaje("");
 
-            const data = await requestApi('/mensualidades/pendientes');
+            const data = await requestApi(
+                "/mensualidades/todas"
+            );
 
-            setMensualidades(data.datos || []);
+            const registros = Array.isArray(data.datos)
+                ? data.datos
+                : [];
+
+            setMensualidades(registros);
         } catch (error: any) {
-            setMensaje(error.message);
+            setMensaje(
+                error.message ||
+                "Error cargando mensualidades"
+            );
         } finally {
             setLoading(false);
         }
@@ -106,15 +164,14 @@ export default function MensualidadesPage() {
         }
     }
 
-    async function marcarVencidas() {
+    async function marcarVencida(mensualidadId: string) {
         try {
             setLoading(true);
-            const data = await requestApi('/mensualidades/marcar-vencidas', {
-                method: 'POST',
-                body: JSON.stringify({}),
+            const data = await requestApi(`/mensualidades/${mensualidadId}/marcar-vencida`, {
+                method: 'PATCH',
             });
 
-            setMensaje(`Mensualidades vencidas: ${data.vencidas}`);
+            setMensaje(data.message || 'Mensualidad marcada como vencida');
             await cargarMensualidades();
         } catch (error: any) {
             setMensaje(error.message);
@@ -123,48 +180,113 @@ export default function MensualidadesPage() {
         }
     }
 
-    async function procesarCortes() {
+    async function procesarCorte(mensualidadId: string) {
         try {
             setLoading(true);
-            const data = await requestApi('/mensualidades/procesar-cortes', {
-                method: 'POST',
-                body: JSON.stringify({}),
+            const data = await requestApi(`/mensualidades/${mensualidadId}/procesar-corte`, {
+                method: 'PATCH',
             });
 
-            setMensaje(`Cortadas: ${data.cortadas} | Errores: ${data.errores}`);
+            setMensaje(data.message || 'Servicio cortado correctamente');
             await cargarMensualidades();
         } catch (error: any) {
             setMensaje(error.message);
         } finally {
             setLoading(false);
         }
+    }
+
+    function obtenerFormaPagoId(forma: string): number {
+        const formasPago: Record<string, number> = {
+            EFECTIVO: 7,
+            TRANSFERENCIA: 8,
+            DEPOSITO: 9,
+            CHEQUE: 8,
+            DATAFAST: 10,
+            LINK_PAGO_SEGURO: 11,
+            CREDITO: 12,
+        };
+
+        return formasPago[forma] || 7;
     }
 
     async function registrarPago() {
-        if (!pagoSeleccionado) return;
+        if (!pagoSeleccionado || loading) return;
+
+        const valor = Number(
+            valorPagado || pagoSeleccionado.valorMensual
+        );
+
+        if (!Number.isFinite(valor) || valor <= 0) {
+            setMensaje("Ingrese un valor pagado válido");
+            return;
+        }
+
+        if (
+            formaPago !== "EFECTIVO" &&
+            !referenciaPago.trim()
+        ) {
+            setMensaje(
+                "Ingrese la referencia o número del comprobante"
+            );
+            return;
+        }
 
         try {
             setLoading(true);
+            setMensaje("");
 
-            await requestApi('/mensualidades/registrar-pago', {
-                method: 'POST',
-                body: JSON.stringify({
-                    mensualidadId: pagoSeleccionado.mensualidadId,
-                    valorPagado: Number(valorPagado || pagoSeleccionado.valorMensual),
-                    referenciaPago,
-                    observacion: `Forma de pago: ${formaPago}`,
-                }),
+            const respuesta = await requestApi(
+                "/mensualidades/registrar-pago",
+                {
+                    method: "POST",
+                    body: JSON.stringify({
+                        mensualidadId:
+                            pagoSeleccionado.mensualidadId,
 
-            });
+                        valorPagado: valor,
 
-            setMensaje('Pago registrado correctamente');
+                        formaPagoId:
+                            obtenerFormaPagoId(formaPago),
+
+                        referenciaPago:
+                            referenciaPago.trim() || null,
+
+                        observacion:
+                            `Forma de pago: ${formaPago}`,
+                    }),
+                }
+            );
+
+            if (!respuesta?.ok) {
+                throw new Error(
+                    respuesta?.mensaje ||
+                    respuesta?.message ||
+                    "No se pudo registrar el pago"
+                );
+            }
+
+            setMensaje(
+                respuesta.message ||
+                "Pago registrado y factura interna generada correctamente"
+            );
+
             setPagoSeleccionado(null);
-            setValorPagado('');
-            setFormaPago('EFECTIVO');
-            setReferenciaPago('');
+            setValorPagado("");
+            setFormaPago("EFECTIVO");
+            setReferenciaPago("");
+
             await cargarMensualidades();
         } catch (error: any) {
-            setMensaje(error.message);
+            console.error(
+                "Error registrando pago:",
+                error
+            );
+
+            setMensaje(
+                error?.message ||
+                "Ocurrió un error registrando el pago"
+            );
         } finally {
             setLoading(false);
         }
@@ -177,6 +299,16 @@ export default function MensualidadesPage() {
         if (estado === 'PAGADA') return 'bg-green-500/20 text-green-300';
         return 'bg-slate-500/20 text-slate-300';
     }
+
+
+
+    const mensualidadesFiltradas = filtroEstado === 'TODAS'
+        ? mensualidades
+        : mensualidades.filter((mensualidad) => mensualidad.estado === filtroEstado);
+
+    const totalCartera = mensualidades
+        .filter((mensualidad) => ['PENDIENTE', 'VENCIDA', 'CORTADA'].includes(mensualidad.estado))
+        .reduce((total, mensualidad) => total + Number(mensualidad.valorMensual || 0), 0);
 
     async function crearMensualidadManual() {
         try {
@@ -206,12 +338,7 @@ export default function MensualidadesPage() {
     return (
         <div className="min-h-screen bg-slate-950 text-white p-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-                <div>
-                    <h1 className="text-2xl font-bold">Mensualidades y Corte Automático</h1>
-                    <p className="text-slate-400">
-                        Control de facturación mensual, mora y cortes MikroTik.
-                    </p>
-                </div>
+
 
                 <div className="flex flex-wrap gap-2">
                     <button
@@ -231,29 +358,45 @@ export default function MensualidadesPage() {
                     </button>
 
                     <button
-                        onClick={marcarVencidas}
+                        onClick={() => setFiltroEstado('TODAS')}
                         disabled={loading}
-                        className="bg-orange-600 hover:bg-orange-700 px-4 py-2 rounded-xl font-semibold disabled:opacity-50"
+                        className="bg-cyan-600 hover:bg-cyan-700 px-4 py-2 rounded-xl font-semibold disabled:opacity-50"
                     >
-                        Marcar vencidas
+                        Todos
                     </button>
 
                     <button
-                        onClick={procesarCortes}
+                        onClick={() => setFiltroEstado('PENDIENTE')}
+                        disabled={loading}
+                        className="bg-yellow-600 hover:bg-yellow-700 px-4 py-2 rounded-xl font-semibold disabled:opacity-50"
+                    >
+                        Pendientes
+                    </button>
+
+                    <button
+                        onClick={() => setFiltroEstado('PAGADA')}
+                        disabled={loading}
+                        className="bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-xl font-semibold disabled:opacity-50"
+                    >
+                        Pagados
+                    </button>
+
+                    <button
+                        onClick={() => setFiltroEstado('CORTADA')}
                         disabled={loading}
                         className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-xl font-semibold disabled:opacity-50"
                     >
-                        Procesar cortes
-                    </button>
-
-                    <button
-                        onClick={cargarMensualidades}
-                        disabled={loading}
-                        className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-xl font-semibold disabled:opacity-50"
-                    >
-                        Recargar
+                        Cortados
                     </button>
                 </div>
+
+                <button
+                    onClick={() => onAbrirFacturasinternas()}
+                    disabled={loading}
+                    className="bg-red-400  hover:bg-red-500 px-4 py-2 rounded-xl font-semibold disabled:opacity-50"
+                >
+                    Facturación
+                </button>
             </div>
 
             {mensaje && (
@@ -262,11 +405,17 @@ export default function MensualidadesPage() {
                 </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <Card titulo="Pendientes" valor={mensualidades.filter(x => x.estado === 'PENDIENTE').length} />
-                <Card titulo="Vencidas" valor={mensualidades.filter(x => x.estado === 'VENCIDA').length} />
-                <Card titulo="Cortadas" valor={mensualidades.filter(x => x.estado === 'CORTADA').length} />
-                <Card titulo="Total cartera" valor={`$${mensualidades.reduce((a, b) => a + Number(b.valorMensual || 0), 0).toFixed(2)}`} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
+                <Card titulo="Todas" valor={mensualidades.length} activo={filtroEstado === 'TODAS'} onClick={() => setFiltroEstado('TODAS')} />
+                <Card titulo="Pendientes" valor={mensualidades.filter(x => x.estado === 'PENDIENTE').length} activo={filtroEstado === 'PENDIENTE'} onClick={() => setFiltroEstado('PENDIENTE')} />
+                <Card titulo="Vencidas" valor={mensualidades.filter(x => x.estado === 'VENCIDA').length} activo={filtroEstado === 'VENCIDA'} onClick={() => setFiltroEstado('VENCIDA')} />
+                <Card titulo="Cortadas" valor={mensualidades.filter(x => x.estado === 'CORTADA').length} activo={filtroEstado === 'CORTADA'} onClick={() => setFiltroEstado('CORTADA')} />
+                <Card titulo="Pagadas" valor={mensualidades.filter(x => x.estado === 'PAGADA').length} activo={filtroEstado === 'PAGADA'} onClick={() => setFiltroEstado('PAGADA')} />
+            </div>
+
+            <div className="mb-6 rounded-2xl border border-slate-700 bg-slate-900 p-5">
+                <p className="text-slate-400 text-sm">Total cartera pendiente</p>
+                <h2 className="text-2xl font-bold mt-1">${totalCartera.toFixed(2)}</h2>
             </div>
 
             <div className="rounded-2xl border border-slate-700 bg-slate-900 overflow-hidden">
@@ -288,7 +437,7 @@ export default function MensualidadesPage() {
                         </thead>
 
                         <tbody>
-                            {mensualidades.map((m) => (
+                            {mensualidadesFiltradas.map((m) => (
                                 <tr key={m.mensualidadId} className="border-t border-slate-800 hover:bg-slate-800/60">
                                     <td className="p-3">
                                         <div className="font-semibold">
@@ -319,23 +468,49 @@ export default function MensualidadesPage() {
                                     </td>
 
                                     <td className="p-3">
-                                        <button
-                                            onClick={() => {
-                                                setPagoSeleccionado(m);
-                                                setValorPagado(String(m.valorMensual));
-                                            }}
-                                            className="bg-green-600 hover:bg-green-700 px-3 py-2 rounded-lg font-semibold"
-                                        >
-                                            Registrar pago
-                                        </button>
+                                        <div className="flex flex-wrap gap-2">
+                                            {m.estado === 'PENDIENTE' && (
+                                                <button
+                                                    onClick={() => marcarVencida(m.mensualidadId)}
+                                                    disabled={loading}
+                                                    className="bg-orange-600 hover:bg-orange-700 px-3 py-2 rounded-lg font-semibold disabled:opacity-50"
+                                                >
+                                                    Marcar vencida
+                                                </button>
+                                            )}
+
+                                            {(m.estado === 'PENDIENTE' || m.estado === 'VENCIDA') && (
+                                                <button
+                                                    onClick={() => procesarCorte(m.mensualidadId)}
+                                                    disabled={loading}
+                                                    className="bg-red-600 hover:bg-red-700 px-3 py-2 rounded-lg font-semibold disabled:opacity-50"
+                                                >
+                                                    Cortar
+                                                </button>
+                                            )}
+
+                                            {m.estado !== 'PAGADA' && m.estado !== 'ANULADA' ? (
+                                                <button
+                                                    onClick={() => {
+                                                        setPagoSeleccionado(m);
+                                                        setValorPagado(String(m.valorMensual));
+                                                    }}
+                                                    className="bg-green-600 hover:bg-green-700 px-3 py-2 rounded-lg font-semibold"
+                                                >
+                                                    Registrar pago
+                                                </button>
+                                            ) : (
+                                                <span className="text-slate-500">Sin acciones</span>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
 
-                            {!loading && mensualidades.length === 0 && (
+                            {!loading && mensualidadesFiltradas.length === 0 && (
                                 <tr>
                                     <td colSpan={10} className="p-6 text-center text-slate-400">
-                                        No hay mensualidades pendientes.
+                                        No hay mensualidades para el filtro seleccionado.
                                     </td>
                                 </tr>
                             )}
@@ -491,12 +666,29 @@ export default function MensualidadesPage() {
     );
 }
 
-function Card({ titulo, valor }: { titulo: string; valor: any }) {
+function Card({
+    titulo,
+    valor,
+    activo = false,
+    onClick,
+}: {
+    titulo: string;
+    valor: any;
+    activo?: boolean;
+    onClick?: () => void;
+}) {
     return (
-        <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
+        <button
+            type="button"
+            onClick={onClick}
+            className={`rounded-2xl border p-5 text-left transition ${activo
+                ? 'border-cyan-400 bg-cyan-400/10'
+                : 'border-slate-700 bg-slate-900 hover:border-slate-500'
+                }`}
+        >
             <p className="text-slate-400 text-sm">{titulo}</p>
             <h2 className="text-2xl font-bold mt-1">{valor}</h2>
-        </div>
+        </button>
     );
 }
 

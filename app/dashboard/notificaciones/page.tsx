@@ -102,36 +102,71 @@ export default function BotNotificaciones({
     const [offset, setOffset] = useState({ x: 0, y: 0 });
 
     async function cargarNotificaciones() {
+        const url = `${API_BASE}/notificaciones-sistema/resumen`;
+
         try {
             const token = getToken();
 
-            const res = await fetch(`${API_BASE}/notificaciones-sistema/resumen`, {
+            if (!token) {
+                console.warn("No existe token para cargar notificaciones");
+                return;
+            }
+
+            console.log("Consultando notificaciones en:", url);
+
+            const res = await fetch(url, {
+                method: "GET",
                 headers: {
+                    Accept: "application/json",
                     Authorization: `Bearer ${token}`,
                 },
+                cache: "no-store",
             });
 
-            const data = await res.json();
+            const texto = await res.text();
 
-            if (data.ok) {
-                setResumen({
-                    totalNuevas: Number(data.resumen?.totalNuevas || 0),
-                    criticas: Number(data.resumen?.criticas || 0),
-                    advertencias: Number(data.resumen?.advertencias || 0),
-                    info: Number(data.resumen?.info || 0),
-                    wireless: Number(data.resumen?.wireless || 0),
-                    mensualidades: Number(data.resumen?.mensualidades || 0),
-                    sriEmail: Number(data.resumen?.sriEmail || 0),
-                    sriAnulacion: Number(data.resumen?.sriAnulacion || 0),
-                    sriNotaCredito: Number(data.resumen?.sriNotaCredito || 0),
-                });
+            let data: any;
 
-                setNotificaciones(
-                    (data.ultimas || []).map(normalizarNotificacion)
+            try {
+                data = texto ? JSON.parse(texto) : {};
+            } catch {
+                throw new Error(
+                    `El servidor respondió contenido no JSON. HTTP ${res.status}: ${texto.slice(0, 200)}`
                 );
             }
+
+            if (!res.ok || !data.ok) {
+                throw new Error(
+                    data.message ||
+                    `Error HTTP ${res.status} cargando notificaciones`
+                );
+            }
+
+            setResumen({
+                totalNuevas: Number(data.resumen?.totalNuevas || 0),
+                criticas: Number(data.resumen?.criticas || 0),
+                advertencias: Number(data.resumen?.advertencias || 0),
+                info: Number(data.resumen?.info || 0),
+                wireless: Number(data.resumen?.wireless || 0),
+                mensualidades: Number(data.resumen?.mensualidades || 0),
+                sriEmail: Number(data.resumen?.sriEmail || 0),
+                sriAnulacion: Number(data.resumen?.sriAnulacion || 0),
+                sriNotaCredito: Number(
+                    data.resumen?.sriNotaCredito || 0
+                ),
+            });
+
+            setNotificaciones(
+                Array.isArray(data.ultimas)
+                    ? data.ultimas.map(normalizarNotificacion)
+                    : []
+            );
         } catch (error) {
-            console.error("Error cargando notificaciones:", error);
+            console.error("Error cargando notificaciones:", {
+                url,
+                API_BASE,
+                error,
+            });
         }
     }
 

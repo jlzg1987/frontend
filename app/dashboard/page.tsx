@@ -514,6 +514,12 @@ export default function DashboardPage() {
 
     function getHeaderInfo() {
 
+        if (vistaActual === 'pagos') {
+            return {
+                titulo: 'Mensualidades y Corte Automático',
+                subtitulo: ' Control de facturación mensual, mora y cortes MikroTik.',
+            };
+        }
 
         if (vistaActual === 'confg') {
             return {
@@ -1244,7 +1250,9 @@ export default function DashboardPage() {
                             <TodasNotificacionesPage />
                         )}
                         {vistaActual === 'pagos' && (
-                            <MensualidadesPage />
+                            <MensualidadesPage
+                                onAbrirFacturasinternas={() => setVistaActual('facturasinternas')}
+                            />
                         )}
 
                         {vistaActual === 'DesarrolloSistema' && (
