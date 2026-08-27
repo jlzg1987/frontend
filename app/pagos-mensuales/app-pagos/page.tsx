@@ -235,15 +235,20 @@ export default function PagosPage() {
         [pagos]
     );
     const totalVisible = useMemo(
-        () => pagos.reduce(
-            (suma, pago) => suma + Number(
-                pago.montoAprobado ??
-                pago.montoDeclarado ??
-                pago.montoEsperado ??
+        () => pagos
+            .filter(
+                (pago) =>
+                    pago.estado === 'APROBADO'
+            )
+            .reduce(
+                (suma, pago) =>
+                    suma + Number(
+                        pago.montoAprobado ??
+                        pago.montoEsperado ??
+                        0
+                    ),
                 0
             ),
-            0
-        ),
         [pagos]
     );
 
@@ -976,8 +981,8 @@ function Aviso({
 }) {
     return (
         <div className={`mb-4 flex items-start justify-between gap-3 rounded-xl border p-4 text-sm ${tipo === 'success'
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-                : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+            : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
             }`}>
             <span>{mensaje}</span>
             <button type="button" onClick={onCerrar}><X size={17} /></button>
@@ -1043,8 +1048,8 @@ function MiniEstado({ valor }: { valor: string }) {
 
     return (
         <span className={`rounded-full px-2 py-1 text-xs font-bold ${positivo
-                ? 'bg-emerald-500/15 text-emerald-300'
-                : 'bg-slate-700 text-slate-300'
+            ? 'bg-emerald-500/15 text-emerald-300'
+            : 'bg-slate-700 text-slate-300'
             }`}>
             {valor}
         </span>

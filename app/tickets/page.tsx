@@ -247,7 +247,7 @@ export default function TicketsPage() {
 
                     <input
                         className="border border-slate-300 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Cliente ID opcional"
+                        placeholder="Cliente cédula"
                         value={form.clienteId}
                         onChange={(e) => setForm({ ...form, clienteId: e.target.value })}
                     />
