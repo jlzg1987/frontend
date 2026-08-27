@@ -107,6 +107,7 @@ import {
     Wifi,
     Wrench,
 } from 'lucide-react';
+import PagosPage from '../pagos-mensuales/app-pagos/page';
 
 
 type DashboardResponse = {
@@ -237,7 +238,7 @@ export default function DashboardPage() {
         | 'AbrirCArrrito' | 'Ventas' | 'Monitoreonodos' | 'Redesinternas' | 'DesarrolloSistema' | 'CrearSolicitud'
         | 'DETALLE' | 'EDITAR_SOLICITUD' | 'SOLICITUDES' | 'EN_PROCESO' | 'PENDIENTES_CLIENTE' | 'RESPONSABLES'
         | 'ENTREGADOS' | 'PROFORMAS' | 'usuarios' | 'ListdoUsuario' | 'PermisosUsuarios' | 'Administrarroles'
-        | 'Menulateral' | 'Portalcliente' | 'Crearusuario' | 'monitoreoCliente'
+        | 'Menulateral' | 'Portalcliente' | 'Crearusuario' | 'monitoreoCliente' | 'AppPagos'
     >('dashboard');
 
     function normalizarCodigo(codigo: string) {
@@ -1252,7 +1253,11 @@ export default function DashboardPage() {
                         {vistaActual === 'pagos' && (
                             <MensualidadesPage
                                 onAbrirFacturasinternas={() => setVistaActual('facturasinternas')}
+                                onAbrirAppPagos={() => setVistaActual('AppPagos')}
                             />
+                        )}
+                        {vistaActual === 'AppPagos' && (
+                            <PagosPage />
                         )}
 
                         {vistaActual === 'DesarrolloSistema' && (

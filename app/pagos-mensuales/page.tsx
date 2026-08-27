@@ -2,6 +2,7 @@
 'use client';
 
 import { API_BASE, getToken } from '@/src/lib/api';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 type Mensualidad = {
@@ -27,10 +28,13 @@ type Mensualidad = {
 
 type FacturacionInternaProps = {
     onAbrirFacturasinternas: () => void;
+    onAbrirAppPagos: () => void;
 };
 export default function MensualidadesPage({
     onAbrirFacturasinternas,
+    onAbrirAppPagos,
 }: FacturacionInternaProps) {
+    const router = useRouter();
     const [mensualidades, setMensualidades] = useState<Mensualidad[]>([]);
     const [filtroEstado, setFiltroEstado] = useState<'TODAS' | Mensualidad['estado']>('TODAS');
     const [loading, setLoading] = useState(false);
@@ -390,13 +394,23 @@ export default function MensualidadesPage({
                     </button>
                 </div>
 
-                <button
-                    onClick={() => onAbrirFacturasinternas()}
-                    disabled={loading}
-                    className="bg-red-400  hover:bg-red-500 px-4 py-2 rounded-xl font-semibold disabled:opacity-50"
-                >
-                    Facturación
-                </button>
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        onClick={() => onAbrirFacturasinternas()}
+                        disabled={loading}
+                        className="bg-red-400 hover:bg-red-500 px-4 py-2 rounded-xl font-semibold disabled:opacity-50"
+                    >
+                        Facturación
+                    </button>
+
+                    <button
+                        onClick={() => onAbrirAppPagos()}
+                        disabled={loading}
+                        className="bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-xl font-semibold disabled:opacity-50"
+                    >
+                        Ver pagos
+                    </button>
+                </div>
             </div>
 
             {mensaje && (
