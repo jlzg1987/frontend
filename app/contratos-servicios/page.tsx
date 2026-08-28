@@ -1,7 +1,19 @@
 'use client';
 
 import { API_BASE } from '@/src/lib/api';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+    Check,
+    CircleCheckBig,
+    Clock3,
+    Copy,
+    FileText,
+    Files,
+    PauseCircle,
+    TrendingDown,
+    TrendingUp,
+    UserMinus,
+} from 'lucide-react';
 
 type Servicio = {
     servicioId: string;
@@ -80,6 +92,10 @@ export default function ContratosServiciosPage({
     const [servicios, setServicios] = useState<Servicio[]>([]);
     const [loading, setLoading] = useState(true);
     const [busqueda, setBusqueda] = useState('');
+    const [estadoFiltro, setEstadoFiltro] = useState<
+        'TODOS' | Servicio['estadoServicio']
+    >('TODOS');
+    const [routerFiltro, setRouterFiltro] = useState('');
 
     const [showModal, setShowModal] = useState(false);
 
@@ -111,6 +127,12 @@ export default function ContratosServiciosPage({
         setServicioDetalle(servicio);
         setShowDetalleModal(true);
     };
+
+    const [idCopiado, setIdCopiado] = useState<
+        'SERVICIO' | 'CLIENTE' | 'CEDULA' | null
+    >(null);
+
+    const IVA = 0.15;
 
     const [formData, setFormData] = useState({
         clienteId: '',
@@ -304,14 +326,170 @@ export default function ContratosServiciosPage({
         }
     };
 
+    const cargarRoutersFiltro = async () => {
+        try {
+            const res = await fetch(`${API_BASE}/mikrotik/routers`);
+            const data = await res.json();
+
+            setRouters(data.routers || []);
+        } catch (error) {
+            console.error('Error cargando routers para el filtro:', error);
+        }
+    };
+
     useEffect(() => {
         cargarServicios();
+        cargarRoutersFiltro();
     }, []);
 
     const serviciosFiltrados = servicios.filter((s) => {
         const texto = `${s.nombres} ${s.apellidos} ${s.cedula} ${s.telefono} ${s.email} ${s.nombrePlan} ${s.pppSecret} ${s.ipCliente}`.toLowerCase();
-        return texto.includes(busqueda.toLowerCase());
+        const coincideBusqueda = texto.includes(busqueda.toLowerCase());
+        const coincideEstado =
+            estadoFiltro === 'TODOS' || s.estadoServicio === estadoFiltro;
+        const coincideRouter =
+            !routerFiltro || String(s.routerId || '') === routerFiltro;
+
+        return coincideBusqueda && coincideEstado && coincideRouter;
     });
+
+    const serviciosResumen = useMemo(
+        () =>
+            routerFiltro
+                ? servicios.filter(
+                    (servicio) =>
+                        String(servicio.routerId || '') === routerFiltro
+                )
+                : servicios,
+        [servicios, routerFiltro]
+    );
+
+    const resumenContratos = useMemo(() => {
+        const resumen = {
+            total: serviciosResumen.length,
+            ACTIVO: { cantidad: 0, subtotal: 0 },
+            SUSPENDIDO: { cantidad: 0, subtotal: 0 },
+            RETIRADO: { cantidad: 0, subtotal: 0 },
+            PENDIENTE: { cantidad: 0, subtotal: 0 },
+        };
+
+        serviciosResumen.forEach((servicio) => {
+            const estado = servicio.estadoServicio;
+
+            if (resumen[estado]) {
+                resumen[estado].cantidad += 1;
+                resumen[estado].subtotal += Number(servicio.precioMensual || 0);
+            }
+        });
+
+        return resumen;
+    }, [serviciosResumen]);
+
+    const nombreRouterSeleccionado = useMemo(() => {
+        if (!routerFiltro) return 'Todos los routers';
+
+        const router = routers.find((item) =>
+            String(item.routerId || item.RouterId || item.id || '') === routerFiltro
+        );
+
+        return router?.nombre || router?.Nombre || 'Router seleccionado';
+    }, [routers, routerFiltro]);
+
+    const formatearDinero = (valor: number) =>
+        new Intl.NumberFormat('es-EC', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 2,
+        }).format(valor);
+
+    const obtenerValores = (subtotal: number) => ({
+        subtotal,
+        iva: subtotal * IVA,
+        total: subtotal * (1 + IVA),
+    });
+
+    const tarjetasEstado = [
+        {
+            titulo: 'Total contratos',
+            estado: 'TODOS' as const,
+            valor: resumenContratos.total,
+            detalle: 'Todos los contratos registrados',
+            color: '#38bdf8',
+            fondo: 'linear-gradient(145deg, rgba(14,165,233,0.22), rgba(2,132,199,0.06))',
+            icono: Files,
+        },
+        {
+            titulo: 'Activos',
+            estado: 'ACTIVO' as const,
+            valor: resumenContratos.ACTIVO.cantidad,
+            detalle: 'Servicios que generan ingresos',
+            color: '#4ade80',
+            fondo: 'linear-gradient(145deg, rgba(34,197,94,0.22), rgba(22,163,74,0.06))',
+            icono: CircleCheckBig,
+        },
+        {
+            titulo: 'Suspendidos',
+            estado: 'SUSPENDIDO' as const,
+            valor: resumenContratos.SUSPENDIDO.cantidad,
+            detalle: 'Servicios suspendidos',
+            color: '#fb7185',
+            fondo: 'linear-gradient(145deg, rgba(244,63,94,0.22), rgba(190,18,60,0.06))',
+            icono: PauseCircle,
+        },
+        {
+            titulo: 'Retirados',
+            estado: 'RETIRADO' as const,
+            valor: resumenContratos.RETIRADO.cantidad,
+            detalle: 'Contratos fuera de servicio',
+            color: '#cbd5e1',
+            fondo: 'linear-gradient(145deg, rgba(100,116,139,0.24), rgba(51,65,85,0.08))',
+            icono: UserMinus,
+        },
+        {
+            titulo: 'Pendientes',
+            estado: 'PENDIENTE' as const,
+            valor: resumenContratos.PENDIENTE.cantidad,
+            detalle: 'Pendientes de activación',
+            color: '#fbbf24',
+            fondo: 'linear-gradient(145deg, rgba(245,158,11,0.22), rgba(217,119,6,0.06))',
+            icono: Clock3,
+        },
+    ];
+
+    const tarjetasFinancieras = [
+        {
+            titulo: 'Ingreso mensual activo',
+            descripcion: 'Ganancia de contratos activos',
+            valores: obtenerValores(resumenContratos.ACTIVO.subtotal),
+            color: '#4ade80',
+            fondo: 'linear-gradient(145deg, rgba(22,163,74,0.19), rgba(5,46,22,0.25))',
+            icono: TrendingUp,
+        },
+        {
+            titulo: 'Pérdida por suspendidos',
+            descripcion: 'Valor mensual que no se está cobrando',
+            valores: obtenerValores(resumenContratos.SUSPENDIDO.subtotal),
+            color: '#fb7185',
+            fondo: 'linear-gradient(145deg, rgba(225,29,72,0.19), rgba(76,5,25,0.25))',
+            icono: TrendingDown,
+        },
+        {
+            titulo: 'Pérdida por retirados',
+            descripcion: 'Valor mensual de contratos retirados',
+            valores: obtenerValores(resumenContratos.RETIRADO.subtotal),
+            color: '#cbd5e1',
+            fondo: 'linear-gradient(145deg, rgba(100,116,139,0.20), rgba(30,41,59,0.28))',
+            icono: TrendingDown,
+        },
+        {
+            titulo: 'Ingreso pendiente',
+            descripcion: 'Proyección de contratos por activar',
+            valores: obtenerValores(resumenContratos.PENDIENTE.subtotal),
+            color: '#fbbf24',
+            fondo: 'linear-gradient(145deg, rgba(217,119,6,0.19), rgba(69,26,3,0.25))',
+            icono: Clock3,
+        },
+    ];
 
     const colorEstado = (estado: string) => {
         switch (estado) {
@@ -573,8 +751,140 @@ export default function ContratosServiciosPage({
         );
     };
 
+    const copiarAlPortapapeles = async (
+        texto: string,
+        tipo: 'SERVICIO' | 'CLIENTE' | 'CEDULA'
+    ) => {
+        try {
+            await navigator.clipboard.writeText(texto);
+
+            setIdCopiado(tipo);
+
+            setTimeout(() => {
+                setIdCopiado(null);
+            }, 1500);
+        } catch (error) {
+            console.error('Error al copiar:', error);
+            alert('No se pudo copiar');
+        }
+    };
     return (
         <main style={styles.page}>
+
+
+            <section style={styles.summarySection}>
+                <div style={styles.summaryHeader}>
+                    <div>
+                        <p style={styles.summarySubtitle}>
+                            Estado general: <strong style={styles.summaryRouterName}>
+                                {nombreRouterSeleccionado}
+                            </strong>
+                        </p>
+                    </div>
+                </div>
+
+                <div style={styles.statusSummaryGrid}>
+                    {tarjetasEstado.map((tarjeta) => {
+                        const Icono = tarjeta.icono;
+
+                        return (
+                            <button
+                                type="button"
+                                key={tarjeta.titulo}
+                                onClick={() => setEstadoFiltro(tarjeta.estado)}
+                                aria-pressed={estadoFiltro === tarjeta.estado}
+                                style={{
+                                    ...styles.statusSummaryCard,
+                                    background: tarjeta.fondo,
+                                    borderColor:
+                                        estadoFiltro === tarjeta.estado
+                                            ? tarjeta.color
+                                            : `${tarjeta.color}38`,
+                                    boxShadow:
+                                        estadoFiltro === tarjeta.estado
+                                            ? `0 0 0 2px ${tarjeta.color}25, 0 16px 34px rgba(0,0,0,0.28)`
+                                            : styles.statusSummaryCard.boxShadow,
+                                    transform:
+                                        estadoFiltro === tarjeta.estado
+                                            ? 'translateY(-2px)'
+                                            : 'translateY(0)',
+                                }}
+                            >
+                                <div
+                                    style={{
+                                        ...styles.summaryIcon,
+                                        color: tarjeta.color,
+                                        background: `${tarjeta.color}18`,
+                                        borderColor: `${tarjeta.color}30`,
+                                    }}
+                                >
+                                    <Icono size={22} />
+                                </div>
+                                <div>
+                                    <p style={styles.summaryCardLabel}>{tarjeta.titulo}</p>
+                                    <strong style={{ ...styles.summaryCardValue, color: tarjeta.color }}>
+                                        {tarjeta.valor}
+                                    </strong>
+                                    <p style={styles.summaryCardDetail}>{tarjeta.detalle}</p>
+                                </div>
+                            </button>
+                        );
+                    })}
+                </div>
+
+                <div style={styles.financialSummaryGrid}>
+                    {tarjetasFinancieras.map((tarjeta) => {
+                        const Icono = tarjeta.icono;
+
+                        return (
+                            <article
+                                key={tarjeta.titulo}
+                                style={{
+                                    ...styles.financialCard,
+                                    background: tarjeta.fondo,
+                                    borderColor: `${tarjeta.color}35`,
+                                }}
+                            >
+                                <div style={styles.financialCardHeader}>
+                                    <div>
+                                        <p style={{ ...styles.financialTitle, color: tarjeta.color }}>
+                                            {tarjeta.titulo}
+                                        </p>
+                                        <p style={styles.financialDescription}>{tarjeta.descripcion}</p>
+                                    </div>
+                                    <div
+                                        style={{
+                                            ...styles.summaryIcon,
+                                            color: tarjeta.color,
+                                            background: `${tarjeta.color}18`,
+                                            borderColor: `${tarjeta.color}30`,
+                                        }}
+                                    >
+                                        <Icono size={22} />
+                                    </div>
+                                </div>
+
+                                <div style={styles.financialRows}>
+                                    <div style={styles.financialRow}>
+                                        <span>Subtotal sin IVA</span>
+                                        <strong>{formatearDinero(tarjeta.valores.subtotal)}</strong>
+                                    </div>
+                                    <div style={styles.financialRow}>
+                                        <span>IVA (15 %)</span>
+                                        <strong>{formatearDinero(tarjeta.valores.iva)}</strong>
+                                    </div>
+                                    <div style={styles.financialTotalRow}>
+                                        <span>Total con IVA</span>
+                                        <strong style={{ color: tarjeta.color }}>
+                                            {formatearDinero(tarjeta.valores.total)}
+                                        </strong>
+                                    </div>
+                                </div>
+                            </article>
+                        );
+                    })}
+                </div>
+            </section>
             <section style={styles.header}>
 
                 <button style={styles.primaryButton}
@@ -584,7 +894,6 @@ export default function ContratosServiciosPage({
                     + Nuevo servicio
                 </button>
             </section>
-
             <section style={styles.filters}>
                 <input
                     value={busqueda}
@@ -592,7 +901,51 @@ export default function ContratosServiciosPage({
                     placeholder="Buscar por cliente, cédula, teléfono, plan, PPPoE o IP..."
                     style={styles.searchInput}
                 />
+
+                <select
+                    value={routerFiltro}
+                    onChange={(e) => setRouterFiltro(e.target.value)}
+                    style={styles.filterSelect}
+                    aria-label="Filtrar contratos por router"
+                >
+                    <option value="" style={styles.option}>Todos los routers</option>
+                    {routers.map((router, index) => {
+                        const id = router.routerId || router.RouterId || router.id;
+                        const nombre = router.nombre || router.Nombre || 'Router';
+
+                        return (
+                            <option
+                                key={id || index}
+                                value={String(id || '')}
+                                style={styles.option}
+                            >
+                                {nombre}
+                            </option>
+                        );
+                    })}
+                </select>
+
+                {(estadoFiltro !== 'TODOS' || routerFiltro || busqueda) && (
+                    <button
+                        type="button"
+                        style={styles.clearFiltersButton}
+                        onClick={() => {
+                            setEstadoFiltro('TODOS');
+                            setRouterFiltro('');
+                            setBusqueda('');
+                        }}
+                    >
+                        Limpiar filtros
+                    </button>
+                )}
             </section>
+
+            {!loading && (
+                <p style={styles.resultsCount}>
+                    Mostrando <strong>{serviciosFiltrados.length}</strong> de{' '}
+                    <strong>{servicios.length}</strong> contratos
+                </p>
+            )}
 
             {loading ? (
                 <p style={styles.loading}>Cargando servicios...</p>
@@ -622,7 +975,35 @@ export default function ContratosServiciosPage({
                                         <h3 style={styles.clientName}>
                                             {servicio.nombres} {servicio.apellidos}
                                         </h3>
-                                        <p style={styles.smallText}>Cédula: {servicio.cedula}</p>
+                                        <div style={styles.cedulaRow}>
+                                            <p style={styles.smallText}>
+                                                Cédula: {servicio.cedula}
+                                            </p>
+
+                                            <button
+                                                type="button"
+                                                title="Copiar cédula"
+                                                aria-label="Copiar cédula"
+                                                style={{
+                                                    ...styles.copyCedulaButton,
+                                                    ...(idCopiado === 'CEDULA'
+                                                        ? styles.copyButtonSuccess
+                                                        : {}),
+                                                }}
+                                                onClick={() =>
+                                                    copiarAlPortapapeles(
+                                                        servicio.cedula,
+                                                        'CEDULA'
+                                                    )
+                                                }
+                                            >
+                                                {idCopiado === 'CEDULA' ? (
+                                                    <Check size={14} />
+                                                ) : (
+                                                    <Copy size={14} />
+                                                )}
+                                            </button>
+                                        </div>
                                         <p style={styles.smallText}>Tel: {servicio.telefono}</p>
                                     </div>
                                 </div>
@@ -650,11 +1031,20 @@ export default function ContratosServiciosPage({
 
 
                                 <div style={styles.infoBox}>
-                                    <p><strong>Plan:</strong> {servicio.nombrePlan}</p>
-                                    <p><strong>Precio:</strong> ${Number(servicio.precioMensual || 0).toFixed(2)}</p>
-                                    <p><strong>Tipo:</strong> {servicio.tipoServicio}</p>
-                                    <p><strong>IP:</strong> {servicio.ipCliente || 'No asignada'}</p>
-                                    <p><strong>Día pago:</strong> {servicio.diaPago}</p>
+                                    <div style={{
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                                        gap: '8px 18px',
+                                        alignItems: 'start',
+                                        marginBottom: 5
+                                    }}>
+
+                                        <p ><strong style={{ color: '#ca9a33' }}>Plan:</strong> {servicio.nombrePlan}</p>
+                                        <p><strong>Precio:</strong> ${Number(servicio.precioMensual || 0).toFixed(2)}</p>
+                                        <p><strong>Tipo:</strong> {servicio.tipoServicio}</p>
+                                        <p><strong>IP:</strong> {servicio.ipCliente || 'No asignada'}</p>
+                                        <p><strong>Día pago:</strong> {servicio.diaPago}</p>
+                                    </div>
                                     <button
                                         style={styles.secondaryButton}
                                         onClick={() => abrirDetalleServicio(servicio)}
@@ -684,11 +1074,11 @@ export default function ContratosServiciosPage({
                                         onClick={() =>
                                             cambiarEstadoServicio(
                                                 servicio.servicioId,
-                                                servicio.estadoServicio === 'SUSPENDIDO' ? 'ACTIVO' : 'SUSPENDIDO'
+                                                servicio.estadoServicio === 'PENDIENTE' ? 'ACTIVO' : 'SUSPENDIDO'
                                             )
                                         }
                                     >
-                                        {servicio.estadoServicio === 'SUSPENDIDO' ? 'Activar' : 'Suspender'}
+                                        {servicio.estadoServicio === 'PENDIENTE' ? 'Activar' : 'Suspender'}
                                     </button>
 
                                     <button
@@ -862,7 +1252,6 @@ export default function ContratosServiciosPage({
                             <select
                                 value={formData.planId}
                                 onChange={(e) => {
-
                                     const planId = e.target.value;
 
                                     const planSeleccionado = planes.find(
@@ -909,15 +1298,27 @@ export default function ContratosServiciosPage({
                                     Seleccionar plan
                                 </option>
 
-                                {planes.map((p) => (
-                                    <option
-                                        key={p.planId}
-                                        value={p.planId}
-                                        style={styles.option}
-                                    >
-                                        {p.nombrePlan} - {p.tipoServicio}
-                                    </option>
-                                ))}
+                                {planes.map((p) => {
+                                    const precioBase = Number(p.precioMensual || 0);
+                                    const valorIva = precioBase * IVA;
+                                    const precioConIva = precioBase + valorIva;
+
+                                    return (
+                                        <option
+                                            key={p.planId}
+                                            value={p.planId}
+                                            style={styles.option}
+                                        >
+                                            {p.nombrePlan} - {p.tipoServicio}
+                                            {' | '}
+                                            Base: ${precioBase.toFixed(2)}
+                                            {' | '}
+                                            IVA: ${valorIva.toFixed(2)}
+                                            {' | '}
+                                            Total: ${precioConIva.toFixed(2)}
+                                        </option>
+                                    );
+                                })}
                             </select>
 
                             {/* ROUTER */}
@@ -954,14 +1355,16 @@ export default function ContratosServiciosPage({
                                 })}
                             </select>
 
-                            {/* FECHA */}
+                            {/* Dias d epago */}
                             <input
-                                type="date"
-                                name="fechaInstalacion"
-                                value={formData.fechaInstalacion}
+                                placeholder="Día de pago"
+                                name="diaPago"
+                                value={formData.diaPago}
                                 onChange={handleChange}
-                                style={styles.inputDate}
+                                style={styles.input}
                             />
+
+                            {/* FECHA */}
                             <div style={styles.formGroup}>
                                 <label style={styles.label}>Fecha de firma del contrato</label>
 
@@ -974,6 +1377,17 @@ export default function ContratosServiciosPage({
                                     className="inputDate"
                                 />
                             </div>
+                            <div style={styles.formGroup}>
+                                <label style={styles.label}>Fecha de Instalación</label>
+                                <input
+                                    type="date"
+                                    name="fechaInstalacion"
+                                    value={formData.fechaInstalacion}
+                                    onChange={handleChange}
+                                    style={styles.inputDate}
+                                />
+                            </div>
+
                             {/* WISP */}
                             {(tipoServicioSeleccionado === 'RADIO' ||
                                 tipoServicioSeleccionado === 'MIXTO') && (
@@ -1206,14 +1620,6 @@ export default function ContratosServiciosPage({
 
                             {/* GENERALES */}
                             <input
-                                placeholder="Día de pago"
-                                name="diaPago"
-                                value={formData.diaPago}
-                                onChange={handleChange}
-                                style={styles.input}
-                            />
-
-                            <input
                                 placeholder="PPPoE Secret"
                                 name="pppSecret"
                                 value={formData.pppSecret}
@@ -1246,7 +1652,8 @@ export default function ContratosServiciosPage({
                             />
 
                             <div style={styles.sectionLabel}>
-                                📝 Datos del contrato
+                                <FileText size={18} />
+                                Datos del contrato
                             </div>
 
                             <select
@@ -1335,6 +1742,7 @@ export default function ContratosServiciosPage({
                     </div>
                 </div>
             )}
+
             {showDetalleModal && servicioDetalle && (
                 <div style={styles.modalOverlay}>
                     <div
@@ -1344,7 +1752,7 @@ export default function ContratosServiciosPage({
                         }}
                     >
                         <div style={styles.modalHeader}>
-                            <h2>
+                            <h2 style={styles.modalTitle}>
                                 Detalle del Servicio
                             </h2>
 
@@ -1359,21 +1767,79 @@ export default function ContratosServiciosPage({
                             </button>
                         </div>
 
-                        <div
-                            style={{
-                                padding: 20,
-                                display: 'grid',
-                                gridTemplateColumns:
-                                    'repeat(auto-fit,minmax(300px,1fr))',
-                                gap: 15,
-                            }}
-                        >
+                        <div style={styles.detailModalBody}>
 
                             <div style={styles.infoBox}>
                                 <h3>General</h3>
-                                <p><strong>Servicio ID:</strong> {servicioDetalle.servicioId}</p>
+                                <div style={{ display: 'grid', gap: '10px' }}>
+                                    <div style={styles.copyRow}>
+                                        <div>
+                                            <span style={styles.copyLabel}>Servicio ID</span>
 
-                                <p><strong>Cliente ID:</strong> {servicioDetalle.clienteId}</p>
+                                            <p style={styles.copyValue}>
+                                                {servicioDetalle.servicioId}
+                                            </p>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            title="Copiar Servicio ID"
+                                            aria-label="Copiar Servicio ID"
+                                            style={{
+                                                ...styles.copyButton,
+                                                ...(idCopiado === 'SERVICIO'
+                                                    ? styles.copyButtonSuccess
+                                                    : {}),
+                                            }}
+                                            onClick={() =>
+                                                copiarAlPortapapeles(
+                                                    servicioDetalle.servicioId,
+                                                    'SERVICIO'
+                                                )
+                                            }
+                                        >
+                                            {idCopiado === 'SERVICIO' ? (
+                                                <Check size={17} />
+                                            ) : (
+                                                <Copy size={17} />
+                                            )}
+                                        </button>
+                                    </div>
+
+                                    <div style={styles.copyRow}>
+                                        <div>
+                                            <span style={styles.copyLabel}>Cliente ID</span>
+
+                                            <p style={styles.copyValue}>
+                                                {servicioDetalle.clienteId}
+                                            </p>
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            title="Copiar Cliente ID"
+                                            aria-label="Copiar Cliente ID"
+                                            style={{
+                                                ...styles.copyButton,
+                                                ...(idCopiado === 'CLIENTE'
+                                                    ? styles.copyButtonSuccess
+                                                    : {}),
+                                            }}
+                                            onClick={() =>
+                                                copiarAlPortapapeles(
+                                                    servicioDetalle.clienteId,
+                                                    'CLIENTE'
+                                                )
+                                            }
+                                        >
+                                            {idCopiado === 'CLIENTE' ? (
+                                                <Check size={17} />
+                                            ) : (
+                                                <Copy size={17} />
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
                                 <p><strong>Plan:</strong> {servicioDetalle.nombrePlan}</p>
                                 <p><strong>Bajada:</strong> {servicioDetalle.velocidadBajada}</p>
                                 <p><strong>Subida:</strong> {servicioDetalle.velocidadSubida}</p>
@@ -1439,50 +1905,241 @@ export default function ContratosServiciosPage({
 
 const styles: { [key: string]: React.CSSProperties } = {
 
+    summarySection: {
+        marginBottom: '24px',
+    },
+    summaryHeader: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '14px',
+    },
+    summaryTitle: {
+        margin: 0,
+        color: '#f8fafc',
+        fontSize: '21px',
+        fontWeight: 900,
+    },
+    summarySubtitle: {
+        margin: '4px 0 0',
+        color: '#94a3b8',
+        fontSize: '13px',
+    },
+    summaryRouterName: {
+        color: '#67e8f9',
+        fontWeight: 900,
+    },
+    statusSummaryGrid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+        gap: '12px',
+        marginBottom: '14px',
+    },
+    statusSummaryCard: {
+        minWidth: 0,
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: '12px',
+        padding: '16px',
+        border: '1px solid',
+        borderRadius: '18px',
+        boxShadow: '0 12px 28px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.04)',
+        color: 'inherit',
+        textAlign: 'left',
+        cursor: 'pointer',
+        transition: 'transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease',
+    },
+    summaryIcon: {
+        width: '42px',
+        height: '42px',
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        border: '1px solid',
+        borderRadius: '13px',
+    },
+    summaryCardLabel: {
+        margin: 0,
+        color: '#cbd5e1',
+        fontSize: '13px',
+        fontWeight: 800,
+    },
+    summaryCardValue: {
+        display: 'block',
+        marginTop: '3px',
+        fontSize: '27px',
+        lineHeight: 1,
+        fontWeight: 900,
+    },
+    summaryCardDetail: {
+        margin: '7px 0 0',
+        color: '#94a3b8',
+        fontSize: '11px',
+        lineHeight: 1.35,
+    },
+    financialSummaryGrid: {
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))',
+        gap: '14px',
+    },
+    financialCard: {
+        minWidth: 0,
+        padding: '17px',
+        border: '1px solid',
+        borderRadius: '19px',
+        boxShadow: '0 14px 32px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.04)',
+    },
+    financialCardHeader: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: '12px',
+        marginBottom: '14px',
+    },
+    financialTitle: {
+        margin: 0,
+        fontSize: '14px',
+        fontWeight: 900,
+    },
+    financialDescription: {
+        margin: '4px 0 0',
+        color: '#94a3b8',
+        fontSize: '11px',
+        lineHeight: 1.35,
+    },
+    financialRows: {
+        display: 'grid',
+        gap: '8px',
+    },
+    financialRow: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        gap: '12px',
+        color: '#cbd5e1',
+        fontSize: '12px',
+    },
+    financialTotalRow: {
+        display: 'flex',
+        justifyContent: 'space-between',
+        gap: '12px',
+        paddingTop: '10px',
+        marginTop: '2px',
+        borderTop: '1px solid rgba(255,255,255,0.11)',
+        color: '#f8fafc',
+        fontSize: '14px',
+        fontWeight: 900,
+    },
+
+    sectionLabel: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        gridColumn: '1 / -1',
+        color: '#67e8f9',
+        fontWeight: 900,
+    },
+
+    cedulaRow: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '7px',
+    },
+
+    copyCedulaButton: {
+        width: '27px',
+        height: '27px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        padding: 0,
+        borderRadius: '8px',
+        border: '1px solid rgba(34,211,238,0.18)',
+        background: 'rgba(8,145,178,0.12)',
+        color: '#67e8f9',
+        cursor: 'pointer',
+    },
+
+    copyRow: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '14px',
+
+    },
+
+    copyLabel: {
+
+        marginBottom: '4px',
+        color: '#67e8f9',
+        fontSize: '11px',
+        fontWeight: 900,
+        textTransform: 'uppercase',
+
+    },
+
+    copyValue: {
+        margin: 0,
+        maxWidth: '220px',
+        color: '#f8fafc',
+        fontSize: '12px',
+        fontWeight: 700,
+        wordBreak: 'break-all',
+    },
+
+    copyButton: {
+        flexShrink: 0,
+        padding: '9px 12px',
+        border: '1px solid rgba(34,211,238,0.24)',
+        borderRadius: '10px',
+        background: 'linear-gradient(135deg, #0891b2, #2563eb)',
+        color: '#fff',
+        fontSize: '12px',
+        fontWeight: 800,
+        cursor: 'pointer',
+    },
+
     inputDate: {
         width: '100%',
-        padding: '12px 14px',
-        borderRadius: '10px',
-        border: '1px solid #334155',
-        background: '#0F172A',
+        padding: '13px 14px',
+        borderRadius: '12px',
+        border: '1px solid rgba(148,163,184,0.22)',
+        background: 'rgba(15,23,42,0.92)',
         color: '#fff',
         fontSize: '14px',
         outline: 'none',
         colorScheme: 'dark',
+        boxSizing: 'border-box',
     },
     contractBox: {
-        background: '#c1d9f1',
-        border: '1px solid #a6c7f1',
-        borderRadius: '12px',
-        padding: '12px',
-        marginTop: '10px',
-        fontSize: '13px',
-        color: '#1b222c',
-        marginBottom: 10,
+        background: 'linear-gradient(145deg, rgba(30,64,175,0.20), rgba(8,145,178,0.10))',
+        border: '1px solid rgba(96,165,250,0.25)',
+        borderRadius: '18px',
+        padding: '18px',
+        fontSize: '14px',
+        lineHeight: 1.65,
+        color: '#dbeafe',
+        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.04)',
     },
 
     input: {
-        background: '#0f172a',
-        border: '1px solid rgba(255,255,255,0.1)',
+        width: '100%',
+        background: 'rgba(15,23,42,0.92)',
+        border: '1px solid rgba(148,163,184,0.22)',
         borderRadius: '12px',
-        padding: '12px',
+        padding: '13px 14px',
         color: '#fff',
         outline: 'none',
-
+        fontSize: '14px',
+        boxSizing: 'border-box',
     },
     autocompleteBox: {
         position: 'relative',
         gridColumn: '1 / -1',
     },
 
-    sectionLabel: {
-        gridColumn: '1 / -1',
-        color: '#67e8f9',
-        fontWeight: 900,
-        marginTop: '10px',
-        marginBottom: '-4px',
-        fontSize: '15px',
-    },
+
     resultadosClientes: {
         position: 'absolute',
         top: '52px',
@@ -1542,50 +2199,72 @@ const styles: { [key: string]: React.CSSProperties } = {
     modalOverlay: {
         position: 'fixed',
         inset: 0,
-        background: 'rgba(0,0,0,0.7)',
+        background: 'rgba(2,6,23,0.84)',
+        backdropFilter: 'blur(8px)',
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
         zIndex: 9999,
-        padding: '20px',
+        padding: '16px',
     },
 
     modal: {
         width: '100%',
         maxWidth: '900px',
-        background: '#020617',
+        maxHeight: '92vh',
+        background: 'linear-gradient(155deg, #0b1428 0%, #020617 62%, #061224 100%)',
         borderRadius: '24px',
-        border: '1px solid rgba(34,211,238,0.25)',
+        border: '1px solid rgba(34,211,238,0.30)',
         overflow: 'hidden',
+        boxShadow: '0 30px 80px rgba(0,0,0,0.62), 0 0 0 1px rgba(59,130,246,0.06)',
     },
 
     modalHeader: {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: '20px',
-        borderBottom: '1px solid rgba(255,255,255,0.08)',
+        padding: '20px 24px',
+        borderBottom: '1px solid rgba(34,211,238,0.14)',
+        background: 'linear-gradient(90deg, rgba(8,145,178,0.18), rgba(37,99,235,0.10), transparent)',
     },
 
     modalTitle: {
         color: '#fff',
         margin: 0,
+        fontSize: '22px',
+        fontWeight: 900,
+        letterSpacing: '-0.02em',
     },
 
     closeButton: {
-        background: 'transparent',
-        border: 'none',
-        color: '#fff',
-        fontSize: '22px',
+        width: '38px',
+        height: '38px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(255,255,255,0.07)',
+        border: '1px solid rgba(255,255,255,0.10)',
+        borderRadius: '12px',
+        color: '#cbd5e1',
+        fontSize: '18px',
         cursor: 'pointer',
     },
 
     modalBody: {
-        padding: '20px',
+        padding: '24px',
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))',
-        gap: '14px',
-        maxHeight: '70vh',
+        gap: '16px',
+        maxHeight: 'calc(92vh - 154px)',
+        overflowY: 'auto',
+    },
+
+    detailModalBody: {
+        padding: '24px',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(280px, 100%), 1fr))',
+        gap: '16px',
+        maxHeight: 'calc(92vh - 80px)',
         overflowY: 'auto',
     },
 
@@ -1593,15 +2272,16 @@ const styles: { [key: string]: React.CSSProperties } = {
         display: 'flex',
         justifyContent: 'flex-end',
         gap: '12px',
-        padding: '20px',
-        borderTop: '1px solid rgba(255,255,255,0.08)',
+        padding: '18px 24px',
+        borderTop: '1px solid rgba(34,211,238,0.12)',
+        background: 'rgba(2,6,23,0.72)',
     },
 
 
 
     page: {
         minHeight: '100vh',
-        background: '#020617',
+        background: 'radial-gradient(circle at 12% 0%, rgba(8,145,178,0.12), transparent 28%), #020617',
         color: '#e5e7eb',
         padding: '28px',
     },
@@ -1626,44 +2306,86 @@ const styles: { [key: string]: React.CSSProperties } = {
         background: 'linear-gradient(135deg, #06b6d4, #2563eb)',
         color: '#fff',
         border: 'none',
-        borderRadius: '14px',
+        borderRadius: '12px',
         padding: '12px 18px',
         fontWeight: 800,
         cursor: 'pointer',
+        boxShadow: '0 10px 24px rgba(37,99,235,0.24)',
     },
     filters: {
-        marginBottom: '24px',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))',
+        gap: '12px',
+        alignItems: 'center',
+        marginBottom: '10px',
     },
     searchInput: {
         width: '100%',
         padding: '14px 16px',
         borderRadius: '14px',
         border: '1px solid rgba(34,211,238,0.35)',
-        background: '#0f172a',
+        background: 'rgba(15,23,42,0.86)',
         color: '#fff',
         outline: 'none',
+        boxSizing: 'border-box',
+        boxShadow: '0 10px 30px rgba(0,0,0,0.18)',
+    },
+    filterSelect: {
+        width: '100%',
+        padding: '14px 16px',
+        borderRadius: '14px',
+        border: '1px solid rgba(34,211,238,0.35)',
+        background: 'rgba(15,23,42,0.96)',
+        color: '#fff',
+        outline: 'none',
+        boxSizing: 'border-box',
+        cursor: 'pointer',
+        colorScheme: 'dark',
+    },
+    clearFiltersButton: {
+        minHeight: '47px',
+        padding: '11px 15px',
+        borderRadius: '13px',
+        border: '1px solid rgba(248,113,113,0.28)',
+        background: 'rgba(127,29,29,0.20)',
+        color: '#fca5a5',
+        fontWeight: 800,
+        whiteSpace: 'nowrap',
+        cursor: 'pointer',
+    },
+    resultsCount: {
+        margin: '0 0 18px',
+        color: '#94a3b8',
+        fontSize: '13px',
     },
     loading: {
         color: '#94a3b8',
     },
     grid: {
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))',
-        gap: '20px',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(min(340px, 100%), 1fr))',
+        gap: '22px',
+
     },
     card: {
-        background: 'linear-gradient(180deg, #0f172a, #020617)',
-        width: 400,
-        border: '1px solid rgba(34,211,238,0.22)',
-        borderRadius: '22px',
-        padding: '18px',
-        boxShadow: '0 18px 40px rgba(0,0,0,0.35)',
+        position: 'relative',
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        background: 'linear-gradient(155deg, rgba(15,23,42,0.98), rgba(2,6,23,0.98))',
+        border: '1px solid rgba(34,211,238,0.20)',
+        borderRadius: '24px',
+        padding: '20px',
+        boxShadow: '0 18px 46px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.04)',
+        overflow: 'hidden',
     },
     cardTop: {
         display: 'flex',
         alignItems: 'center',
         gap: '14px',
-        marginBottom: '14px',
+        marginBottom: '16px',
+        paddingBottom: '16px',
+        borderBottom: '1px solid rgba(148,163,184,0.12)',
     },
     avatarImg: {
         width: '56px',
@@ -1697,14 +2419,17 @@ const styles: { [key: string]: React.CSSProperties } = {
     statusRow: {
         display: 'flex',
         gap: '8px',
-        marginBottom: '14px',
+        marginBottom: '16px',
+        flexWrap: 'wrap',
     },
     badge: {
         padding: '6px 10px',
         borderRadius: '999px',
         color: '#fff',
         fontWeight: 800,
-        fontSize: '12px',
+        fontSize: '11px',
+        letterSpacing: '0.03em',
+        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.12)',
     },
     typeBadge: {
         padding: '6px 10px',
@@ -1713,57 +2438,64 @@ const styles: { [key: string]: React.CSSProperties } = {
         color: '#67e8f9',
         fontWeight: 800,
         fontSize: '12px',
+        border: '1px solid rgba(103,232,249,0.16)',
     },
     infoBox: {
-        background: 'rgba(15,23,42,0.85)',
-        borderRadius: '14px',
-        padding: '12px',
-        marginBottom: '10px',
-        fontSize: '14px',
-    },
-    techBox: {
-        background: 'rgba(30,41,59,0.75)',
-        borderRadius: '14px',
-        padding: '12px',
-        marginBottom: '10px',
-        fontSize: '14px',
-    },
-    gponBox: {
-        background: 'rgba(8,47,73,0.45)',
-        borderRadius: '14px',
-        padding: '12px',
+        background: 'linear-gradient(145deg, rgba(30,41,59,0.74), rgba(15,23,42,0.78))',
+        border: '1px solid rgba(148,163,184,0.12)',
+        borderRadius: '18px',
+        padding: '16px',
         marginBottom: '14px',
         fontSize: '14px',
+        lineHeight: 1.55,
+    },
+    techBox: {
+        background: 'linear-gradient(145deg, rgba(51,65,85,0.70), rgba(30,41,59,0.48))',
+        border: '1px solid rgba(148,163,184,0.16)',
+        borderRadius: '18px',
+        padding: '18px',
+        fontSize: '14px',
+        lineHeight: 1.65,
+    },
+    gponBox: {
+        background: 'linear-gradient(145deg, rgba(8,47,73,0.66), rgba(8,145,178,0.08))',
+        border: '1px solid rgba(34,211,238,0.18)',
+        borderRadius: '18px',
+        padding: '18px',
+        fontSize: '14px',
+        lineHeight: 1.65,
     },
     actions: {
         display: 'flex',
         gap: '8px',
         flexWrap: 'wrap',
-        marginBottom: 10,
+        marginBottom: 12,
     },
     secondaryButton: {
-        background: '#334155',
+        background: 'linear-gradient(135deg, #334155, #1e293b)',
         color: '#fff',
-        border: 'none',
-        borderRadius: '10px',
-        padding: '9px 12px',
+        border: '1px solid rgba(148,163,184,0.16)',
+        borderRadius: '11px',
+        padding: '10px 13px',
         cursor: 'pointer',
+        fontWeight: 700,
     },
     warningButton: {
-        background: '#f59e0b',
+        background: 'linear-gradient(135deg, #fbbf24, #f59e0b)',
         color: '#111827',
         border: 'none',
-        borderRadius: '10px',
-        padding: '9px 12px',
+        borderRadius: '11px',
+        padding: '10px 13px',
         fontWeight: 800,
         cursor: 'pointer',
     },
     dangerButton: {
-        background: '#dc2626',
+        background: 'linear-gradient(135deg, #ef4444, #b91c1c)',
         color: '#fff',
         border: 'none',
-        borderRadius: '10px',
-        padding: '9px 12px',
+        borderRadius: '11px',
+        padding: '10px 13px',
         cursor: 'pointer',
+        fontWeight: 700,
     },
 };
