@@ -5,14 +5,17 @@ import {
     ArrowRight,
     Banknote,
     BarChart3,
+    Building2,
     CircleSlash2,
     FileDown,
     Gauge,
     Megaphone,
     ReceiptText,
     Settings,
+    Tags,
     Users,
     Wifi,
+    WalletCards,
     type LucideIcon,
 } from 'lucide-react';
 import ImportarClientesInterno from '../dashboard/components/ImportarClientesInterno';
@@ -29,6 +32,9 @@ export default function AdminIspPageInterno({
     onAbrirPublicidad,
     onAbrirReportesISP,
     onAbrirSpeedTestAnalytics,
+    onAbrirConfiguracionSedes,
+    onAbrirCategoriasGastos,
+    onAbrirGastosMensuales,
 }: {
     onVolver: () => void;
     onAbrirAdministracion: () => void;
@@ -41,6 +47,9 @@ export default function AdminIspPageInterno({
     onAbrirPublicidad: () => void;
     onAbrirReportesISP: () => void;
     onAbrirSpeedTestAnalytics: () => void;
+    onAbrirConfiguracionSedes: () => void;
+    onAbrirCategoriasGastos: () => void;
+    onAbrirGastosMensuales: () => void;
 }) {
     const router = useRouter();
 
@@ -121,7 +130,28 @@ export default function AdminIspPageInterno({
                 icono: Gauge,
                 ruta: "/speedtest",
                 color: "#06b6d4",
-            }
+            },
+            {
+                titulo: 'Configuración de sedes',
+                descripcion: 'Administrar sedes y asignar los routers de cada operación.',
+                icono: Building2,
+                ruta: '/admin-isp/gastos/sedes',
+                color: '#0ea5e9',
+            },
+            {
+                titulo: 'Categorías de gastos',
+                descripcion: 'Crear y organizar las categorías utilizadas en los gastos.',
+                icono: Tags,
+                ruta: '/admin-isp/gastos/categorias',
+                color: '#8b5cf6',
+            },
+            {
+                titulo: 'Gastos mensuales',
+                descripcion: 'Registrar gastos y consultar resultados por sede y periodo.',
+                icono: WalletCards,
+                ruta: '/admin-isp/gastos/mensuales',
+                color: '#f97316',
+            },
         ];
 
     return (
@@ -203,8 +233,19 @@ export default function AdminIspPageInterno({
                                     onAbrirSpeedTestAnalytics();
                                     return;
                                 }
+                                if (card.titulo === "Configuración de sedes") {
+                                    onAbrirConfiguracionSedes();
+                                    return;
+                                }
+                                if (card.titulo === "Categorías de gastos") {
+                                    onAbrirCategoriasGastos();
+                                    return;
+                                }
+                                if (card.titulo === "Gastos mensuales") {
+                                    onAbrirGastosMensuales();
+                                    return;
+                                }
 
-                                router.push(card.ruta);
                             }}
                         >
 

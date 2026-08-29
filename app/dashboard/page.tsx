@@ -108,6 +108,9 @@ import {
     Wrench,
 } from 'lucide-react';
 import PagosPage from '../pagos-mensuales/app-pagos/page';
+import CategoriasGastosPage from '../gastos/categorias/page';
+import GastosMensualesPage from '../gastos/mensuales/page';
+import ConfiguracionSedesPage from '../gastos/sedes/page';
 
 
 type DashboardResponse = {
@@ -238,7 +241,8 @@ export default function DashboardPage() {
         | 'AbrirCArrrito' | 'Ventas' | 'Monitoreonodos' | 'Redesinternas' | 'DesarrolloSistema' | 'CrearSolicitud'
         | 'DETALLE' | 'EDITAR_SOLICITUD' | 'SOLICITUDES' | 'EN_PROCESO' | 'PENDIENTES_CLIENTE' | 'RESPONSABLES'
         | 'ENTREGADOS' | 'PROFORMAS' | 'usuarios' | 'ListdoUsuario' | 'PermisosUsuarios' | 'Administrarroles'
-        | 'Menulateral' | 'Portalcliente' | 'Crearusuario' | 'monitoreoCliente' | 'AppPagos'
+        | 'Menulateral' | 'Portalcliente' | 'Crearusuario' | 'monitoreoCliente' | 'AppPagos' | 'ConfiguracionSedes'
+        | 'CategoriasGastos' | 'GastosMensuales'
     >('dashboard');
 
     function normalizarCodigo(codigo: string) {
@@ -514,6 +518,26 @@ export default function DashboardPage() {
     }
 
     function getHeaderInfo() {
+
+
+        if (vistaActual === 'ConfiguracionSedes') {
+            return {
+                titulo: 'Configuración de sedes',
+                subtitulo: 'Sedes de Netcomp y routers asignados.',
+            };
+        }
+        if (vistaActual === 'CategoriasGastos') {
+            return {
+                titulo: 'Categorías de gastos',
+                subtitulo: 'Organiza los egresos mensuales de Netcomp.',
+            };
+        }
+        if (vistaActual === 'GastosMensuales') {
+            return {
+                titulo: 'Gastos mensuales',
+                subtitulo: ' Control financiero de Netcomp por sede.',
+            };
+        }
 
         if (vistaActual === 'pagos') {
             return {
@@ -1481,7 +1505,19 @@ export default function DashboardPage() {
                                 onAbrirPublicidad={() => setVistaActual('Publicidad')}
                                 onAbrirReportesISP={() => setVistaActual('ReportesISP')}
                                 onAbrirSpeedTestAnalytics={() => setVistaActual('SpeedTestAnalytics')}
+                                onAbrirConfiguracionSedes={() => setVistaActual('ConfiguracionSedes')}
+                                onAbrirCategoriasGastos={() => setVistaActual('CategoriasGastos')}
+                                onAbrirGastosMensuales={() => setVistaActual('GastosMensuales')}
                             />
+                        )}
+                        {vistaActual === 'ConfiguracionSedes' && (
+                            <ConfiguracionSedesPage />
+                        )}
+                        {vistaActual === 'CategoriasGastos' && (
+                            <CategoriasGastosPage />
+                        )}
+                        {vistaActual === 'GastosMensuales' && (
+                            <GastosMensualesPage />
                         )}
 
 
