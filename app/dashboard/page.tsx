@@ -106,7 +106,15 @@ import {
     Users,
     Wifi,
     Wrench,
+    Clock3,
+    CircleCheckBig,
+    TriangleAlert,
+    WifiOff,
+    WalletCards,
+    CircleDollarSign,
+    TicketCheck,
 } from 'lucide-react';
+
 import PagosPage from '../pagos-mensuales/app-pagos/page';
 import CategoriasGastosPage from '../gastos/categorias/page';
 import GastosMensualesPage from '../gastos/mensuales/page';
@@ -462,7 +470,7 @@ export default function DashboardPage() {
             permiso: 'CLIENTES',
         },
         {
-            title: 'Contratos Servicios',
+            title: 'Buscar clientes en sistema',
             desc: 'Administrar servicios de internet, planes, PPPoE, GPON y estados.',
             icon: Wifi,
             href: '/contratos-servicios',
@@ -470,7 +478,7 @@ export default function DashboardPage() {
             permiso: 'CONTRATOS_SERVICIOS',
         },
         {
-            title: 'Pagos',
+            title: 'Listado de pagos mensuales',
             desc: 'Control de mensualidades, deudas y cortes.',
             icon: CreditCard,
             href: '/pagos',
@@ -508,6 +516,14 @@ export default function DashboardPage() {
             href: '/usuarios',
             color: 'bg-slate-700',
             permiso: 'USUARIOS',
+        },
+        {
+            title: 'Listado de facturación',
+            desc: 'Consultar y administrar las facturas generadas.',
+            icon: ReceiptText,
+            href: '/facturacion',
+            color: 'bg-cyan-700',
+            permiso: 'FACTURACION',
         },
     ];
 
@@ -1120,32 +1136,51 @@ export default function DashboardPage() {
                     <div className="p-5 md:p-8">
                         {vistaActual === 'dashboard' && (
                             <>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-5 mb-8">
+                                <div
+                                    className="
+        flex
+        flex-nowrap
+        gap-3
+        mb-8
+        overflow-x-auto
+        pb-2
+    "
+                                >
                                     {esAdmin && (
                                         <StatCard
                                             title="Clientes activos"
                                             value={String(clientesActivos)}
+                                            icon={Users}
+                                            tone="cyan"
                                         />
                                     )}
 
                                     <StatCard
                                         title="Pagos pendientes"
                                         value={String(dashboardMensualidades.pendientes)}
+                                        icon={Clock3}
+                                        tone="yellow"
                                     />
 
                                     <StatCard
                                         title="Pagadas"
                                         value={String(dashboardMensualidades.pagadas)}
+                                        icon={CircleCheckBig}
+                                        tone="green"
                                     />
 
                                     <StatCard
                                         title="Vencidas"
                                         value={String(dashboardMensualidades.vencidas)}
+                                        icon={TriangleAlert}
+                                        tone="orange"
                                     />
 
                                     <StatCard
                                         title="Cortadas"
                                         value={String(dashboardMensualidades.cortadas)}
+                                        icon={WifiOff}
+                                        tone="red"
                                     />
 
                                     {esAdmin && (
@@ -1153,23 +1188,33 @@ export default function DashboardPage() {
                                             <StatCard
                                                 title="Por cobrar"
                                                 value={`$${dashboardMensualidades.totalPorCobrar.toFixed(2)}`}
+                                                icon={WalletCards}
+                                                tone="violet"
                                             />
 
                                             <StatCard
                                                 title="Cobrado"
                                                 value={`$${dashboardMensualidades.totalCobrado.toFixed(2)}`}
+                                                icon={CircleDollarSign}
+                                                tone="green"
                                             />
                                         </>
                                     )}
 
                                     <StatCard
                                         title="Tickets abiertos"
-                                        value={String(dashboard?.resumen?.tecnicosActivos ?? 0)}
+                                        value={String(
+                                            dashboard?.resumen?.tecnicosActivos ?? 0
+                                        )}
+                                        icon={TicketCheck}
+                                        tone="blue"
                                     />
 
                                     <StatCard
                                         title="Equipos online"
                                         value="0"
+                                        icon={Wifi}
+                                        tone="cyan"
                                     />
                                 </div>
 
@@ -1215,9 +1260,15 @@ export default function DashboardPage() {
                                                             setVistaActual('PerfilAdministrativo');
                                                             return;
                                                         }
+                                                        if (item.title === 'Usuarios') {
+                                                            setVistaActual('usuarios');
+                                                            return;
+                                                        }
+                                                        if (item.title === 'Listado de facturación') {
+                                                            setVistaActual('facturasinternas');
+                                                            return;
+                                                        }
 
-
-                                                        router.push(item.href);
                                                     }}
                                                     className="text-left rounded-3xl bg-slate-900/95 p-6 shadow-xl shadow-cyan-500/10 hover:scale-[1.02] transition border border-cyan-500/25 hover:border-cyan-400/60"
                                                 >
@@ -1804,11 +1855,162 @@ function MenuItem({
         </button>
     );
 }
-function StatCard({ title, value }: { title: string; value: string }) {
+type StatTone =
+    | 'cyan'
+    | 'blue'
+    | 'green'
+    | 'yellow'
+    | 'orange'
+    | 'red'
+    | 'violet';
+
+type StatCardProps = {
+    title: string;
+    value: string;
+    icon: React.ElementType;
+    tone?: StatTone;
+};
+
+function StatCard({
+    title,
+    value,
+    icon: Icon,
+    tone = 'cyan',
+}: StatCardProps) {
+
+    const tones: Record<
+        StatTone,
+        {
+            border: string;
+            background: string;
+            iconBg: string;
+            icon: string;
+            value: string;
+        }
+    > = {
+        cyan: {
+            border: 'border-cyan-500/25',
+            background: 'bg-cyan-500/5',
+            iconBg: 'bg-cyan-500/10',
+            icon: 'text-cyan-400',
+            value: 'text-cyan-300',
+        },
+
+        blue: {
+            border: 'border-blue-500/25',
+            background: 'bg-blue-500/5',
+            iconBg: 'bg-blue-500/10',
+            icon: 'text-blue-400',
+            value: 'text-blue-300',
+        },
+
+        green: {
+            border: 'border-emerald-500/25',
+            background: 'bg-emerald-500/5',
+            iconBg: 'bg-emerald-500/10',
+            icon: 'text-emerald-400',
+            value: 'text-emerald-300',
+        },
+
+        yellow: {
+            border: 'border-yellow-500/25',
+            background: 'bg-yellow-500/5',
+            iconBg: 'bg-yellow-500/10',
+            icon: 'text-yellow-400',
+            value: 'text-yellow-300',
+        },
+
+        orange: {
+            border: 'border-orange-500/25',
+            background: 'bg-orange-500/5',
+            iconBg: 'bg-orange-500/10',
+            icon: 'text-orange-400',
+            value: 'text-orange-300',
+        },
+
+        red: {
+            border: 'border-red-500/25',
+            background: 'bg-red-500/5',
+            iconBg: 'bg-red-500/10',
+            icon: 'text-red-400',
+            value: 'text-red-300',
+        },
+
+        violet: {
+            border: 'border-violet-500/25',
+            background: 'bg-violet-500/5',
+            iconBg: 'bg-violet-500/10',
+            icon: 'text-violet-400',
+            value: 'text-violet-300',
+        },
+    };
+
+    const color = tones[tone];
+
     return (
-        <div className="rounded-2xl bg-slate-900/95 p-5 shadow-lg shadow-cyan-500/10 border border-cyan-500/25">
-            <p className="text-sm font-bold text-cyan-200/70">{title}</p>
-            <h3 className="text-3xl font-black text-cyan-400 mt-2">{value}</h3>
+        <div
+            className={`
+                ${color.border}
+                ${color.background}
+                border
+                rounded-2xl
+                px-4
+                py-3
+                min-w-[155px]
+                flex-1
+                transition-all
+                duration-200
+                hover:-translate-y-0.5
+                hover:bg-slate-800/70
+            `}
+            style={{ marginTop: 10 }}
+        >
+            <div className="flex items-center gap-3">
+
+                <div
+                    className={`
+                        ${color.iconBg}
+                        ${color.icon}
+                        w-9
+                        h-9
+                        rounded-xl
+                        flex
+                        items-center
+                        justify-center
+                        shrink-0
+                    `}
+                >
+                    <Icon size={18} />
+                </div>
+
+                <div className="min-w-0">
+
+                    <p
+                        className="
+                            text-[11px]
+                            text-slate-400
+                            font-medium
+                            whitespace-nowrap
+                        "
+                    >
+                        {title}
+                    </p>
+
+                    <p
+                        className={`
+                            ${color.value}
+                            text-xl
+                            font-black
+                            leading-tight
+                            mt-0.5
+                            whitespace-nowrap
+                        `}
+                    >
+                        {value}
+                    </p>
+
+                </div>
+            </div>
         </div>
     );
 }
