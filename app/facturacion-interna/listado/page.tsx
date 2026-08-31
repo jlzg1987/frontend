@@ -12,13 +12,17 @@ type FacturaInterna = {
     clienteId: string | null;
     clienteExternoId?: number | null;
     tipoCliente?: 'ISP' | 'EXTERNO' | string;
+
     subtotal: number;
     totalImpuestos: number;
     totalDescuentos: number;
     totalFinal: number;
+
     estado: string;
+
     fechaFactura: string;
     fechaPago: string | null;
+
     observacion: string | null;
     pdfUrl: string | null;
 
@@ -31,6 +35,22 @@ type FacturaInterna = {
     apellidosExterno?: string;
     cedulaExterno?: string;
     celularExterno?: string;
+
+    routerId?: number | null;
+    routerNombre?: string | null;
+
+    sedeId?: string | null;
+    sedeNombre?: string | null;
+    sedeProvincia?: string | null;
+    sedeCiudad?: string | null;
+};
+
+type Sede = {
+    sedeId: string;
+    nombre: string;
+    provincia: string;
+    ciudadCanton?: string | null;
+    estado: 'ACTIVA' | 'INACTIVA';
 };
 
 export default function ListadoFacturasInternasPage() {
@@ -39,6 +59,10 @@ export default function ListadoFacturasInternasPage() {
     const [fechaDesde, setFechaDesde] = useState('');
     const [fechaHasta, setFechaHasta] = useState('');
     const [estado, setEstado] = useState('');
+
+    const [sedes, setSedes] = useState<Sede[]>([]);
+    const [sedeId, setSedeId] = useState('');
+
     const [loading, setLoading] = useState(false);
     const [ordenFecha, setOrdenFecha] = useState<'ASC' | 'DESC'>('DESC');
     const [procesandoSriId, setProcesandoSriId] = useState<string | null>(null);
@@ -53,8 +77,86 @@ export default function ListadoFacturasInternasPage() {
     });
 
     useEffect(() => {
+        cargarSedes();
         cargarFacturas();
     }, []);
+
+    async function cargarSedes() {
+        try {
+
+            const resp = await fetch(
+                `${API_BASE}/gastos-mensuales/sedes?incluirInactivas=0`
+            );
+
+            const data = await resp.json();
+
+            if (!data.ok) {
+                console.error(
+                    'Error cargando sedes:',
+                    data.message
+                );
+                return;
+            }
+
+            setSedes(data.sedes || []);
+
+        } catch (error) {
+
+            console.error(
+                'Error cargando sedes:',
+                error
+            );
+        }
+    }
+
+    function generarReportePdf() {
+
+        const params =
+            new URLSearchParams();
+
+        if (buscar.trim()) {
+            params.append(
+                'buscar',
+                buscar.trim()
+            );
+        }
+
+        if (fechaDesde) {
+            params.append(
+                'fechaDesde',
+                fechaDesde
+            );
+        }
+
+        if (fechaHasta) {
+            params.append(
+                'fechaHasta',
+                fechaHasta
+            );
+        }
+
+        if (estado) {
+            params.append(
+                'estado',
+                estado
+            );
+        }
+
+        if (sedeId) {
+            params.append(
+                'sedeId',
+                sedeId
+            );
+        }
+
+        const url =
+            `${API_BASE}/facturacion-interna/reporte-pdf?${params.toString()}`;
+
+        window.open(
+            url,
+            '_blank'
+        );
+    }
 
     async function cargarFacturas() {
         try {
@@ -66,6 +168,9 @@ export default function ListadoFacturasInternasPage() {
             if (fechaDesde) params.append('fechaDesde', fechaDesde);
             if (fechaHasta) params.append('fechaHasta', fechaHasta);
             if (estado) params.append('estado', estado);
+            if (sedeId) {
+                params.append('sedeId', sedeId);
+            }
 
             const resp = await fetch(`${API_BASE}/facturacion-interna?${params.toString()}`);
             const data = await resp.json();
@@ -146,15 +251,39 @@ export default function ListadoFacturasInternasPage() {
         }
     }
 
-    function limpiarFiltros() {
+    async function limpiarFiltros() {
+
         setBuscar('');
         setFechaDesde('');
         setFechaHasta('');
         setEstado('');
+        setSedeId('');
 
-        setTimeout(() => {
-            cargarFacturas();
-        }, 100);
+        try {
+
+            setLoading(true);
+
+            const resp = await fetch(
+                `${API_BASE}/facturacion-interna`
+            );
+
+            const data = await resp.json();
+
+            if (data.ok) {
+                setFacturas(data.data || []);
+            }
+
+        } catch (error) {
+
+            console.error(
+                'Error limpiando filtros:',
+                error
+            );
+
+        } finally {
+
+            setLoading(false);
+        }
     }
 
     function colorEstado(estado: string) {
@@ -288,6 +417,57 @@ export default function ListadoFacturasInternasPage() {
             setProcesandoSriId(null);
         }
     }
+    async function marcarFacturaComoPagada(factura: FacturaInterna) {
+        if (factura.estado === 'PAGADA') {
+            alert('Esta factura ya está pagada');
+            return;
+        }
+
+        if (factura.estado === 'ANULADA') {
+            alert('Una factura anulada no puede marcarse como pagada');
+            return;
+        }
+
+        const confirmar = confirm(
+            `¿Desea marcar la factura ${factura.numeroFactura} como PAGADA?`
+        );
+
+        if (!confirmar) return;
+
+        try {
+            const resp = await fetch(
+                `${API_BASE}/facturacion-interna/${factura.facturaId}/estado`,
+                {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        estado: 'PAGADA',
+                    }),
+                }
+            );
+
+            const data = await resp.json();
+
+            if (!data.ok) {
+                alert(data.message || 'No se pudo actualizar la factura');
+                return;
+            }
+
+            alert('Factura marcada como pagada correctamente');
+
+            cargarFacturas();
+
+        } catch (error) {
+            console.error(
+                'Error actualizando estado de factura:',
+                error
+            );
+
+            alert('Error actualizando la factura');
+        }
+    }
 
     return (
         <main className="min-h-screen bg-slate-950 text-white p-6">
@@ -296,7 +476,7 @@ export default function ListadoFacturasInternasPage() {
                 <section className="bg-slate-900 border border-cyan-500/20 rounded-2xl p-5 shadow-lg shadow-cyan-500/10 mb-6">
                     <h2 className="text-xl font-bold mb-4">Filtros de búsqueda</h2>
 
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
                         <div className="md:col-span-2">
                             <label className="text-sm text-slate-300">
                                 Nombre, cédula, celular o número factura
@@ -345,6 +525,42 @@ export default function ListadoFacturasInternasPage() {
                                 <option value="ANULADA">Anulada</option>
                             </select>
                         </div>
+                        <div>
+                            <label className="text-sm text-slate-300">
+                                Sede
+                            </label>
+
+                            <select
+                                value={sedeId}
+                                onChange={(e) => setSedeId(e.target.value)}
+                                className="
+            w-full
+            mt-1
+            bg-slate-950
+            border
+            border-slate-700
+            rounded-xl
+            px-3
+            py-2
+            outline-none
+            focus:border-cyan-400
+        "
+                            >
+                                <option value="">
+                                    Todas las sedes
+                                </option>
+
+                                {sedes.map((sede) => (
+                                    <option
+                                        key={sede.sedeId}
+                                        value={sede.sedeId}
+                                    >
+                                        {sede.nombre}
+                                    </option>
+                                ))}
+
+                            </select>
+                        </div>
                     </div>
 
                     <div className="flex flex-col md:flex-row gap-3 mt-5">
@@ -361,6 +577,20 @@ export default function ListadoFacturasInternasPage() {
                             className="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-bold px-5 py-2 rounded-xl"
                         >
                             Limpiar filtros
+                        </button>
+                        <button
+                            onClick={generarReportePdf}
+                            className="
+        bg-cyan-600
+        hover:bg-cyan-500
+        text-white
+        font-bold
+        px-5
+        py-2
+        rounded-xl
+    "
+                        >
+                            Reporte PDF
                         </button>
                     </div>
                 </section>
@@ -392,6 +622,7 @@ export default function ListadoFacturasInternasPage() {
                                     </th>
                                     <th className="px-4 py-3 text-right">Total</th>
                                     <th className="px-4 py-3 text-center">Estado</th>
+                                    <th className="px-4 py-3 text-left">Sede</th>
                                     <th className="px-4 py-3 text-center">Acciones</th>
                                 </tr>
                             </thead>
@@ -399,7 +630,7 @@ export default function ListadoFacturasInternasPage() {
                             <tbody>
                                 {facturasOrdenadas.length === 0 && (
                                     <tr>
-                                        <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
+                                        <td colSpan={9} className="px-4 py-10 text-center text-slate-400">
                                             No hay facturas internas registradas.
                                         </td>
                                     </tr>
@@ -456,6 +687,43 @@ export default function ListadoFacturasInternasPage() {
                                         </td>
 
                                         <td className="px-4 py-4">
+
+                                            {factura.tipoCliente === 'ISP' ? (
+                                                <>
+                                                    <div className="font-semibold text-cyan-300">
+                                                        {factura.sedeNombre || 'Sin sede'}
+                                                    </div>
+
+                                                    <div className="text-xs text-slate-500">
+                                                        {factura.routerNombre || 'Router no asignado'}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <span className="text-slate-500">
+                                                    Externo
+                                                </span>
+                                            )}
+
+                                        </td>
+
+                                        <td className="px-4 py-4">
+                                            {factura.estado === 'PENDIENTE' && (
+                                                <button
+                                                    onClick={() => marcarFacturaComoPagada(factura)}
+                                                    className="
+            bg-emerald-600
+            hover:bg-emerald-500
+            text-white
+            font-bold
+            px-3
+            py-2
+            rounded-lg
+            text-xs
+        "
+                                                    style={{ marginBottom: 10 }}>
+                                                    Aprobar
+                                                </button>
+                                            )}
                                             <div className="flex flex-col md:flex-row gap-2 justify-center">
                                                 <button
                                                     onClick={() => procesarFacturaSriDesdeInterna(factura)}

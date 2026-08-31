@@ -3,10 +3,12 @@
 
 import { API_BASE, getToken } from '@/src/lib/api';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Download } from 'lucide-react';
 
 type Mensualidad = {
     mensualidadId: string;
+    routerId?: number | string | null;
     servicioId: string;
     clienteId: string;
     ipCliente: string;
@@ -37,6 +39,8 @@ export default function MensualidadesPage({
     const router = useRouter();
     const [mensualidades, setMensualidades] = useState<Mensualidad[]>([]);
     const [filtroEstado, setFiltroEstado] = useState<'TODAS' | Mensualidad['estado']>('TODAS');
+    const [filtroRouterId, setFiltroRouterId] = useState('');
+    const [descargandoPdf, setDescargandoPdf] = useState(false);
     const [loading, setLoading] = useState(false);
     const [mensaje, setMensaje] = useState('');
     const [pagoSeleccionado, setPagoSeleccionado] = useState<Mensualidad | null>(null);
@@ -306,13 +310,97 @@ export default function MensualidadesPage({
 
 
 
-    const mensualidadesFiltradas = filtroEstado === 'TODAS'
-        ? mensualidades
-        : mensualidades.filter((mensualidad) => mensualidad.estado === filtroEstado);
+    const routersDisponibles = useMemo(() => {
+        const mapa = new Map<string, string>();
 
-    const totalCartera = mensualidades
+        mensualidades.forEach((mensualidad) => {
+            const routerId = String(mensualidad.routerId || '');
+
+            if (routerId && !mapa.has(routerId)) {
+                mapa.set(
+                    routerId,
+                    mensualidad.nombreRouter || `Router ${routerId}`
+                );
+            }
+        });
+
+        return Array.from(mapa.entries())
+            .map(([routerId, nombreRouter]) => ({ routerId, nombreRouter }))
+            .sort((a, b) => a.nombreRouter.localeCompare(b.nombreRouter));
+    }, [mensualidades]);
+
+    const mensualidadesDelRouter = filtroRouterId
+        ? mensualidades.filter(
+            (mensualidad) =>
+                String(mensualidad.routerId || '') === filtroRouterId
+        )
+        : mensualidades;
+
+    const mensualidadesFiltradas = filtroEstado === 'TODAS'
+        ? mensualidadesDelRouter
+        : mensualidadesDelRouter.filter(
+            (mensualidad) => mensualidad.estado === filtroEstado
+        );
+
+    const totalCartera = mensualidadesDelRouter
         .filter((mensualidad) => ['PENDIENTE', 'VENCIDA', 'CORTADA'].includes(mensualidad.estado))
         .reduce((total, mensualidad) => total + Number(mensualidad.valorMensual || 0), 0);
+
+    async function descargarReporteIngresosPdf() {
+        try {
+            setDescargandoPdf(true);
+            setMensaje('');
+
+            const token = getToken();
+            if (!token) {
+                throw new Error('No se encontró el token de autenticación');
+            }
+
+            const params = new URLSearchParams();
+            if (filtroEstado !== 'TODAS') {
+                params.set('estado', filtroEstado);
+            }
+            if (filtroRouterId) {
+                params.set('routerId', filtroRouterId);
+            }
+
+            const res = await fetch(
+                `${API_BASE}/mensualidades/reporte-ingresos-pdf?${params.toString()}`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                }
+            );
+
+            if (!res.ok) {
+                const contentType = res.headers.get('content-type') || '';
+                const data = contentType.includes('application/json')
+                    ? await res.json().catch(() => ({}))
+                    : {};
+
+                throw new Error(
+                    data.message ||
+                    data.mensaje ||
+                    'No se pudo generar el reporte de ingresos'
+                );
+            }
+
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const enlace = document.createElement('a');
+            enlace.href = url;
+            enlace.download = `reporte-ingresos-${filtroEstado.toLowerCase()}-${filtroRouterId || 'todos'}.pdf`;
+            document.body.appendChild(enlace);
+            enlace.click();
+            enlace.remove();
+            URL.revokeObjectURL(url);
+        } catch (error: any) {
+            setMensaje(error.message || 'Error descargando el reporte de ingresos');
+        } finally {
+            setDescargandoPdf(false);
+        }
+    }
 
     async function crearMensualidadManual() {
         try {
@@ -396,6 +484,17 @@ export default function MensualidadesPage({
 
                 <div className="flex flex-wrap gap-2">
                     <button
+                        onClick={descargarReporteIngresosPdf}
+                        disabled={loading || descargandoPdf}
+                        className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-700 px-4 py-2 rounded-xl font-semibold disabled:opacity-50"
+                    >
+                        <Download size={17} />
+                        {descargandoPdf
+                            ? 'Generando PDF...'
+                            : 'Reporte de ingresos'}
+                    </button>
+
+                    <button
                         onClick={() => onAbrirFacturasinternas()}
                         disabled={loading}
                         className="bg-red-400 hover:bg-red-500 px-4 py-2 rounded-xl font-semibold disabled:opacity-50"
@@ -419,12 +518,33 @@ export default function MensualidadesPage({
                 </div>
             )}
 
+            <div className="mb-5 rounded-2xl border border-cyan-500/20 bg-slate-900 p-4">
+                <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-400">
+                    Filtrar por router
+                </label>
+                <select
+                    value={filtroRouterId}
+                    onChange={(e) => setFiltroRouterId(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-500 md:max-w-md"
+                >
+                    <option value="">Todos los routers</option>
+                    {routersDisponibles.map((router) => (
+                        <option
+                            key={router.routerId}
+                            value={router.routerId}
+                        >
+                            {router.nombreRouter}
+                        </option>
+                    ))}
+                </select>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
-                <Card titulo="Todas" valor={mensualidades.length} activo={filtroEstado === 'TODAS'} onClick={() => setFiltroEstado('TODAS')} />
-                <Card titulo="Pendientes" valor={mensualidades.filter(x => x.estado === 'PENDIENTE').length} activo={filtroEstado === 'PENDIENTE'} onClick={() => setFiltroEstado('PENDIENTE')} />
-                <Card titulo="Vencidas" valor={mensualidades.filter(x => x.estado === 'VENCIDA').length} activo={filtroEstado === 'VENCIDA'} onClick={() => setFiltroEstado('VENCIDA')} />
-                <Card titulo="Cortadas" valor={mensualidades.filter(x => x.estado === 'CORTADA').length} activo={filtroEstado === 'CORTADA'} onClick={() => setFiltroEstado('CORTADA')} />
-                <Card titulo="Pagadas" valor={mensualidades.filter(x => x.estado === 'PAGADA').length} activo={filtroEstado === 'PAGADA'} onClick={() => setFiltroEstado('PAGADA')} />
+                <Card titulo="Todas" valor={mensualidadesDelRouter.length} activo={filtroEstado === 'TODAS'} onClick={() => setFiltroEstado('TODAS')} />
+                <Card titulo="Pendientes" valor={mensualidadesDelRouter.filter(x => x.estado === 'PENDIENTE').length} activo={filtroEstado === 'PENDIENTE'} onClick={() => setFiltroEstado('PENDIENTE')} />
+                <Card titulo="Vencidas" valor={mensualidadesDelRouter.filter(x => x.estado === 'VENCIDA').length} activo={filtroEstado === 'VENCIDA'} onClick={() => setFiltroEstado('VENCIDA')} />
+                <Card titulo="Cortadas" valor={mensualidadesDelRouter.filter(x => x.estado === 'CORTADA').length} activo={filtroEstado === 'CORTADA'} onClick={() => setFiltroEstado('CORTADA')} />
+                <Card titulo="Pagadas" valor={mensualidadesDelRouter.filter(x => x.estado === 'PAGADA').length} activo={filtroEstado === 'PAGADA'} onClick={() => setFiltroEstado('PAGADA')} />
             </div>
 
             <div className="mb-6 rounded-2xl border border-slate-700 bg-slate-900 p-5">
