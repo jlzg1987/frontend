@@ -2,8 +2,15 @@
 
 import { API_BASE } from '@/src/lib/api';
 import { authHeaders } from '@/src/utils/authHeaders';
-import { useEffect, useState } from 'react';
-
+import { useEffect, useRef, useState } from 'react';
+import {
+    Search,
+    RotateCcw,
+    FileText,
+    CalendarDays,
+    Building2,
+    Filter,
+} from 'lucide-react';
 
 const BASE_URL = API_BASE.replace('/api', '');
 
@@ -67,6 +74,9 @@ export default function ListadoFacturasInternasPage() {
     const [loading, setLoading] = useState(false);
     const [ordenFecha, setOrdenFecha] = useState<'ASC' | 'DESC'>('DESC');
     const [procesandoSriId, setProcesandoSriId] = useState<string | null>(null);
+
+    const fechaDesdeRef = useRef<HTMLInputElement>(null);
+    const fechaHastaRef = useRef<HTMLInputElement>(null);
 
     const facturasOrdenadas = [...facturas].sort((a, b) => {
         const fechaA = new Date(a.fechaFactura).getTime();
@@ -617,126 +627,328 @@ export default function ListadoFacturasInternasPage() {
                 </section>
 
                 <section className="bg-slate-900 border border-cyan-500/20 rounded-2xl p-5 shadow-lg shadow-cyan-500/10 mb-6">
-                    <h2 className="text-xl font-bold mb-4">Filtros de búsqueda</h2>
+
+                    <div className="flex items-center gap-2 mb-4">
+                        <Filter size={20} className="text-cyan-300" />
+
+                        <h2 className="text-xl font-bold">
+                            Filtros de búsqueda
+                        </h2>
+                    </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+
+                        {/* BUSCAR */}
                         <div className="md:col-span-2">
                             <label className="text-sm text-slate-300">
                                 Nombre, cédula, celular o número factura
                             </label>
-                            <input
-                                value={buscar}
-                                onChange={(e) => setBuscar(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') cargarFacturas();
-                                }}
-                                className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:border-cyan-400"
-                                placeholder="Buscar factura..."
-                            />
+
+                            <div className="relative mt-1">
+                                <Search
+                                    size={17}
+                                    className="
+                        absolute
+                        left-3
+                        top-1/2
+                        -translate-y-1/2
+                        text-slate-500
+                    "
+                                />
+
+                                <input
+                                    value={buscar}
+                                    onChange={(e) => setBuscar(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            cargarFacturas();
+                                        }
+                                    }}
+                                    className="
+                        w-full
+                        bg-slate-950
+                        border
+                        border-slate-700
+                        rounded-xl
+                        pl-10
+                        pr-3
+                        py-2
+                        outline-none
+                        focus:border-cyan-400
+                    "
+                                    placeholder="Buscar factura..."
+                                />
+                            </div>
                         </div>
 
+                        {/* DESDE */}
                         <div>
-                            <label className="text-sm text-slate-300">Desde</label>
-                            <input
-                                type="date"
-                                value={fechaDesde}
-                                onChange={(e) => setFechaDesde(e.target.value)}
-                                className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:border-cyan-400"
-                            />
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => fechaDesdeRef.current?.showPicker()}
+                                    className="
+            flex
+            items-center
+            justify-center
+            text-cyan-400
+            hover:text-cyan-300
+            transition-colors
+        "
+                                    title="Seleccionar fecha desde"
+                                >
+                                    <CalendarDays size={17} />
+                                </button>
+
+                                <label className="text-sm text-slate-300">
+                                    Desde
+                                </label>
+                            </div>
+
+
+
+                            <div className="relative mt-1">
+                                <input
+                                    ref={fechaDesdeRef}
+                                    type="date"
+                                    value={fechaDesde}
+                                    onChange={(e) => setFechaDesde(e.target.value)}
+                                    className="
+                        w-full
+                        bg-slate-950
+                        border
+                        border-slate-700
+                        rounded-xl
+                        px-3
+                        py-2
+                        outline-none
+                        focus:border-cyan-400
+                    "
+                                />
+
+
+                            </div>
                         </div>
 
+                        {/* HASTA */}
                         <div>
-                            <label className="text-sm text-slate-300">Hasta</label>
-                            <input
-                                type="date"
-                                value={fechaHasta}
-                                onChange={(e) => setFechaHasta(e.target.value)}
-                                className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:border-cyan-400"
-                            />
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => fechaHastaRef.current?.showPicker()}
+                                    className="
+            flex
+            items-center
+            justify-center
+            text-cyan-400
+            hover:text-cyan-300
+            transition-colors
+        "
+                                    title="Seleccionar fecha hasta"
+                                >
+                                    <CalendarDays size={17} />
+                                </button>
+
+                                <label className="text-sm text-slate-300">
+                                    Hasta
+                                </label>
+                            </div>
+
+
+
+                            <div className="relative mt-1">
+                                <input
+                                    ref={fechaHastaRef}
+                                    type="date"
+                                    value={fechaHasta}
+                                    onChange={(e) => setFechaHasta(e.target.value)}
+                                    className="
+                        w-full
+                        bg-slate-950
+                        border
+                        border-slate-700
+                        rounded-xl
+                        px-3
+                        py-2
+                        outline-none
+                        focus:border-cyan-400
+                    "
+                                />
+
+
+                            </div>
                         </div>
 
+                        {/* ESTADO */}
                         <div>
-                            <label className="text-sm text-slate-300">Estado</label>
-                            <select
-                                value={estado}
-                                onChange={(e) => setEstado(e.target.value)}
-                                className="w-full mt-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 outline-none focus:border-cyan-400"
-                            >
-                                <option value="">Todos</option>
-                                <option value="PENDIENTE">Pendiente</option>
-                                <option value="PAGADA">Pagada</option>
-                                <option value="ANULADA">Anulada</option>
-                            </select>
-                        </div>
-                        <div>
+
                             <label className="text-sm text-slate-300">
-                                Sede
+                                Estado
                             </label>
 
                             <select
-                                value={sedeId}
-                                onChange={(e) => setSedeId(e.target.value)}
+                                value={estado}
+                                onChange={(e) => setEstado(e.target.value)}
                                 className="
-            w-full
-            mt-1
-            bg-slate-950
-            border
-            border-slate-700
-            rounded-xl
-            px-3
-            py-2
-            outline-none
-            focus:border-cyan-400
-        "
+                    w-full
+                    mt-1
+                    bg-slate-950
+                    border
+                    border-slate-700
+                    rounded-xl
+                    px-3
+                    py-2
+                    outline-none
+                    focus:border-cyan-400
+                "
                             >
-                                <option value="">
-                                    Todas las sedes
+                                <option value="">Todos</option>
+                                <option value="PENDIENTE">
+                                    Pendiente
                                 </option>
-
-                                {sedes.map((sede) => (
-                                    <option
-                                        key={sede.sedeId}
-                                        value={sede.sedeId}
-                                    >
-                                        {sede.nombre}
-                                    </option>
-                                ))}
-
+                                <option value="PAGADA">
+                                    Pagada
+                                </option>
+                                <option value="ANULADA">
+                                    Anulada
+                                </option>
                             </select>
                         </div>
+
+                        {/* SEDE */}
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <Building2
+                                    size={17}
+                                    className="text-cyan-400"
+                                />
+
+                                <label className="text-sm text-slate-300">
+                                    Sede
+                                </label>
+                            </div>
+                            <div className="relative mt-1">
+
+
+
+                                <select
+                                    value={sedeId}
+                                    onChange={(e) =>
+                                        setSedeId(e.target.value)
+                                    }
+                                    className="
+                        w-full
+                        bg-slate-950
+                        border
+                        border-slate-700
+                        rounded-xl
+                        pl-10
+                        pr-3
+                        py-2
+                        outline-none
+                        focus:border-cyan-400
+                    "
+                                >
+                                    <option value="">
+                                        Todas las sedes
+                                    </option>
+
+                                    {sedes.map((sede) => (
+                                        <option
+                                            key={sede.sedeId}
+                                            value={sede.sedeId}
+                                        >
+                                            {sede.nombre}
+                                        </option>
+                                    ))}
+
+                                </select>
+                            </div>
+                        </div>
+
                     </div>
 
-                    <div className="flex flex-col md:flex-row gap-3 mt-5">
+                    {/* BOTONES */}
+                    <div className="flex flex-col sm:flex-row gap-3 mt-5">
+
                         <button
                             onClick={cargarFacturas}
                             disabled={loading}
-                            className="bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-700 text-slate-950 font-bold px-5 py-2 rounded-xl"
+                            className="
+                inline-flex
+                items-center
+                justify-center
+                gap-2
+                bg-emerald-500
+                hover:bg-emerald-400
+                disabled:bg-slate-700
+                disabled:text-slate-400
+                text-slate-950
+                font-bold
+                px-5
+                py-2.5
+                rounded-xl
+                transition
+            "
                         >
-                            {loading ? 'Buscando...' : 'Buscar'}
+                            <Search size={17} />
+
+                            {loading
+                                ? 'Buscando...'
+                                : 'Buscar'
+                            }
                         </button>
 
                         <button
                             onClick={limpiarFiltros}
-                            className="bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-bold px-5 py-2 rounded-xl"
+                            className="
+                inline-flex
+                items-center
+                justify-center
+                gap-2
+                bg-slate-800
+                hover:bg-slate-700
+                border
+                border-slate-600
+                text-white
+                font-bold
+                px-5
+                py-2.5
+                rounded-xl
+                transition
+            "
                         >
+                            <RotateCcw size={17} />
+
                             Limpiar filtros
                         </button>
+
                         <button
                             onClick={generarReportePdf}
                             className="
-        bg-cyan-600
-        hover:bg-cyan-500
-        text-white
-        font-bold
-        px-5
-        py-2
-        rounded-xl
-    "
+                inline-flex
+                items-center
+                justify-center
+                gap-2
+                bg-cyan-600
+                hover:bg-cyan-500
+                text-white
+                font-bold
+                px-5
+                py-2.5
+                rounded-xl
+                transition
+            "
                         >
+                            <FileText size={17} />
+
                             Reporte PDF
                         </button>
+
                     </div>
+
                 </section>
+
 
                 <section className="bg-slate-900 border border-cyan-500/20 rounded-2xl shadow-lg shadow-cyan-500/10 overflow-hidden">
                     <div className="p-5 border-b border-slate-800 flex items-center justify-between">
