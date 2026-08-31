@@ -1320,7 +1320,11 @@ export default function DashboardPage() {
                         )}
 
                         {vistaActual === 'PerfilAdministrativo' && servicioIdPerfil && (
-                            <PerfilAdministrativoPage servicioId={servicioIdPerfil} />
+                            <PerfilAdministrativoPage
+                                servicioId={servicioIdPerfil}
+                                onVolver={() => setVistaActual('contratosServicios')}
+                                onAbrirListadoMorosos={() => setVistaActual('mikrotikCortes')}
+                            />
                         )}
                         {vistaActual === 'listaNotificacion' && (
                             <TodasNotificacionesPage />

@@ -3,13 +3,19 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
+import { ArrowLeft, BadgeDollarSign } from "lucide-react";
+import { Copy, Check } from "lucide-react";
 
 import { API_BASE, getToken } from "@/src/lib/api";
 
 export default function PerfilAdministrativoPage({
     servicioId,
+    onVolver,
+    onAbrirListadoMorosos,
 }: {
     servicioId: string;
+    onVolver: () => void;
+    onAbrirListadoMorosos: () => void;
 }) {
 
 
@@ -23,6 +29,8 @@ export default function PerfilAdministrativoPage({
     const [formaPago, setFormaPago] = useState("EFECTIVO");
     const [referenciaPago, setReferenciaPago] = useState("");
     const [loadingPago, setLoadingPago] = useState(false);
+    const [datosCopiados, setDatosCopiados] = useState(false);
+    const [campoCopiado, setCampoCopiado] = useState<string | null>(null);
 
     const [nuevoTicket, setNuevoTicket] = useState({
         titulo: "",
@@ -220,6 +228,47 @@ export default function PerfilAdministrativoPage({
             </div>
         );
     }
+    const copiarDatosCliente = async () => {
+        const datos = [
+            `Nombre: ${perfil.cliente?.nombres || ""} ${perfil.cliente?.apellidos || ""}`,
+            `Cédula: ${perfil.cliente?.cedula || "N/A"}`,
+            `Cliente ID: ${perfil.cliente?.clienteId || "N/A"}`,
+            `Servicio ID: ${perfil.servicio?.servicioId || "N/A"}`,
+            `IP Cliente: ${perfil.servicio?.ipCliente || "N/A"}`,
+        ].join("\n");
+
+        try {
+            await navigator.clipboard.writeText(datos);
+
+            setDatosCopiados(true);
+
+            setTimeout(() => {
+                setDatosCopiados(false);
+            }, 2000);
+
+        } catch (error) {
+            console.error("Error copiando datos:", error);
+        }
+    };
+    const copiarDato = async (
+        valor: string | number | null | undefined,
+        campo: string
+    ) => {
+        if (valor === null || valor === undefined || valor === "") return;
+
+        try {
+            await navigator.clipboard.writeText(String(valor));
+
+            setCampoCopiado(campo);
+
+            setTimeout(() => {
+                setCampoCopiado(null);
+            }, 1500);
+
+        } catch (error) {
+            console.error("Error copiando dato:", error);
+        }
+    };
 
     return (
         <div className="p-6 space-y-6 text-white">
@@ -229,40 +278,186 @@ export default function PerfilAdministrativoPage({
             <div className="bg-slate-900 border border-cyan-500/20 rounded-2xl p-6">
                 <div className="flex gap-6 items-center">
 
-                    <Image
-                        src={
-                            perfil.cliente?.fotoPerfil ||
-                            "/avatar.png"
-                        }
-                        alt="Cliente"
-                        width={120}
-                        height={120}
-                        className="rounded-full border-4 border-cyan-500"
-                    />
+                    {/* FOTO / INICIALES */}
+                    <div className="shrink-0">
+                        {perfil.cliente?.fotoPerfil ? (
+                            <Image
+                                src={perfil.cliente.fotoPerfil}
+                                alt={`${perfil.cliente?.nombres || ""} ${perfil.cliente?.apellidos || ""}`}
+                                width={120}
+                                height={120}
+                                className="w-[120px] h-[120px] rounded-full border-4 border-cyan-500 object-cover"
+                            />
+                        ) : (
+                            <div
+                                className="
+                        w-[120px] h-[120px]
+                        rounded-full
+                        border-4 border-cyan-500
+                        bg-gradient-to-br from-cyan-500/20 to-blue-600/20
+                        flex items-center justify-center
+                        shadow-lg shadow-cyan-500/10
+                    "
+                            >
+                                <span className="text-4xl font-bold text-cyan-400 uppercase">
+                                    {`${perfil.cliente?.nombres?.charAt(0) || ""}${perfil.cliente?.apellidos?.charAt(0) || ""
+                                        }`}
+                                </span>
+                            </div>
+                        )}
+                    </div>
 
                     <div className="flex-1">
 
-                        <h1 className="text-3xl font-bold">
-                            {perfil.cliente?.nombres}{" "}
-                            {perfil.cliente?.apellidos}
-                        </h1>
+                        <div className="flex flex-wrap items-center justify-between gap-3">
 
-                        <p className="text-slate-400">
-                            {perfil.cliente?.cedula}
-                        </p>
+                            <div className="flex items-center gap-2">
+                                <h1 className="text-3xl font-bold text-white">
+                                    {perfil.cliente?.nombres}{" "}
+                                    {perfil.cliente?.apellidos}
+                                </h1>
 
-                        <div className="grid md:grid-cols-3 gap-4 mt-4">
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        copiarDato(
+                                            `${perfil.cliente?.nombres || ""} ${perfil.cliente?.apellidos || ""}`.trim(),
+                                            "nombre"
+                                        )
+                                    }
+                                    className="p-1.5 rounded-md text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition"
+                                    title="Copiar nombre"
+                                >
+                                    {campoCopiado === "nombre" ? (
+                                        <Check size={16} className="text-emerald-400" />
+                                    ) : (
+                                        <Copy size={16} />
+                                    )}
+                                </button>
+                            </div>
 
+                            <button
+                                type="button"
+                                onClick={copiarDatosCliente}
+                                className={`
+            inline-flex items-center gap-2
+            px-3 py-2 rounded-lg
+            text-sm font-medium
+            border transition-all
+            ${datosCopiados
+                                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                                        : "bg-slate-800 border-slate-700 text-slate-300 hover:border-cyan-500/40 hover:text-cyan-400"
+                                    }
+        `}
+                            >
+                                {datosCopiados ? (
+                                    <>
+                                        <Check size={16} />
+                                        Copiado
+                                    </>
+                                ) : (
+                                    <>
+                                        <Copy size={16} />
+                                        Copiar datos
+                                    </>
+                                )}
+                            </button>
+
+                        </div>
+
+
+                        <div className="flex items-center gap-2">
+                            <p className="text-slate-400">
+                                Cédula:  {perfil.cliente?.cedula}
+                            </p>
+
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    copiarDato(
+                                        perfil.cliente?.cedula,
+                                        "cedula"
+                                    )
+                                }
+                                className="p-1.5 rounded-md text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition"
+                                title="Copiar cédula"
+                            >
+                                {campoCopiado === "cedula" ? (
+                                    <Check size={15} className="text-emerald-400" />
+                                ) : (
+                                    <Copy size={15} />
+                                )}
+                            </button>
+                        </div>
+
+                        <div className="grid md:grid-cols-4 gap-4 mt-4">
+
+                            {/* CLIENTE ID */}
                             <div>
-                                <p className="text-slate-400 text-sm">
-                                    Servicio ID
+                                <div className="flex items-center gap-2">
+                                    <p className="text-slate-400 text-sm">
+                                        Cliente ID
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            copiarDato(
+                                                perfil.cliente?.clienteId,
+                                                "clienteId"
+                                            )
+                                        }
+                                        className="p-1.5 rounded-md text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition"
+                                        title="Copiar Cliente ID"
+                                    >
+                                        {campoCopiado === "clienteId" ? (
+                                            <Check size={15} className="text-emerald-400" />
+                                        ) : (
+                                            <Copy size={15} />
+                                        )}
+                                    </button>
+                                </div>
+
+                                <p className="font-mono text-cyan-400">
+                                    {perfil.cliente?.clienteId}
                                 </p>
+
+
+                            </div>
+
+                            {/* SERVICIO ID */}
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <p className="text-slate-400 text-sm">
+                                        Servicio ID
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            copiarDato(
+                                                perfil.servicio?.servicioId,
+                                                "servicioId"
+                                            )
+                                        }
+                                        className="p-1.5 rounded-md text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition"
+                                        title="Copiar Servicio ID"
+                                    >
+                                        {campoCopiado === "servicioId" ? (
+                                            <Check size={15} className="text-emerald-400" />
+                                        ) : (
+                                            <Copy size={15} />
+                                        )}
+                                    </button>
+                                </div>
+
 
                                 <p className="font-mono text-cyan-400">
                                     {perfil.servicio?.servicioId}
                                 </p>
+
+
                             </div>
 
+                            {/* ESTADO CLIENTE */}
                             <div>
                                 <p className="text-slate-400 text-sm">
                                     Estado Cliente
@@ -273,6 +468,7 @@ export default function PerfilAdministrativoPage({
                                 </p>
                             </div>
 
+                            {/* ESTADO SERVICIO */}
                             <div>
                                 <p className="text-slate-400 text-sm">
                                     Estado Servicio
@@ -287,6 +483,26 @@ export default function PerfilAdministrativoPage({
                     </div>
 
                 </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 mb-6">
+
+                <button
+                    onClick={() => onVolver()}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-800 text-white font-medium transition"
+                >
+                    <ArrowLeft size={18} />
+                    Listado de clientes
+                </button>
+
+                <button
+                    onClick={() => onAbrirListadoMorosos()}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium transition"
+                >
+                    <BadgeDollarSign size={18} />
+                    Listado de morosos
+                </button>
+
             </div>
 
             {/* RESUMEN */}
@@ -378,8 +594,33 @@ export default function PerfilAdministrativoPage({
                                     IP Cliente
                                 </div>
 
-                                <div className="font-mono">
-                                    {estadoConexion?.ipCliente}
+                                <div className="flex items-center gap-2">
+                                    <div className="font-mono">
+                                        {estadoConexion?.ipCliente || "Sin IP"}
+                                    </div>
+
+                                    {estadoConexion?.ipCliente && (
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                copiarDato(
+                                                    estadoConexion.ipCliente,
+                                                    "ipCliente"
+                                                )
+                                            }
+                                            className="p-1.5 rounded-md text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 transition"
+                                            title="Copiar IP del cliente"
+                                        >
+                                            {campoCopiado === "ipCliente" ? (
+                                                <Check
+                                                    size={15}
+                                                    className="text-emerald-400"
+                                                />
+                                            ) : (
+                                                <Copy size={15} />
+                                            )}
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
@@ -449,7 +690,11 @@ export default function PerfilAdministrativoPage({
 
                     <div>
                         <strong>Fecha Instalación:</strong>{" "}
-                        {perfil.servicio?.fechaInstalacion}
+                        {perfil.servicio?.fechaInstalacion
+                            ? new Date(perfil.servicio.fechaInstalacion)
+                                .toISOString()
+                                .split("T")[0]
+                            : "N/A"}
                     </div>
 
                 </div>
@@ -464,11 +709,11 @@ export default function PerfilAdministrativoPage({
                     Historial Mensualidades
                 </h2>
 
-                <div className="overflow-auto">
+                <div className="max-h-[360px] overflow-y-auto overflow-x-auto pr-1">
 
                     <table className="w-full">
 
-                        <thead>
+                        <thead className="sticky top-0 z-10 bg-slate-900">
                             <tr className="border-b border-slate-700">
                                 <th className="text-left p-2">
                                     Periodo
@@ -485,6 +730,7 @@ export default function PerfilAdministrativoPage({
                                 <th className="text-left p-2">
                                     Estado
                                 </th>
+
                                 <th className="p-2 text-left">
                                     Acción
                                 </th>
@@ -513,21 +759,29 @@ export default function PerfilAdministrativoPage({
                                         <td className="p-2">
                                             {item.estado}
                                         </td>
+
                                         <td className="p-2">
-                                            {item.estado !== "PAGADA" && item.estado !== "ANULADA" ? (
+                                            {item.estado !== "PAGADA" &&
+                                                item.estado !== "ANULADA" ? (
                                                 <button
                                                     onClick={() => {
                                                         setPagoSeleccionado(item);
-                                                        setValorPagado(String(item.valorMensual || ""));
+                                                        setValorPagado(
+                                                            String(item.valorMensual || "")
+                                                        );
                                                         setFormaPago("EFECTIVO");
-                                                        setReferenciaPago("PAGO EN EFECTIVO");
+                                                        setReferenciaPago(
+                                                            "PAGO EN EFECTIVO"
+                                                        );
                                                     }}
                                                     className="px-3 py-1 rounded-lg bg-green-600 hover:bg-green-500 text-sm font-semibold"
                                                 >
                                                     Pagar
                                                 </button>
                                             ) : (
-                                                <span className="text-slate-500">—</span>
+                                                <span className="text-slate-500">
+                                                    —
+                                                </span>
                                             )}
                                         </td>
                                     </tr>
@@ -555,11 +809,11 @@ export default function PerfilAdministrativoPage({
                     </span>
                 </div>
 
-                <div className="overflow-auto">
+                <div className="max-h-[360px] overflow-y-auto overflow-x-auto pr-1">
 
                     <table className="w-full">
 
-                        <thead>
+                        <thead className="sticky top-0 z-10 bg-slate-900">
                             <tr className="border-b border-slate-700">
                                 <th className="p-2 text-left">Factura</th>
                                 <th className="p-2 text-left">Fecha</th>
@@ -616,6 +870,7 @@ export default function PerfilAdministrativoPage({
                                                 <a
                                                     href={factura.pdfUrl}
                                                     target="_blank"
+                                                    rel="noopener noreferrer"
                                                     className="text-cyan-400 hover:underline"
                                                 >
                                                     Ver PDF
@@ -663,11 +918,11 @@ export default function PerfilAdministrativoPage({
 
                 </div>
 
-                <div className="overflow-auto">
+                <div className="max-h-[360px] overflow-y-auto overflow-x-auto pr-1">
 
                     <table className="w-full">
 
-                        <thead>
+                        <thead className="sticky top-0 z-10 bg-slate-900">
                             <tr className="border-b border-slate-700">
                                 <th className="p-2 text-left">
                                     Código
