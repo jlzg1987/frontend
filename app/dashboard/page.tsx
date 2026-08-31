@@ -1236,7 +1236,7 @@ export default function DashboardPage() {
                                                             setVistaActual('Clientes');
                                                             return;
                                                         }
-                                                        if (item.title === 'Contratos Servicios') {
+                                                        if (item.title === 'Buscar clientes en sistema') {
                                                             setVistaActual('contratosServicios');
                                                             return;
                                                         }
@@ -1252,7 +1252,7 @@ export default function DashboardPage() {
                                                             setVistaActual('tickets');
                                                             return;
                                                         }
-                                                        if (item.title === 'Pagos') {
+                                                        if (item.title === 'Listado de pagos mensuales') {
                                                             setVistaActual('pagos');
                                                             return;
                                                         }

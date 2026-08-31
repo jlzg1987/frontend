@@ -14,6 +14,7 @@ import {
     TrendingDown,
     TrendingUp,
     UserMinus,
+    CalendarDays,
 } from 'lucide-react';
 import { authHeaders } from '@/src/utils/authHeaders';
 
@@ -1981,28 +1982,49 @@ export default function ContratosServiciosPage({
                                     style={styles.input}
                                 />
 
-                                {/* FECHA */}
+                                {/* FECHAS */}
                                 <div style={styles.formGroup}>
-                                    <label style={styles.label}>Fecha de firma del contrato</label>
+                                    <label style={styles.label}>
+                                        Fecha de firma del contrato
+                                    </label>
 
-                                    <input
-                                        type="date"
-                                        name="fechaFirmaContrato"
-                                        value={formData.fechaFirmaContrato}
-                                        onChange={handleChange}
-                                        style={styles.inputDate || styles.input}
-                                        className="inputDate"
-                                    />
+                                    <div style={styles.dateInputWrapper}>
+                                        <input
+                                            type="date"
+                                            name="fechaFirmaContrato"
+                                            value={formData.fechaFirmaContrato}
+                                            onChange={handleChange}
+                                            style={styles.inputDate}
+                                            className="inputDateCustom"
+                                        />
+
+                                        <CalendarDays
+                                            size={19}
+                                            style={styles.dateIcon}
+                                        />
+                                    </div>
                                 </div>
+
                                 <div style={styles.formGroup}>
-                                    <label style={styles.label}>Fecha de Instalación</label>
-                                    <input
-                                        type="date"
-                                        name="fechaInstalacion"
-                                        value={formData.fechaInstalacion}
-                                        onChange={handleChange}
-                                        style={styles.inputDate}
-                                    />
+                                    <label style={styles.label}>
+                                        Fecha de Instalación
+                                    </label>
+
+                                    <div style={styles.dateInputWrapper}>
+                                        <input
+                                            type="date"
+                                            name="fechaInstalacion"
+                                            value={formData.fechaInstalacion}
+                                            onChange={handleChange}
+                                            style={styles.inputDate}
+                                            className="inputDateCustom"
+                                        />
+
+                                        <CalendarDays
+                                            size={19}
+                                            style={styles.dateIcon}
+                                        />
+                                    </div>
                                 </div>
 
                                 {/* WISP */}
@@ -2534,6 +2556,34 @@ export default function ContratosServiciosPage({
 
 const styles: { [key: string]: React.CSSProperties } = {
 
+    dateInputWrapper: {
+        position: 'relative',
+        width: '100%',
+    },
+
+    dateIcon: {
+        position: 'absolute',
+        right: '14px',
+        top: '50%',
+        transform: 'translateY(-50%)',
+        color: '#ffffff',
+        pointerEvents: 'none',
+    },
+
+    inputDate: {
+        width: '100%',
+        padding: '13px 45px 13px 14px',
+        borderRadius: '12px',
+        border: '1px solid rgba(148,163,184,0.22)',
+        background: 'rgba(15,23,42,0.92)',
+        color: '#fff',
+        fontSize: '14px',
+        outline: 'none',
+        colorScheme: 'dark',
+        boxSizing: 'border-box',
+    },
+
+
     summarySection: {
         marginBottom: '24px',
     },
@@ -2729,18 +2779,7 @@ const styles: { [key: string]: React.CSSProperties } = {
         cursor: 'pointer',
     },
 
-    inputDate: {
-        width: '100%',
-        padding: '13px 14px',
-        borderRadius: '12px',
-        border: '1px solid rgba(148,163,184,0.22)',
-        background: 'rgba(15,23,42,0.92)',
-        color: '#fff',
-        fontSize: '14px',
-        outline: 'none',
-        colorScheme: 'dark',
-        boxSizing: 'border-box',
-    },
+
     contractBox: {
         background: 'linear-gradient(145deg, rgba(30,64,175,0.20), rgba(8,145,178,0.10))',
         border: '1px solid rgba(96,165,250,0.25)',

@@ -26,23 +26,47 @@ body {
 }
 
 .input {
-    background: #020617;
-    border: 1px solid rgba(34, 211, 238, 0.25);
-    color: white;
-    border-radius: 12px;
-    padding: 10px 14px;
-    outline: none;
+  background: #020617;
+  border: 1px solid rgba(34, 211, 238, 0.25);
+  color: white;
+  border-radius: 12px;
+  padding: 10px 14px;
+  outline: none;
 }
 
 .input:focus {
-    border-color: #22d3ee;
+  border-color: #22d3ee;
 }
+
 input[type="date"]::-webkit-calendar-picker-indicator {
-    filter: invert(1);
-    opacity: 0.8;
-    cursor: pointer;
+  filter: invert(1);
+  opacity: 0.8;
+  cursor: pointer;
 }
 
 input[type="date"]::-webkit-calendar-picker-indicator:hover {
-    opacity: 1;
+  opacity: 1;
+}
+
+.inputDate {
+  color-scheme: dark;
+}
+
+.inputDate::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.85;
+  cursor: pointer;
+}
+
+.inputDate::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+.inputDateCustom::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  cursor: pointer;
+  position: absolute;
+  right: 0;
+  width: 45px;
+  height: 100%;
 }
