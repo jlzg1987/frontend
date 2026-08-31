@@ -8,12 +8,14 @@ import {
     Clock3,
     Copy,
     FileText,
+    FileDown,
     Files,
     PauseCircle,
     TrendingDown,
     TrendingUp,
     UserMinus,
 } from 'lucide-react';
+import { authHeaders } from '@/src/utils/authHeaders';
 
 type Servicio = {
     servicioId: string;
@@ -81,6 +83,21 @@ type Servicio = {
     | 'REPROGRAMADO'
     | 'CANCELADO';
 };
+type Sede = {
+    sedeId: string;
+    nombre: string;
+    provincia?: string;
+    ciudadCanton?: string;
+};
+
+type SedeRouter = {
+    sedeRouterId?: string;
+    sedeId: string;
+    routerMikrotikId: number;
+    sedeNombre?: string;
+    nombreSede?: string;
+    routerNombre?: string;
+};
 
 export default function ContratosServiciosPage({
     onAbrirFacturainterna,
@@ -96,6 +113,10 @@ export default function ContratosServiciosPage({
         'TODOS' | Servicio['estadoServicio']
     >('TODOS');
     const [routerFiltro, setRouterFiltro] = useState('');
+
+    const [sedeFiltro, setSedeFiltro] = useState('');
+    const [sedes, setSedes] = useState<Sede[]>([]);
+    const [sedeRouters, setSedeRouters] = useState<SedeRouter[]>([]);
 
     const [showModal, setShowModal] = useState(false);
 
@@ -133,6 +154,65 @@ export default function ContratosServiciosPage({
     >(null);
 
     const IVA = 0.15;
+
+    const generarReporteServiciosPdf = async () => {
+        try {
+            const params = new URLSearchParams();
+
+            if (busqueda.trim()) {
+                params.append('buscar', busqueda.trim());
+            }
+
+            if (estadoFiltro !== 'TODOS') {
+                params.append('estado', estadoFiltro);
+            }
+
+            if (sedeFiltro) {
+                params.append('sedeId', sedeFiltro);
+            }
+
+            if (routerFiltro) {
+                params.append('routerId', routerFiltro);
+            }
+
+            const res = await fetch(
+                `${API_BASE}/cliente-servicio/reporte-pdf?${params.toString()}`,
+                {
+                    headers: authHeaders(),
+                }
+            );
+
+            if (!res.ok) {
+                const texto = await res.text();
+
+                console.error(
+                    'Error generando reporte:',
+                    texto
+                );
+
+                alert('No se pudo generar el reporte PDF');
+                return;
+            }
+
+            const blob = await res.blob();
+
+            const url = URL.createObjectURL(blob);
+
+            window.open(url, '_blank');
+
+            setTimeout(() => {
+                URL.revokeObjectURL(url);
+            }, 60000);
+
+        } catch (error) {
+            console.error(
+                'Error generando reporte de servicios:',
+                error
+            );
+
+            alert('Error generando reporte PDF');
+        }
+    };
 
     const [formData, setFormData] = useState({
         clienteId: '',
@@ -240,6 +320,52 @@ export default function ContratosServiciosPage({
         setServicioEditandoId('');
     };
 
+    const cargarSedesFiltro = async () => {
+        try {
+            const [resSedes, resSedeRouters] = await Promise.all([
+                fetch(
+                    `${API_BASE}/gastos-mensuales/sedes?incluirInactivas=0`,
+                    {
+                        headers: authHeaders(),
+                    }
+                ),
+
+                fetch(
+                    `${API_BASE}/gastos-mensuales/sedes-routers`,
+                    {
+                        headers: authHeaders(),
+                    }
+                ),
+            ]);
+
+            const dataSedes = await resSedes.json();
+            const dataSedeRouters = await resSedeRouters.json();
+
+            console.log('SEDES:', dataSedes);
+            console.log('SEDE ROUTERS:', dataSedeRouters);
+
+            setSedes(
+                Array.isArray(dataSedes.sedes)
+                    ? dataSedes.sedes
+                    : []
+            );
+
+            setSedeRouters(
+                Array.isArray(dataSedeRouters.sedeRouters)
+                    ? dataSedeRouters.sedeRouters
+                    : Array.isArray(dataSedeRouters.routers)
+                        ? dataSedeRouters.routers
+                        : []
+            );
+
+        } catch (error) {
+            console.error(
+                'Error cargando sedes y routers:',
+                error
+            );
+        }
+    };
+
     const cargarDatosModal = async () => {
         try {
 
@@ -340,29 +466,132 @@ export default function ContratosServiciosPage({
     useEffect(() => {
         cargarServicios();
         cargarRoutersFiltro();
+        cargarSedesFiltro();
     }, []);
 
-    const serviciosFiltrados = servicios.filter((s) => {
-        const texto = `${s.nombres} ${s.apellidos} ${s.cedula} ${s.telefono} ${s.email} ${s.nombrePlan} ${s.pppSecret} ${s.ipCliente}`.toLowerCase();
-        const coincideBusqueda = texto.includes(busqueda.toLowerCase());
-        const coincideEstado =
-            estadoFiltro === 'TODOS' || s.estadoServicio === estadoFiltro;
-        const coincideRouter =
-            !routerFiltro || String(s.routerId || '') === routerFiltro;
+    const obtenerSedePorRouter = (routerId?: string) => {
+        if (!routerId) return null;
 
-        return coincideBusqueda && coincideEstado && coincideRouter;
+        const relacion = sedeRouters.find(
+            (item) =>
+                String(item.routerMikrotikId) ===
+                String(routerId)
+        );
+
+        if (!relacion) return null;
+
+        const sede = sedes.find(
+            (item) =>
+                String(item.sedeId) ===
+                String(relacion.sedeId)
+        );
+
+        if (sede) return sede;
+
+        if (relacion.sedeNombre || relacion.nombreSede) {
+            return {
+                sedeId: relacion.sedeId,
+                nombre:
+                    relacion.sedeNombre ||
+                    relacion.nombreSede ||
+                    'Sede',
+            } as Sede;
+        }
+
+        return null;
+    };
+
+    const obtenerNombreRouter = (routerId?: string) => {
+        if (!routerId) return 'No asignado';
+
+        const router = routers.find((item) =>
+            String(
+                item.routerId ||
+                item.RouterId ||
+                item.id ||
+                ''
+            ) === String(routerId)
+        );
+
+        return (
+            router?.nombre ||
+            router?.Nombre ||
+            'Router no identificado'
+        );
+    };
+
+    const serviciosFiltrados = servicios.filter((s) => {
+
+        const texto = `
+        ${s.nombres}
+        ${s.apellidos}
+        ${s.cedula}
+        ${s.telefono}
+        ${s.email}
+        ${s.nombrePlan}
+        ${s.pppSecret}
+        ${s.ipCliente}
+    `.toLowerCase();
+
+        const coincideBusqueda =
+            texto.includes(busqueda.toLowerCase());
+
+        const coincideEstado =
+            estadoFiltro === 'TODOS' ||
+            s.estadoServicio === estadoFiltro;
+
+        const coincideRouter =
+            !routerFiltro ||
+            String(s.routerId || '') === routerFiltro;
+
+        const relacionSede = sedeRouters.find(
+            (item) =>
+                String(item.routerMikrotikId) ===
+                String(s.routerId || '')
+        );
+
+        const coincideSede =
+            !sedeFiltro ||
+            String(relacionSede?.sedeId || '') ===
+            sedeFiltro;
+
+        return (
+            coincideBusqueda &&
+            coincideEstado &&
+            coincideRouter &&
+            coincideSede
+        );
     });
 
-    const serviciosResumen = useMemo(
-        () =>
-            routerFiltro
-                ? servicios.filter(
-                    (servicio) =>
-                        String(servicio.routerId || '') === routerFiltro
-                )
-                : servicios,
-        [servicios, routerFiltro]
-    );
+    const serviciosResumen = useMemo(() => {
+
+        return servicios.filter((servicio) => {
+
+            const coincideRouter =
+                !routerFiltro ||
+                String(servicio.routerId || '') ===
+                routerFiltro;
+
+            const relacionSede = sedeRouters.find(
+                (item) =>
+                    String(item.routerMikrotikId) ===
+                    String(servicio.routerId || '')
+            );
+
+            const coincideSede =
+                !sedeFiltro ||
+                String(relacionSede?.sedeId || '') ===
+                sedeFiltro;
+
+            return coincideRouter && coincideSede;
+        });
+
+    }, [
+        servicios,
+        routerFiltro,
+        sedeFiltro,
+        sedeRouters
+    ]);
 
     const resumenContratos = useMemo(() => {
         const resumen = {
@@ -394,6 +623,18 @@ export default function ContratosServiciosPage({
 
         return router?.nombre || router?.Nombre || 'Router seleccionado';
     }, [routers, routerFiltro]);
+
+    const nombreSedeSeleccionada = useMemo(() => {
+        if (!sedeFiltro) return 'Todas las sedes';
+
+        const sede = sedes.find(
+            (item) =>
+                String(item.sedeId) ===
+                String(sedeFiltro)
+        );
+
+        return sede?.nombre || 'Sede seleccionada';
+    }, [sedes, sedeFiltro]);
 
     const formatearDinero = (valor: number) =>
         new Intl.NumberFormat('es-EC', {
@@ -528,11 +769,10 @@ export default function ContratosServiciosPage({
                 '#475569';
         }
     };
-    const clientesFiltrados = clientes
-        .filter((c) => {
-            const texto = `${c.nombres} ${c.apellidos} ${c.cedula} ${c.telefono} ${c.email}`.toLowerCase();
-            return texto.includes(busquedaCliente.toLowerCase());
-        })
+    const clientesFiltrados = clientes.filter((c) => {
+        const texto = `${c.nombres} ${c.apellidos} ${c.cedula} ${c.telefono} ${c.email}`.toLowerCase();
+        return texto.includes(busquedaCliente.toLowerCase());
+    })
         .slice(0, 8);
     const guardarServicio = async () => {
         try {
@@ -768,6 +1008,8 @@ export default function ContratosServiciosPage({
             alert('No se pudo copiar');
         }
     };
+
+
     return (
         <main style={styles.page}>
 
@@ -776,7 +1018,12 @@ export default function ContratosServiciosPage({
                 <div style={styles.summaryHeader}>
                     <div>
                         <p style={styles.summarySubtitle}>
-                            Estado general: <strong style={styles.summaryRouterName}>
+                            Estado general:{' '}
+                            <strong style={styles.summaryRouterName}>
+                                {nombreSedeSeleccionada}
+                            </strong>
+                            {' · '}
+                            <strong style={styles.summaryRouterName}>
                                 {nombreRouterSeleccionado}
                             </strong>
                         </p>
@@ -893,6 +1140,24 @@ export default function ContratosServiciosPage({
                 >
                     + Nuevo servicio
                 </button>
+
+                <button
+                    type="button"
+                    style={{
+                        ...styles.primaryButton,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        background:
+                            'linear-gradient(135deg, #0891b2, #2563eb)',
+                    }}
+                    onClick={generarReporteServiciosPdf}
+                >
+                    <FileDown size={18} />
+
+                    Reporte PDF
+                </button>
             </section>
             <section style={styles.filters}>
                 <input
@@ -903,15 +1168,48 @@ export default function ContratosServiciosPage({
                 />
 
                 <select
+                    value={sedeFiltro}
+                    onChange={(e) => {
+                        setSedeFiltro(e.target.value);
+                    }}
+                    style={styles.filterSelect}
+                    aria-label="Filtrar contratos por sede"
+                >
+                    <option value="" style={styles.option}>
+                        Todas las sedes
+                    </option>
+
+                    {sedes.map((sede) => (
+                        <option
+                            key={sede.sedeId}
+                            value={sede.sedeId}
+                            style={styles.option}
+                        >
+                            {sede.nombre}
+                        </option>
+                    ))}
+                </select>
+
+                <select
                     value={routerFiltro}
                     onChange={(e) => setRouterFiltro(e.target.value)}
                     style={styles.filterSelect}
                     aria-label="Filtrar contratos por router"
                 >
-                    <option value="" style={styles.option}>Todos los routers</option>
+                    <option value="" style={styles.option}>
+                        Todos los routers
+                    </option>
+
                     {routers.map((router, index) => {
-                        const id = router.routerId || router.RouterId || router.id;
-                        const nombre = router.nombre || router.Nombre || 'Router';
+                        const id =
+                            router.routerId ||
+                            router.RouterId ||
+                            router.id;
+
+                        const nombre =
+                            router.nombre ||
+                            router.Nombre ||
+                            'Router';
 
                         return (
                             <option
@@ -925,19 +1223,25 @@ export default function ContratosServiciosPage({
                     })}
                 </select>
 
-                {(estadoFiltro !== 'TODOS' || routerFiltro || busqueda) && (
-                    <button
-                        type="button"
-                        style={styles.clearFiltersButton}
-                        onClick={() => {
-                            setEstadoFiltro('TODOS');
-                            setRouterFiltro('');
-                            setBusqueda('');
-                        }}
-                    >
-                        Limpiar filtros
-                    </button>
-                )}
+                {(
+                    estadoFiltro !== 'TODOS' ||
+                    routerFiltro ||
+                    sedeFiltro ||
+                    busqueda
+                ) && (
+                        <button
+                            type="button"
+                            style={styles.clearFiltersButton}
+                            onClick={() => {
+                                setEstadoFiltro('TODOS');
+                                setRouterFiltro('');
+                                setSedeFiltro('');
+                                setBusqueda('');
+                            }}
+                        >
+                            Limpiar filtros
+                        </button>
+                    )}
             </section>
 
             {!loading && (
@@ -1033,17 +1337,62 @@ export default function ContratosServiciosPage({
                                 <div style={styles.infoBox}>
                                     <div style={{
                                         display: 'grid',
-                                        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-                                        gap: '8px 18px',
+                                        gridTemplateColumns: 'repeat(3, minmax(0, 0,50fr))',
+                                        gap: '4px 4px',
                                         alignItems: 'start',
                                         marginBottom: 5
                                     }}>
 
                                         <p ><strong style={{ color: '#ca9a33' }}>Plan:</strong> {servicio.nombrePlan}</p>
-                                        <p><strong>Precio:</strong> ${Number(servicio.precioMensual || 0).toFixed(2)}</p>
                                         <p><strong>Tipo:</strong> {servicio.tipoServicio}</p>
                                         <p><strong>IP:</strong> {servicio.ipCliente || 'No asignada'}</p>
                                         <p><strong>Día pago:</strong> {servicio.diaPago}</p>
+
+                                        <p>
+                                            <strong style={{ color: '#67e8f9' }}>
+                                                Sede:
+                                            </strong>{' '}
+                                            {obtenerSedePorRouter(servicio.routerId)?.nombre ||
+                                                'Sin sede asignada'}
+                                        </p>
+
+
+                                        <p>
+                                            <strong style={{ color: '#93c5fd' }}>
+                                                Router:
+                                            </strong>{' '}
+                                            {obtenerNombreRouter(servicio.routerId)}
+                                        </p>
+                                    </div>
+                                    <div
+                                        style={{
+                                            background: 'rgba(34, 211, 238, 0.06)',
+                                            border: '1px solid rgba(34, 211, 238, 0.14)',
+                                            borderRadius: '10px',
+                                            padding: '8px 10px',
+                                            marginBottom: 5
+                                        }}
+                                    >
+                                        <p style={{ margin: 0 }}>
+                                            <strong style={{ color: '#94a3b8' }}>
+                                                Subtotal:
+                                            </strong>{' '}
+                                            ${Number(servicio.precioMensual || 0).toFixed(2)}
+                                        </p>
+
+                                        <p style={{ margin: '3px 0 0' }}>
+                                            <strong style={{ color: '#fbbf24' }}>
+                                                IVA (15%):
+                                            </strong>{' '}
+                                            ${(Number(servicio.precioMensual || 0) * 0.15).toFixed(2)}
+                                        </p>
+
+                                        <p style={{ margin: '3px 0 0' }}>
+                                            <strong style={{ color: '#4ade80' }}>
+                                                Precio final:
+                                            </strong>{' '}
+                                            ${(Number(servicio.precioMensual || 0) * 1.15).toFixed(2)}
+                                        </p>
                                     </div>
                                     <button
                                         style={styles.secondaryButton}
@@ -1845,6 +2194,15 @@ export default function ContratosServiciosPage({
                                 <p><strong>Subida:</strong> {servicioDetalle.velocidadSubida}</p>
                                 <p><strong>Precio:</strong> ${Number(servicioDetalle.precioMensual || 0).toFixed(2)}</p>
                                 <p><strong>Día de pago:</strong> {servicioDetalle.diaPago}</p>
+                                <p>
+                                    <strong>Sede:</strong>{' '}
+                                    {obtenerSedePorRouter(servicioDetalle.routerId)?.nombre ||
+                                        'Sin sede asignada'}
+                                </p>
+                                <p>
+                                    <strong>Router:</strong>{' '}
+                                    {obtenerNombreRouter(servicioDetalle.routerId)}
+                                </p>
                             </div>
 
                             <div style={styles.contractBox}>
@@ -2444,11 +2802,12 @@ const styles: { [key: string]: React.CSSProperties } = {
         background: 'linear-gradient(145deg, rgba(30,41,59,0.74), rgba(15,23,42,0.78))',
         border: '1px solid rgba(148,163,184,0.12)',
         borderRadius: '18px',
-        padding: '16px',
+        padding: '10px',
         marginBottom: '14px',
         fontSize: '14px',
         lineHeight: 1.55,
     },
+
     techBox: {
         background: 'linear-gradient(145deg, rgba(51,65,85,0.70), rgba(30,41,59,0.48))',
         border: '1px solid rgba(148,163,184,0.16)',
