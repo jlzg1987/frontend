@@ -1,6 +1,7 @@
 'use client';
 
 import { API_BASE } from '@/src/lib/api';
+import { authHeaders } from '@/src/utils/authHeaders';
 import { useEffect, useState } from 'react';
 
 
@@ -76,6 +77,43 @@ export default function ListadoFacturasInternasPage() {
             : fechaB - fechaA;
     });
 
+    const resumenFacturas = facturas.reduce(
+        (acc, factura) => {
+            const total = Number(factura.totalFinal || 0);
+
+            acc.totalGeneral += total;
+
+            if (factura.estado === 'PAGADA') {
+                acc.cantidadPagadas += 1;
+                acc.totalPagadas += total;
+            }
+
+            if (factura.estado === 'PENDIENTE') {
+                acc.cantidadPendientes += 1;
+                acc.totalPendientes += total;
+            }
+
+            if (factura.estado === 'ANULADA') {
+                acc.cantidadAnuladas += 1;
+                acc.totalAnuladas += total;
+            }
+
+            return acc;
+        },
+        {
+            totalGeneral: 0,
+
+            cantidadPagadas: 0,
+            totalPagadas: 0,
+
+            cantidadPendientes: 0,
+            totalPendientes: 0,
+
+            cantidadAnuladas: 0,
+            totalAnuladas: 0,
+        }
+    );
+
     useEffect(() => {
         cargarSedes();
         cargarFacturas();
@@ -83,31 +121,40 @@ export default function ListadoFacturasInternasPage() {
 
     async function cargarSedes() {
         try {
-
             const resp = await fetch(
-                `${API_BASE}/gastos-mensuales/sedes?incluirInactivas=0`
+                `${API_BASE}/gastos-mensuales/sedes?incluirInactivas=0`,
+                {
+                    headers: authHeaders(),
+                }
             );
 
             const data = await resp.json();
 
-            if (!data.ok) {
+            console.log('SEDES:', data);
+
+            if (!resp.ok || !data.ok) {
                 console.error(
                     'Error cargando sedes:',
-                    data.message
+                    data.message || data
                 );
                 return;
             }
 
-            setSedes(data.sedes || []);
+            setSedes(
+                Array.isArray(data.sedes)
+                    ? data.sedes
+                    : []
+            );
 
         } catch (error) {
-
             console.error(
                 'Error cargando sedes:',
                 error
             );
         }
     }
+
+
 
     function generarReportePdf() {
 
@@ -472,6 +519,102 @@ export default function ListadoFacturasInternasPage() {
     return (
         <main className="min-h-screen bg-slate-950 text-white p-6">
             <div className="max-w-7xl mx-auto">
+
+                <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+
+                    {/* TOTAL */}
+                    <div className="
+        bg-slate-900
+        border
+        border-cyan-500/20
+        rounded-2xl
+        p-5
+        shadow-lg
+        shadow-cyan-500/5
+    ">
+                        <div className="text-sm text-slate-400">
+                            Total facturado
+                        </div>
+
+                        <div className="mt-2 text-3xl font-black text-cyan-300">
+                            ${resumenFacturas.totalGeneral.toFixed(2)}
+                        </div>
+
+                        <div className="mt-2 text-xs text-slate-500">
+                            {facturas.length} factura(s)
+                        </div>
+                    </div>
+
+                    {/* PAGADAS */}
+                    <div className="
+        bg-slate-900
+        border
+        border-emerald-500/20
+        rounded-2xl
+        p-5
+        shadow-lg
+        shadow-emerald-500/5
+    ">
+                        <div className="text-sm text-slate-400">
+                            Pagadas
+                        </div>
+
+                        <div className="mt-2 text-3xl font-black text-emerald-300">
+                            ${resumenFacturas.totalPagadas.toFixed(2)}
+                        </div>
+
+                        <div className="mt-2 text-xs text-emerald-400/70">
+                            {resumenFacturas.cantidadPagadas} factura(s)
+                        </div>
+                    </div>
+
+                    {/* PENDIENTES */}
+                    <div className="
+        bg-slate-900
+        border
+        border-yellow-500/20
+        rounded-2xl
+        p-5
+        shadow-lg
+        shadow-yellow-500/5
+    ">
+                        <div className="text-sm text-slate-400">
+                            Pendientes
+                        </div>
+
+                        <div className="mt-2 text-3xl font-black text-yellow-300">
+                            ${resumenFacturas.totalPendientes.toFixed(2)}
+                        </div>
+
+                        <div className="mt-2 text-xs text-yellow-400/70">
+                            {resumenFacturas.cantidadPendientes} factura(s)
+                        </div>
+                    </div>
+
+                    {/* ANULADAS */}
+                    <div className="
+        bg-slate-900
+        border
+        border-red-500/20
+        rounded-2xl
+        p-5
+        shadow-lg
+        shadow-red-500/5
+    ">
+                        <div className="text-sm text-slate-400">
+                            Anuladas
+                        </div>
+
+                        <div className="mt-2 text-3xl font-black text-red-300">
+                            ${resumenFacturas.totalAnuladas.toFixed(2)}
+                        </div>
+
+                        <div className="mt-2 text-xs text-red-400/70">
+                            {resumenFacturas.cantidadAnuladas} factura(s)
+                        </div>
+                    </div>
+
+                </section>
 
                 <section className="bg-slate-900 border border-cyan-500/20 rounded-2xl p-5 shadow-lg shadow-cyan-500/10 mb-6">
                     <h2 className="text-xl font-bold mb-4">Filtros de búsqueda</h2>
