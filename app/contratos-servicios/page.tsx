@@ -154,25 +154,36 @@ export default function ContratosServiciosPage({
     >(null);
 
     const IVA = 0.15;
-
     const generarReporteServiciosPdf = async () => {
         try {
             const params = new URLSearchParams();
 
             if (busqueda.trim()) {
-                params.append('buscar', busqueda.trim());
+                params.append(
+                    'buscar',
+                    busqueda.trim()
+                );
             }
 
             if (estadoFiltro !== 'TODOS') {
-                params.append('estado', estadoFiltro);
+                params.append(
+                    'estado',
+                    estadoFiltro
+                );
             }
 
             if (sedeFiltro) {
-                params.append('sedeId', sedeFiltro);
+                params.append(
+                    'sedeId',
+                    sedeFiltro
+                );
             }
 
             if (routerFiltro) {
-                params.append('routerId', routerFiltro);
+                params.append(
+                    'routerId',
+                    routerFiltro
+                );
             }
 
             const res = await fetch(
@@ -186,19 +197,26 @@ export default function ContratosServiciosPage({
                 const texto = await res.text();
 
                 console.error(
-                    'Error generando reporte:',
+                    'Error reporte PDF:',
                     texto
                 );
 
-                alert('No se pudo generar el reporte PDF');
+                alert(
+                    'No se pudo generar el reporte'
+                );
+
                 return;
             }
 
             const blob = await res.blob();
 
-            const url = URL.createObjectURL(blob);
+            const url =
+                URL.createObjectURL(blob);
 
-            window.open(url, '_blank');
+            window.open(
+                url,
+                '_blank'
+            );
 
             setTimeout(() => {
                 URL.revokeObjectURL(url);
@@ -206,11 +224,13 @@ export default function ContratosServiciosPage({
 
         } catch (error) {
             console.error(
-                'Error generando reporte de servicios:',
+                'Error generando reporte:',
                 error
             );
 
-            alert('Error generando reporte PDF');
+            alert(
+                'Error generando reporte PDF'
+            );
         }
     };
 
@@ -1335,64 +1355,310 @@ export default function ContratosServiciosPage({
 
 
                                 <div style={styles.infoBox}>
-                                    <div style={{
-                                        display: 'grid',
-                                        gridTemplateColumns: 'repeat(3, minmax(0, 0,50fr))',
-                                        gap: '4px 4px',
-                                        alignItems: 'start',
-                                        marginBottom: 5
-                                    }}>
-
-                                        <p ><strong style={{ color: '#ca9a33' }}>Plan:</strong> {servicio.nombrePlan}</p>
-                                        <p><strong>Tipo:</strong> {servicio.tipoServicio}</p>
-                                        <p><strong>IP:</strong> {servicio.ipCliente || 'No asignada'}</p>
-                                        <p><strong>Día pago:</strong> {servicio.diaPago}</p>
-
-                                        <p>
-                                            <strong style={{ color: '#67e8f9' }}>
-                                                Sede:
-                                            </strong>{' '}
-                                            {obtenerSedePorRouter(servicio.routerId)?.nombre ||
-                                                'Sin sede asignada'}
-                                        </p>
-
-
-                                        <p>
-                                            <strong style={{ color: '#93c5fd' }}>
-                                                Router:
-                                            </strong>{' '}
-                                            {obtenerNombreRouter(servicio.routerId)}
-                                        </p>
-                                    </div>
                                     <div
                                         style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                                            gap: '8px 6px',
+                                            width: '100%',
+                                            boxSizing: 'border-box',
+                                            alignItems: 'start',
+                                            marginBottom: 5,
+                                        }}
+                                    >
+                                        {/* PLAN */}
+                                        <div
+                                            style={{
+                                                minWidth: 0,
+                                                textAlign: 'center',
+                                            }}
+                                        >
+                                            <p
+                                                style={{
+                                                    margin: 0,
+                                                    fontSize: '10px',
+                                                    color: '#ca9a33',
+                                                }}
+                                            >
+                                                Plan
+                                            </p>
+
+                                            <strong
+                                                style={{
+                                                    display: 'block',
+                                                    marginTop: '2px',
+                                                    fontSize: '11px',
+                                                    color: '#e2e8f0',
+                                                    overflowWrap: 'anywhere',
+                                                }}
+                                            >
+                                                {servicio.nombrePlan || 'Sin plan'}
+                                            </strong>
+                                        </div>
+
+                                        {/* TIPO */}
+                                        <div
+                                            style={{
+                                                minWidth: 0,
+                                                textAlign: 'center',
+                                                borderLeft: '1px solid rgba(148, 163, 184, 0.12)',
+                                                borderRight: '1px solid rgba(148, 163, 184, 0.12)',
+                                            }}
+                                        >
+                                            <p
+                                                style={{
+                                                    margin: 0,
+                                                    fontSize: '10px',
+                                                    color: '#94a3b8',
+                                                }}
+                                            >
+                                                Tipo
+                                            </p>
+
+                                            <strong
+                                                style={{
+                                                    display: 'block',
+                                                    marginTop: '2px',
+                                                    fontSize: '11px',
+                                                    color: '#e2e8f0',
+                                                    overflowWrap: 'anywhere',
+                                                }}
+                                            >
+                                                {servicio.tipoServicio || '-'}
+                                            </strong>
+                                        </div>
+
+                                        {/* IP */}
+                                        <div
+                                            style={{
+                                                minWidth: 0,
+                                                textAlign: 'center',
+                                            }}
+                                        >
+                                            <p
+                                                style={{
+                                                    margin: 0,
+                                                    fontSize: '10px',
+                                                    color: '#94a3b8',
+                                                }}
+                                            >
+                                                IP
+                                            </p>
+
+                                            <strong
+                                                style={{
+                                                    display: 'block',
+                                                    marginTop: '2px',
+                                                    fontSize: '11px',
+                                                    color: '#e2e8f0',
+                                                    overflowWrap: 'anywhere',
+                                                }}
+                                            >
+                                                {servicio.ipCliente || 'No asignada'}
+                                            </strong>
+                                        </div>
+
+                                        {/* DÍA PAGO */}
+                                        <div
+                                            style={{
+                                                minWidth: 0,
+                                                textAlign: 'center',
+                                            }}
+                                        >
+                                            <p
+                                                style={{
+                                                    margin: 0,
+                                                    fontSize: '10px',
+                                                    color: '#94a3b8',
+                                                }}
+                                            >
+                                                Día pago
+                                            </p>
+
+                                            <strong
+                                                style={{
+                                                    display: 'block',
+                                                    marginTop: '2px',
+                                                    fontSize: '11px',
+                                                    color: '#e2e8f0',
+                                                }}
+                                            >
+                                                {servicio.diaPago || '-'}
+                                            </strong>
+                                        </div>
+
+                                        {/* SEDE */}
+                                        <div
+                                            style={{
+                                                minWidth: 0,
+                                                textAlign: 'center',
+                                                borderLeft: '1px solid rgba(148, 163, 184, 0.12)',
+                                                borderRight: '1px solid rgba(148, 163, 184, 0.12)',
+                                            }}
+                                        >
+                                            <p
+                                                style={{
+                                                    margin: 0,
+                                                    fontSize: '10px',
+                                                    color: '#67e8f9',
+                                                }}
+                                            >
+                                                Sede
+                                            </p>
+
+                                            <strong
+                                                style={{
+                                                    display: 'block',
+                                                    marginTop: '2px',
+                                                    fontSize: '11px',
+                                                    color: '#e2e8f0',
+                                                    overflowWrap: 'anywhere',
+                                                }}
+                                            >
+                                                {obtenerSedePorRouter(servicio.routerId)?.nombre ||
+                                                    'Sin sede asignada'}
+                                            </strong>
+                                        </div>
+
+                                        {/* ROUTER */}
+                                        <div
+                                            style={{
+                                                minWidth: 0,
+                                                textAlign: 'center',
+                                            }}
+                                        >
+                                            <p
+                                                style={{
+                                                    margin: 0,
+                                                    fontSize: '10px',
+                                                    color: '#93c5fd',
+                                                }}
+                                            >
+                                                Router
+                                            </p>
+
+                                            <strong
+                                                style={{
+                                                    display: 'block',
+                                                    marginTop: '2px',
+                                                    fontSize: '10px',
+                                                    lineHeight: '13px',
+                                                    color: '#e2e8f0',
+
+                                                    // Evita que nombres largos salgan de la card
+                                                    overflowWrap: 'anywhere',
+                                                    wordBreak: 'break-word',
+                                                    maxWidth: '100%',
+                                                }}
+                                            >
+                                                {obtenerNombreRouter(servicio.routerId)}
+                                            </strong>
+                                        </div>
+                                    </div>
+
+                                    <div
+                                        style={{
+                                            display: 'grid',
+                                            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                                            gap: '6px',
+                                            width: '100%',
+                                            boxSizing: 'border-box',
+
                                             background: 'rgba(34, 211, 238, 0.06)',
                                             border: '1px solid rgba(34, 211, 238, 0.14)',
                                             borderRadius: '10px',
                                             padding: '8px 10px',
-                                            marginBottom: 5
+                                            marginBottom: 10
                                         }}
                                     >
-                                        <p style={{ margin: 0 }}>
-                                            <strong style={{ color: '#94a3b8' }}>
-                                                Subtotal:
-                                            </strong>{' '}
-                                            ${Number(servicio.precioMensual || 0).toFixed(2)}
-                                        </p>
+                                        {/* SUBTOTAL */}
+                                        <div
+                                            style={{
+                                                minWidth: 0,
+                                                textAlign: 'center',
+                                            }}
+                                        >
+                                            <p
+                                                style={{
+                                                    margin: 0,
+                                                    fontSize: '10px',
+                                                    color: '#94a3b8',
+                                                }}
+                                            >
+                                                Subtotal
+                                            </p>
 
-                                        <p style={{ margin: '3px 0 0' }}>
-                                            <strong style={{ color: '#fbbf24' }}>
-                                                IVA (15%):
-                                            </strong>{' '}
-                                            ${(Number(servicio.precioMensual || 0) * 0.15).toFixed(2)}
-                                        </p>
+                                            <strong
+                                                style={{
+                                                    display: 'block',
+                                                    marginTop: '2px',
+                                                    color: '#e2e8f0',
+                                                    fontSize: '12px',
+                                                }}
+                                            >
+                                                ${Number(servicio.precioMensual || 0).toFixed(2)}
+                                            </strong>
+                                        </div>
 
-                                        <p style={{ margin: '3px 0 0' }}>
-                                            <strong style={{ color: '#4ade80' }}>
-                                                Precio final:
-                                            </strong>{' '}
-                                            ${(Number(servicio.precioMensual || 0) * 1.15).toFixed(2)}
-                                        </p>
+                                        {/* IVA */}
+                                        <div
+                                            style={{
+                                                minWidth: 0,
+                                                textAlign: 'center',
+                                                borderLeft: '1px solid rgba(148, 163, 184, 0.15)',
+                                                borderRight: '1px solid rgba(148, 163, 184, 0.15)',
+                                            }}
+                                        >
+                                            <p
+                                                style={{
+                                                    margin: 0,
+                                                    fontSize: '10px',
+                                                    color: '#fbbf24',
+                                                }}
+                                            >
+                                                IVA 15%
+                                            </p>
+
+                                            <strong
+                                                style={{
+                                                    display: 'block',
+                                                    marginTop: '2px',
+                                                    color: '#fbbf24',
+                                                    fontSize: '12px',
+                                                }}
+                                            >
+                                                ${(Number(servicio.precioMensual || 0) * 0.15).toFixed(2)}
+                                            </strong>
+                                        </div>
+
+                                        {/* TOTAL */}
+                                        <div
+                                            style={{
+                                                minWidth: 0,
+                                                textAlign: 'center',
+                                            }}
+                                        >
+                                            <p
+                                                style={{
+                                                    margin: 0,
+                                                    fontSize: '10px',
+                                                    color: '#4ade80',
+                                                }}
+                                            >
+                                                Precio final
+                                            </p>
+
+                                            <strong
+                                                style={{
+                                                    display: 'block',
+                                                    marginTop: '2px',
+                                                    color: '#4ade80',
+                                                    fontSize: '13px',
+                                                }}
+                                            >
+                                                ${(Number(servicio.precioMensual || 0) * 1.15).toFixed(2)}
+                                            </strong>
+                                        </div>
                                     </div>
                                     <button
                                         style={styles.secondaryButton}
@@ -1511,753 +1777,758 @@ export default function ContratosServiciosPage({
                     }
                     )}
                 </section>
-            )}
+            )
+            }
 
-            {showModal && (
-                <div style={styles.modalOverlay}>
-                    <div style={styles.modal}>
-                        <div style={styles.modalHeader}>
-                            <h2 style={styles.modalTitle}>
-                                {modoEdicion ? 'Editar Servicio ISP' : 'Nuevo Servicio ISP'}
-                            </h2>
+            {
+                showModal && (
+                    <div style={styles.modalOverlay}>
+                        <div style={styles.modal}>
+                            <div style={styles.modalHeader}>
+                                <h2 style={styles.modalTitle}>
+                                    {modoEdicion ? 'Editar Servicio ISP' : 'Nuevo Servicio ISP'}
+                                </h2>
 
-                            <button
-                                style={styles.closeButton}
-                                onClick={() => {
-                                    setShowModal(false);
-                                    limpiarFormulario();
-                                }}
-                            >
-                                ✕
-                            </button>
-                        </div>
+                                <button
+                                    style={styles.closeButton}
+                                    onClick={() => {
+                                        setShowModal(false);
+                                        limpiarFormulario();
+                                    }}
+                                >
+                                    ✕
+                                </button>
+                            </div>
 
-                        <div style={styles.modalBody}>
+                            <div style={styles.modalBody}>
 
-                            {/* CLIENTE */}
-                            <div style={styles.autocompleteBox}>
-                                <input
-                                    type="text"
-                                    placeholder="Buscar cliente por nombre, cédula, teléfono o email..."
-                                    value={busquedaCliente}
+                                {/* CLIENTE */}
+                                <div style={styles.autocompleteBox}>
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar cliente por nombre, cédula, teléfono o email..."
+                                        value={busquedaCliente}
+                                        onChange={(e) => {
+                                            setBusquedaCliente(e.target.value);
+                                            setClienteSeleccionado(null);
+
+                                            setFormData({
+                                                ...formData,
+                                                clienteId: '',
+                                            });
+                                        }}
+                                        style={styles.input}
+                                    />
+
+                                    {busquedaCliente && !clienteSeleccionado && (
+                                        <div style={styles.resultadosClientes}>
+                                            {clientesFiltrados.map((c) => (
+                                                <button
+                                                    key={c.clienteId}
+                                                    type="button"
+                                                    style={styles.clienteResultado}
+                                                    onClick={() => {
+                                                        setClienteSeleccionado(c);
+
+                                                        setBusquedaCliente(
+                                                            `${c.nombres} ${c.apellidos} - ${c.cedula}`
+                                                        );
+
+                                                        setFormData({
+                                                            ...formData,
+                                                            clienteId: c.clienteId,
+                                                        });
+                                                    }}
+                                                >
+                                                    <div>
+                                                        <strong>
+                                                            {c.nombres} {c.apellidos}
+                                                        </strong>
+
+                                                        <div style={styles.smallText}>
+                                                            {c.cedula}
+                                                        </div>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {clienteSeleccionado && (
+                                        <div style={styles.clienteSeleccionado}>
+                                            Cliente seleccionado:{' '}
+                                            <strong>
+                                                {clienteSeleccionado.nombres}{' '}
+                                                {clienteSeleccionado.apellidos}
+                                            </strong>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* PLAN */}
+                                <select
+                                    value={formData.planId}
                                     onChange={(e) => {
-                                        setBusquedaCliente(e.target.value);
-                                        setClienteSeleccionado(null);
+                                        const planId = e.target.value;
+
+                                        const planSeleccionado = planes.find(
+                                            (p) => p.planId === planId
+                                        );
+
+                                        const tipo =
+                                            planSeleccionado?.tipoServicio || '';
+
+                                        setTipoServicioSeleccionado(tipo);
 
                                         setFormData({
                                             ...formData,
-                                            clienteId: '',
+                                            planId,
+
+                                            ...(tipo === 'RADIO' && {
+                                                nodoFibraId: '',
+                                                napId: '',
+                                                puertoNap: '',
+                                                onuId: '',
+                                                vlan: '',
+                                                puertoOlt: '',
+                                                cajaNap: '',
+                                                splitter: '',
+                                                senalRx: '',
+                                                senalTx: '',
+                                            }),
+
+                                            ...(tipo === 'FIBRA' && {
+                                                torreId: '',
+                                                sectorialId: '',
+                                                sectorial: '',
+                                                frecuencia: '',
+                                                ssid: '',
+                                                usuarioCpe: '',
+                                                ipAntena: '',
+                                                modeloAntena: '',
+                                            }),
                                         });
                                     }}
                                     style={styles.input}
+                                >
+                                    <option value="" style={styles.option}>
+                                        Seleccionar plan
+                                    </option>
+
+                                    {planes.map((p) => {
+                                        const precioBase = Number(p.precioMensual || 0);
+                                        const valorIva = precioBase * IVA;
+                                        const precioConIva = precioBase + valorIva;
+
+                                        return (
+                                            <option
+                                                key={p.planId}
+                                                value={p.planId}
+                                                style={styles.option}
+                                            >
+                                                {p.nombrePlan} - {p.tipoServicio}
+                                                {' | '}
+                                                Base: ${precioBase.toFixed(2)}
+                                                {' | '}
+                                                IVA: ${valorIva.toFixed(2)}
+                                                {' | '}
+                                                Total: ${precioConIva.toFixed(2)}
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+
+                                {/* ROUTER */}
+                                <select
+                                    name="routerId"
+                                    value={formData.routerId}
+                                    onChange={handleChange}
+                                    style={styles.input}
+                                >
+                                    <option value="" style={styles.option}>
+                                        Seleccionar router
+                                    </option>
+
+                                    {routers.map((r, index) => {
+                                        const id =
+                                            r.routerId ||
+                                            r.RouterId ||
+                                            r.id;
+
+                                        const nombre =
+                                            r.nombre ||
+                                            r.Nombre ||
+                                            'Router';
+
+                                        return (
+                                            <option
+                                                key={id || index}
+                                                value={id || ''}
+                                                style={styles.option}
+                                            >
+                                                {nombre}
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+
+                                {/* Dias d epago */}
+                                <input
+                                    placeholder="Día de pago"
+                                    name="diaPago"
+                                    value={formData.diaPago}
+                                    onChange={handleChange}
+                                    style={styles.input}
                                 />
 
-                                {busquedaCliente && !clienteSeleccionado && (
-                                    <div style={styles.resultadosClientes}>
-                                        {clientesFiltrados.map((c) => (
-                                            <button
-                                                key={c.clienteId}
-                                                type="button"
-                                                style={styles.clienteResultado}
-                                                onClick={() => {
-                                                    setClienteSeleccionado(c);
+                                {/* FECHA */}
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Fecha de firma del contrato</label>
 
-                                                    setBusquedaCliente(
-                                                        `${c.nombres} ${c.apellidos} - ${c.cedula}`
-                                                    );
+                                    <input
+                                        type="date"
+                                        name="fechaFirmaContrato"
+                                        value={formData.fechaFirmaContrato}
+                                        onChange={handleChange}
+                                        style={styles.inputDate || styles.input}
+                                        className="inputDate"
+                                    />
+                                </div>
+                                <div style={styles.formGroup}>
+                                    <label style={styles.label}>Fecha de Instalación</label>
+                                    <input
+                                        type="date"
+                                        name="fechaInstalacion"
+                                        value={formData.fechaInstalacion}
+                                        onChange={handleChange}
+                                        style={styles.inputDate}
+                                    />
+                                </div>
+
+                                {/* WISP */}
+                                {(tipoServicioSeleccionado === 'RADIO' ||
+                                    tipoServicioSeleccionado === 'MIXTO') && (
+                                        <>
+                                            <div style={styles.sectionLabel}>
+                                                📶 Configuración WISP
+                                            </div>
+
+                                            <select
+                                                value={formData.torreId}
+                                                onChange={async (e) => {
+
+                                                    const torreId = e.target.value;
 
                                                     setFormData({
                                                         ...formData,
-                                                        clienteId: c.clienteId,
+                                                        torreId,
+                                                        sectorialId: '',
+                                                    });
+
+                                                    await cargarSectorialesPorTorre(torreId);
+                                                }}
+                                                style={styles.input}
+                                            >
+                                                <option value="" style={styles.option}>
+                                                    Seleccionar torre
+                                                </option>
+
+                                                {torres.map((t) => (
+                                                    <option
+                                                        key={t.torreId}
+                                                        value={t.torreId}
+                                                        style={styles.option}
+                                                    >
+                                                        {t.nombreTorre}
+                                                    </option>
+                                                ))}
+                                            </select>
+
+                                            <select
+                                                value={formData.sectorialId}
+                                                onChange={(e) => {
+
+                                                    const sectorialId = e.target.value;
+
+                                                    const sectorialSeleccionada =
+                                                        sectoriales.find(
+                                                            (s) =>
+                                                                s.sectorialId ===
+                                                                sectorialId
+                                                        );
+
+                                                    setFormData({
+                                                        ...formData,
+                                                        sectorialId,
+                                                        sectorial:
+                                                            sectorialSeleccionada?.nombreSectorial || '',
+                                                        frecuencia:
+                                                            sectorialSeleccionada?.frecuencia || '',
+                                                        ssid:
+                                                            sectorialSeleccionada?.ssid || '',
                                                     });
                                                 }}
+                                                style={styles.input}
                                             >
-                                                <div>
-                                                    <strong>
-                                                        {c.nombres} {c.apellidos}
-                                                    </strong>
+                                                <option value="" style={styles.option}>
+                                                    Seleccionar sectorial
+                                                </option>
 
-                                                    <div style={styles.smallText}>
-                                                        {c.cedula}
-                                                    </div>
-                                                </div>
+                                                {sectoriales.map((s) => (
+                                                    <option
+                                                        key={s.sectorialId}
+                                                        value={s.sectorialId}
+                                                        style={styles.option}
+                                                    >
+                                                        {s.nombreSectorial}
+                                                    </option>
+                                                ))}
+                                            </select>
+
+                                            <input
+                                                placeholder="Frecuencia"
+                                                name="frecuencia"
+                                                value={formData.frecuencia}
+                                                onChange={handleChange}
+                                                style={styles.input}
+                                            />
+
+                                            <input
+                                                placeholder="SSID"
+                                                name="ssid"
+                                                value={formData.ssid}
+                                                onChange={handleChange}
+                                                style={styles.input}
+                                            />
+
+                                            <input
+                                                placeholder="Usuario CPE"
+                                                name="usuarioCpe"
+                                                value={formData.usuarioCpe}
+                                                onChange={handleChange}
+                                                style={styles.input}
+                                            />
+
+                                            <input
+                                                placeholder="IP Antena"
+                                                name="ipAntena"
+                                                value={formData.ipAntena}
+                                                onChange={handleChange}
+                                                style={styles.input}
+                                            />
+
+                                            <input
+                                                placeholder="Modelo Antena"
+                                                name="modeloAntena"
+                                                value={formData.modeloAntena}
+                                                onChange={handleChange}
+                                                style={styles.input}
+                                            />
+                                        </>
+                                    )}
+
+                                {/* FIBRA */}
+                                {(tipoServicioSeleccionado === 'FIBRA' ||
+                                    tipoServicioSeleccionado === 'MIXTO') && (
+                                        <>
+                                            <div style={styles.sectionLabel}>
+                                                🔌 Configuración GPON / Fibra
+                                            </div>
+
+                                            <select
+                                                name="nodoFibraId"
+                                                value={formData.nodoFibraId}
+                                                onChange={handleChange}
+                                                style={styles.input}
+                                            >
+                                                <option value="" style={styles.option}>
+                                                    Seleccionar nodo fibra
+                                                </option>
+
+                                                {nodosFibra.map((n) => (
+                                                    <option
+                                                        key={n.nodoFibraId}
+                                                        value={n.nodoFibraId}
+                                                        style={styles.option}
+                                                    >
+                                                        {n.nombreNodo}
+                                                    </option>
+                                                ))}
+                                            </select>
+
+                                            <select
+                                                name="napId"
+                                                value={formData.napId}
+                                                onChange={handleChange}
+                                                style={styles.input}
+                                            >
+                                                <option value="" style={styles.option}>
+                                                    Seleccionar NAP
+                                                </option>
+
+                                                {naps.map((n) => (
+                                                    <option
+                                                        key={n.napId}
+                                                        value={n.napId}
+                                                        style={styles.option}
+                                                    >
+                                                        {n.nombreNap}
+                                                    </option>
+                                                ))}
+                                            </select>
+
+                                            <input
+                                                placeholder="ONU ID"
+                                                name="onuId"
+                                                value={formData.onuId}
+                                                onChange={handleChange}
+                                                style={styles.input}
+                                            />
+
+                                            <input
+                                                placeholder="VLAN"
+                                                name="vlan"
+                                                value={formData.vlan}
+                                                onChange={handleChange}
+                                                style={styles.input}
+                                            />
+
+                                            <input
+                                                placeholder="Puerto OLT"
+                                                name="puertoOlt"
+                                                value={formData.puertoOlt}
+                                                onChange={handleChange}
+                                                style={styles.input}
+                                            />
+
+                                            <input
+                                                placeholder="Caja NAP"
+                                                name="cajaNap"
+                                                value={formData.cajaNap}
+                                                onChange={handleChange}
+                                                style={styles.input}
+                                            />
+
+                                            <input
+                                                placeholder="Splitter"
+                                                name="splitter"
+                                                value={formData.splitter}
+                                                onChange={handleChange}
+                                                style={styles.input}
+                                            />
+
+                                            <input
+                                                placeholder="Señal RX"
+                                                name="senalRx"
+                                                value={formData.senalRx}
+                                                onChange={handleChange}
+                                                style={styles.input}
+                                            />
+
+                                            <input
+                                                placeholder="Señal TX"
+                                                name="senalTx"
+                                                value={formData.senalTx}
+                                                onChange={handleChange}
+                                                style={styles.input}
+                                            />
+                                        </>
+                                    )}
+
+                                {/* GENERALES */}
+                                <input
+                                    placeholder="PPPoE Secret"
+                                    name="pppSecret"
+                                    value={formData.pppSecret}
+                                    onChange={handleChange}
+                                    style={styles.input}
+                                />
+
+                                <input
+                                    placeholder="Queue Name"
+                                    name="queueName"
+                                    value={formData.queueName}
+                                    onChange={handleChange}
+                                    style={styles.input}
+                                />
+
+                                <input
+                                    placeholder="IP Cliente"
+                                    name="ipCliente"
+                                    value={formData.ipCliente}
+                                    onChange={handleChange}
+                                    style={styles.input}
+                                />
+
+                                <input
+                                    placeholder="MAC"
+                                    name="mac"
+                                    value={formData.mac}
+                                    onChange={handleChange}
+                                    style={styles.input}
+                                />
+
+                                <div style={styles.sectionLabel}>
+                                    <FileText size={18} />
+                                    Datos del contrato
+                                </div>
+
+                                <select
+                                    name="tipoContrato"
+                                    value={formData.tipoContrato}
+                                    onChange={handleChange}
+                                    style={styles.input}
+                                >
+                                    <option value="" style={styles.option}>Tipo de contrato</option>
+                                    <option value="FISICO" style={styles.option}>Físico</option>
+                                    <option value="DIGITAL" style={styles.option}>Digital</option>
+                                </select>
+
+                                <select
+                                    name="canalContrato"
+                                    value={formData.canalContrato}
+                                    onChange={handleChange}
+                                    style={styles.input}
+                                >
+                                    <option value="" style={styles.option}>Canal de contrato</option>
+                                    <option value="PRESENCIAL" style={styles.option}>Presencial</option>
+                                    <option value="LLAMADA" style={styles.option}>Llamada</option>
+                                    <option value="VIDEO" style={styles.option}>Video</option>
+                                    <option value="MSN" style={styles.option}>MSN</option>
+                                    <option value="WHATSAPP" style={styles.option}>WhatsApp</option>
+                                    <option value="EMAIL" style={styles.option}>Email</option>
+                                </select>
+
+                                <input
+                                    type="number"
+                                    name="precioInstalacion"
+                                    placeholder="Precio instalación"
+                                    value={formData.precioInstalacion}
+                                    onChange={handleChange}
+                                    style={styles.input}
+                                />
+
+                                <input
+                                    type="number"
+                                    name="descuentoInstalacion"
+                                    placeholder="Descuento instalación"
+                                    value={formData.descuentoInstalacion}
+                                    onChange={handleChange}
+                                    style={styles.input}
+                                />
+
+                                <select
+                                    name="instalacionGratis"
+                                    value={formData.instalacionGratis}
+                                    onChange={handleChange}
+                                    style={styles.input}
+                                >
+                                    <option value="0" style={styles.option}>Instalación con costo</option>
+                                    <option value="1" style={styles.option}>Instalación gratis</option>
+                                </select>
+
+                                <input
+                                    type="number"
+                                    name="tiempoContratoMeses"
+                                    placeholder="Tiempo contrato en meses"
+                                    value={formData.tiempoContratoMeses}
+                                    onChange={handleChange}
+                                    style={styles.input}
+                                />
+
+                            </div>
+
+                            <div style={styles.modalFooter}>
+                                <button
+                                    style={styles.secondaryButton}
+                                    onClick={() => {
+                                        setShowModal(false);
+                                        limpiarFormulario();
+                                    }}
+                                >
+                                    Cancelar
+                                </button>
+
+                                <button
+                                    style={styles.primaryButton}
+                                    onClick={guardarServicio}
+                                >
+                                    {modoEdicion ? 'Actualizar servicio' : 'Guardar servicio'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+
+            {
+                showDetalleModal && servicioDetalle && (
+                    <div style={styles.modalOverlay}>
+                        <div
+                            style={{
+                                ...styles.modal,
+                                maxWidth: '1000px',
+                            }}
+                        >
+                            <div style={styles.modalHeader}>
+                                <h2 style={styles.modalTitle}>
+                                    Detalle del Servicio
+                                </h2>
+
+                                <button
+                                    style={styles.closeButton}
+                                    onClick={() => {
+                                        setShowDetalleModal(false);
+                                        setServicioDetalle(null);
+                                    }}
+                                >
+                                    ✕
+                                </button>
+                            </div>
+
+                            <div style={styles.detailModalBody}>
+
+                                <div style={styles.infoBox}>
+                                    <h3>General</h3>
+                                    <div style={{ display: 'grid', gap: '10px' }}>
+                                        <div style={styles.copyRow}>
+                                            <div>
+                                                <span style={styles.copyLabel}>Servicio ID</span>
+
+                                                <p style={styles.copyValue}>
+                                                    {servicioDetalle.servicioId}
+                                                </p>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                title="Copiar Servicio ID"
+                                                aria-label="Copiar Servicio ID"
+                                                style={{
+                                                    ...styles.copyButton,
+                                                    ...(idCopiado === 'SERVICIO'
+                                                        ? styles.copyButtonSuccess
+                                                        : {}),
+                                                }}
+                                                onClick={() =>
+                                                    copiarAlPortapapeles(
+                                                        servicioDetalle.servicioId,
+                                                        'SERVICIO'
+                                                    )
+                                                }
+                                            >
+                                                {idCopiado === 'SERVICIO' ? (
+                                                    <Check size={17} />
+                                                ) : (
+                                                    <Copy size={17} />
+                                                )}
                                             </button>
-                                        ))}
+                                        </div>
+
+                                        <div style={styles.copyRow}>
+                                            <div>
+                                                <span style={styles.copyLabel}>Cliente ID</span>
+
+                                                <p style={styles.copyValue}>
+                                                    {servicioDetalle.clienteId}
+                                                </p>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                title="Copiar Cliente ID"
+                                                aria-label="Copiar Cliente ID"
+                                                style={{
+                                                    ...styles.copyButton,
+                                                    ...(idCopiado === 'CLIENTE'
+                                                        ? styles.copyButtonSuccess
+                                                        : {}),
+                                                }}
+                                                onClick={() =>
+                                                    copiarAlPortapapeles(
+                                                        servicioDetalle.clienteId,
+                                                        'CLIENTE'
+                                                    )
+                                                }
+                                            >
+                                                {idCopiado === 'CLIENTE' ? (
+                                                    <Check size={17} />
+                                                ) : (
+                                                    <Copy size={17} />
+                                                )}
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <p><strong>Plan:</strong> {servicioDetalle.nombrePlan}</p>
+                                    <p><strong>Bajada:</strong> {servicioDetalle.velocidadBajada}</p>
+                                    <p><strong>Subida:</strong> {servicioDetalle.velocidadSubida}</p>
+                                    <p><strong>Precio:</strong> ${Number(servicioDetalle.precioMensual || 0).toFixed(2)}</p>
+                                    <p><strong>Día de pago:</strong> {servicioDetalle.diaPago}</p>
+                                    <p>
+                                        <strong>Sede:</strong>{' '}
+                                        {obtenerSedePorRouter(servicioDetalle.routerId)?.nombre ||
+                                            'Sin sede asignada'}
+                                    </p>
+                                    <p>
+                                        <strong>Router:</strong>{' '}
+                                        {obtenerNombreRouter(servicioDetalle.routerId)}
+                                    </p>
+                                </div>
+
+                                <div style={styles.contractBox}>
+                                    <p><strong>Contrato:</strong> {servicioDetalle.tipoContrato || 'No definido'}</p>
+                                    <p>
+                                        <strong>Fecha de firma:</strong> {formatearFecha(servicioDetalle.fechaFirmaContrato)}
+                                    </p>
+                                    <p>
+                                        <strong>Fecha de instalación:</strong> {formatearFecha(servicioDetalle.fechaInstalacion)}
+                                    </p>
+                                    <p><strong>Canal:</strong> {servicioDetalle.canalContrato || 'No definido'}</p>
+                                    <p><strong>Tiempo:</strong> {servicioDetalle.tiempoContratoMeses ? `${servicioDetalle.tiempoContratoMeses} meses` : 'No definido'}</p>
+
+                                    <p><strong>Instalación:</strong> ${Number(servicioDetalle.precioInstalacion || 0).toFixed(2)}</p>
+                                    <p><strong>Descuento:</strong> ${Number(servicioDetalle.descuentoInstalacion || 0).toFixed(2)}</p>
+                                    <p><strong>Gratis:</strong> {servicioDetalle.instalacionGratis ? 'Sí' : 'No'}</p>
+                                </div>
+                                {servicioDetalle.tipoServicio !== 'RADIO' && (
+                                    <div style={styles.techBox}>
+                                        <p><strong>PPPoE:</strong> {servicioDetalle.pppSecret || 'No asignado'}</p>
+                                        <p><strong>Queue:</strong> {servicioDetalle.queueName || 'No asignado'}</p>
+                                        <p><strong>IP:</strong> {servicioDetalle.ipCliente || 'No asignada'}</p>
+                                        <p><strong>MAC:</strong> {servicioDetalle.mac || 'No asignada'}</p>
                                     </div>
                                 )}
 
-                                {clienteSeleccionado && (
-                                    <div style={styles.clienteSeleccionado}>
-                                        Cliente seleccionado:{' '}
-                                        <strong>
-                                            {clienteSeleccionado.nombres}{' '}
-                                            {clienteSeleccionado.apellidos}
-                                        </strong>
+                                {servicioDetalle.tipoServicio !== 'FIBRA' && (
+                                    <div style={styles.gponBox}>
+                                        <p><strong>Tipo técnico:</strong> Fibra óptica / GPON</p>
+                                        <p><strong>Nodo fibra:</strong> {servicioDetalle.nombreNodoFibra || 'N/A'}</p>
+                                        <p><strong>NAP:</strong> {servicioDetalle.nombreNap || servicioDetalle.cajaNap || 'N/A'}</p>
+                                        <p><strong>Puerto NAP:</strong> {servicioDetalle.puertoNap || 'N/A'}</p>
+                                        <p><strong>ONU:</strong> {servicioDetalle.onuId || 'N/A'}</p>
+                                        <p><strong>VLAN:</strong> {servicioDetalle.vlan || 'N/A'}</p>
+                                        <p><strong>RX/TX:</strong> {servicioDetalle.senalRx || '-'} / {servicioDetalle.senalTx || '-'}</p>
+                                    </div>
+                                )}
+
+                                {servicioDetalle.tipoServicio !== 'RADIO' && (
+                                    <div style={styles.gponBox}>
+                                        <p><strong>Tipo técnico:</strong> WISP / Radio enlace</p>
+                                        <p><strong>Torre:</strong> {servicioDetalle.nombreTorre || 'N/A'}</p>
+                                        <p><strong>Sectorial:</strong> {servicioDetalle.nombreSectorial || servicioDetalle.sectorial || 'N/A'}</p>
+                                        <p><strong>Frecuencia:</strong> {servicioDetalle.frecuencia || 'N/A'}</p>
+                                        <p><strong>SSID:</strong> {servicioDetalle.ssid || 'N/A'}</p>
+                                        <p><strong>IP antena:</strong> {servicioDetalle.ipAntena || 'N/A'}</p>
+                                        <p><strong>Modelo antena:</strong> {servicioDetalle.modeloAntena || 'N/A'}</p>
+                                        <p><strong>Usuario CPE:</strong> {servicioDetalle.usuarioCpe || 'N/A'}</p>
                                     </div>
                                 )}
                             </div>
-
-                            {/* PLAN */}
-                            <select
-                                value={formData.planId}
-                                onChange={(e) => {
-                                    const planId = e.target.value;
-
-                                    const planSeleccionado = planes.find(
-                                        (p) => p.planId === planId
-                                    );
-
-                                    const tipo =
-                                        planSeleccionado?.tipoServicio || '';
-
-                                    setTipoServicioSeleccionado(tipo);
-
-                                    setFormData({
-                                        ...formData,
-                                        planId,
-
-                                        ...(tipo === 'RADIO' && {
-                                            nodoFibraId: '',
-                                            napId: '',
-                                            puertoNap: '',
-                                            onuId: '',
-                                            vlan: '',
-                                            puertoOlt: '',
-                                            cajaNap: '',
-                                            splitter: '',
-                                            senalRx: '',
-                                            senalTx: '',
-                                        }),
-
-                                        ...(tipo === 'FIBRA' && {
-                                            torreId: '',
-                                            sectorialId: '',
-                                            sectorial: '',
-                                            frecuencia: '',
-                                            ssid: '',
-                                            usuarioCpe: '',
-                                            ipAntena: '',
-                                            modeloAntena: '',
-                                        }),
-                                    });
-                                }}
-                                style={styles.input}
-                            >
-                                <option value="" style={styles.option}>
-                                    Seleccionar plan
-                                </option>
-
-                                {planes.map((p) => {
-                                    const precioBase = Number(p.precioMensual || 0);
-                                    const valorIva = precioBase * IVA;
-                                    const precioConIva = precioBase + valorIva;
-
-                                    return (
-                                        <option
-                                            key={p.planId}
-                                            value={p.planId}
-                                            style={styles.option}
-                                        >
-                                            {p.nombrePlan} - {p.tipoServicio}
-                                            {' | '}
-                                            Base: ${precioBase.toFixed(2)}
-                                            {' | '}
-                                            IVA: ${valorIva.toFixed(2)}
-                                            {' | '}
-                                            Total: ${precioConIva.toFixed(2)}
-                                        </option>
-                                    );
-                                })}
-                            </select>
-
-                            {/* ROUTER */}
-                            <select
-                                name="routerId"
-                                value={formData.routerId}
-                                onChange={handleChange}
-                                style={styles.input}
-                            >
-                                <option value="" style={styles.option}>
-                                    Seleccionar router
-                                </option>
-
-                                {routers.map((r, index) => {
-                                    const id =
-                                        r.routerId ||
-                                        r.RouterId ||
-                                        r.id;
-
-                                    const nombre =
-                                        r.nombre ||
-                                        r.Nombre ||
-                                        'Router';
-
-                                    return (
-                                        <option
-                                            key={id || index}
-                                            value={id || ''}
-                                            style={styles.option}
-                                        >
-                                            {nombre}
-                                        </option>
-                                    );
-                                })}
-                            </select>
-
-                            {/* Dias d epago */}
-                            <input
-                                placeholder="Día de pago"
-                                name="diaPago"
-                                value={formData.diaPago}
-                                onChange={handleChange}
-                                style={styles.input}
-                            />
-
-                            {/* FECHA */}
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>Fecha de firma del contrato</label>
-
-                                <input
-                                    type="date"
-                                    name="fechaFirmaContrato"
-                                    value={formData.fechaFirmaContrato}
-                                    onChange={handleChange}
-                                    style={styles.inputDate || styles.input}
-                                    className="inputDate"
-                                />
-                            </div>
-                            <div style={styles.formGroup}>
-                                <label style={styles.label}>Fecha de Instalación</label>
-                                <input
-                                    type="date"
-                                    name="fechaInstalacion"
-                                    value={formData.fechaInstalacion}
-                                    onChange={handleChange}
-                                    style={styles.inputDate}
-                                />
-                            </div>
-
-                            {/* WISP */}
-                            {(tipoServicioSeleccionado === 'RADIO' ||
-                                tipoServicioSeleccionado === 'MIXTO') && (
-                                    <>
-                                        <div style={styles.sectionLabel}>
-                                            📶 Configuración WISP
-                                        </div>
-
-                                        <select
-                                            value={formData.torreId}
-                                            onChange={async (e) => {
-
-                                                const torreId = e.target.value;
-
-                                                setFormData({
-                                                    ...formData,
-                                                    torreId,
-                                                    sectorialId: '',
-                                                });
-
-                                                await cargarSectorialesPorTorre(torreId);
-                                            }}
-                                            style={styles.input}
-                                        >
-                                            <option value="" style={styles.option}>
-                                                Seleccionar torre
-                                            </option>
-
-                                            {torres.map((t) => (
-                                                <option
-                                                    key={t.torreId}
-                                                    value={t.torreId}
-                                                    style={styles.option}
-                                                >
-                                                    {t.nombreTorre}
-                                                </option>
-                                            ))}
-                                        </select>
-
-                                        <select
-                                            value={formData.sectorialId}
-                                            onChange={(e) => {
-
-                                                const sectorialId = e.target.value;
-
-                                                const sectorialSeleccionada =
-                                                    sectoriales.find(
-                                                        (s) =>
-                                                            s.sectorialId ===
-                                                            sectorialId
-                                                    );
-
-                                                setFormData({
-                                                    ...formData,
-                                                    sectorialId,
-                                                    sectorial:
-                                                        sectorialSeleccionada?.nombreSectorial || '',
-                                                    frecuencia:
-                                                        sectorialSeleccionada?.frecuencia || '',
-                                                    ssid:
-                                                        sectorialSeleccionada?.ssid || '',
-                                                });
-                                            }}
-                                            style={styles.input}
-                                        >
-                                            <option value="" style={styles.option}>
-                                                Seleccionar sectorial
-                                            </option>
-
-                                            {sectoriales.map((s) => (
-                                                <option
-                                                    key={s.sectorialId}
-                                                    value={s.sectorialId}
-                                                    style={styles.option}
-                                                >
-                                                    {s.nombreSectorial}
-                                                </option>
-                                            ))}
-                                        </select>
-
-                                        <input
-                                            placeholder="Frecuencia"
-                                            name="frecuencia"
-                                            value={formData.frecuencia}
-                                            onChange={handleChange}
-                                            style={styles.input}
-                                        />
-
-                                        <input
-                                            placeholder="SSID"
-                                            name="ssid"
-                                            value={formData.ssid}
-                                            onChange={handleChange}
-                                            style={styles.input}
-                                        />
-
-                                        <input
-                                            placeholder="Usuario CPE"
-                                            name="usuarioCpe"
-                                            value={formData.usuarioCpe}
-                                            onChange={handleChange}
-                                            style={styles.input}
-                                        />
-
-                                        <input
-                                            placeholder="IP Antena"
-                                            name="ipAntena"
-                                            value={formData.ipAntena}
-                                            onChange={handleChange}
-                                            style={styles.input}
-                                        />
-
-                                        <input
-                                            placeholder="Modelo Antena"
-                                            name="modeloAntena"
-                                            value={formData.modeloAntena}
-                                            onChange={handleChange}
-                                            style={styles.input}
-                                        />
-                                    </>
-                                )}
-
-                            {/* FIBRA */}
-                            {(tipoServicioSeleccionado === 'FIBRA' ||
-                                tipoServicioSeleccionado === 'MIXTO') && (
-                                    <>
-                                        <div style={styles.sectionLabel}>
-                                            🔌 Configuración GPON / Fibra
-                                        </div>
-
-                                        <select
-                                            name="nodoFibraId"
-                                            value={formData.nodoFibraId}
-                                            onChange={handleChange}
-                                            style={styles.input}
-                                        >
-                                            <option value="" style={styles.option}>
-                                                Seleccionar nodo fibra
-                                            </option>
-
-                                            {nodosFibra.map((n) => (
-                                                <option
-                                                    key={n.nodoFibraId}
-                                                    value={n.nodoFibraId}
-                                                    style={styles.option}
-                                                >
-                                                    {n.nombreNodo}
-                                                </option>
-                                            ))}
-                                        </select>
-
-                                        <select
-                                            name="napId"
-                                            value={formData.napId}
-                                            onChange={handleChange}
-                                            style={styles.input}
-                                        >
-                                            <option value="" style={styles.option}>
-                                                Seleccionar NAP
-                                            </option>
-
-                                            {naps.map((n) => (
-                                                <option
-                                                    key={n.napId}
-                                                    value={n.napId}
-                                                    style={styles.option}
-                                                >
-                                                    {n.nombreNap}
-                                                </option>
-                                            ))}
-                                        </select>
-
-                                        <input
-                                            placeholder="ONU ID"
-                                            name="onuId"
-                                            value={formData.onuId}
-                                            onChange={handleChange}
-                                            style={styles.input}
-                                        />
-
-                                        <input
-                                            placeholder="VLAN"
-                                            name="vlan"
-                                            value={formData.vlan}
-                                            onChange={handleChange}
-                                            style={styles.input}
-                                        />
-
-                                        <input
-                                            placeholder="Puerto OLT"
-                                            name="puertoOlt"
-                                            value={formData.puertoOlt}
-                                            onChange={handleChange}
-                                            style={styles.input}
-                                        />
-
-                                        <input
-                                            placeholder="Caja NAP"
-                                            name="cajaNap"
-                                            value={formData.cajaNap}
-                                            onChange={handleChange}
-                                            style={styles.input}
-                                        />
-
-                                        <input
-                                            placeholder="Splitter"
-                                            name="splitter"
-                                            value={formData.splitter}
-                                            onChange={handleChange}
-                                            style={styles.input}
-                                        />
-
-                                        <input
-                                            placeholder="Señal RX"
-                                            name="senalRx"
-                                            value={formData.senalRx}
-                                            onChange={handleChange}
-                                            style={styles.input}
-                                        />
-
-                                        <input
-                                            placeholder="Señal TX"
-                                            name="senalTx"
-                                            value={formData.senalTx}
-                                            onChange={handleChange}
-                                            style={styles.input}
-                                        />
-                                    </>
-                                )}
-
-                            {/* GENERALES */}
-                            <input
-                                placeholder="PPPoE Secret"
-                                name="pppSecret"
-                                value={formData.pppSecret}
-                                onChange={handleChange}
-                                style={styles.input}
-                            />
-
-                            <input
-                                placeholder="Queue Name"
-                                name="queueName"
-                                value={formData.queueName}
-                                onChange={handleChange}
-                                style={styles.input}
-                            />
-
-                            <input
-                                placeholder="IP Cliente"
-                                name="ipCliente"
-                                value={formData.ipCliente}
-                                onChange={handleChange}
-                                style={styles.input}
-                            />
-
-                            <input
-                                placeholder="MAC"
-                                name="mac"
-                                value={formData.mac}
-                                onChange={handleChange}
-                                style={styles.input}
-                            />
-
-                            <div style={styles.sectionLabel}>
-                                <FileText size={18} />
-                                Datos del contrato
-                            </div>
-
-                            <select
-                                name="tipoContrato"
-                                value={formData.tipoContrato}
-                                onChange={handleChange}
-                                style={styles.input}
-                            >
-                                <option value="" style={styles.option}>Tipo de contrato</option>
-                                <option value="FISICO" style={styles.option}>Físico</option>
-                                <option value="DIGITAL" style={styles.option}>Digital</option>
-                            </select>
-
-                            <select
-                                name="canalContrato"
-                                value={formData.canalContrato}
-                                onChange={handleChange}
-                                style={styles.input}
-                            >
-                                <option value="" style={styles.option}>Canal de contrato</option>
-                                <option value="PRESENCIAL" style={styles.option}>Presencial</option>
-                                <option value="LLAMADA" style={styles.option}>Llamada</option>
-                                <option value="VIDEO" style={styles.option}>Video</option>
-                                <option value="MSN" style={styles.option}>MSN</option>
-                                <option value="WHATSAPP" style={styles.option}>WhatsApp</option>
-                                <option value="EMAIL" style={styles.option}>Email</option>
-                            </select>
-
-                            <input
-                                type="number"
-                                name="precioInstalacion"
-                                placeholder="Precio instalación"
-                                value={formData.precioInstalacion}
-                                onChange={handleChange}
-                                style={styles.input}
-                            />
-
-                            <input
-                                type="number"
-                                name="descuentoInstalacion"
-                                placeholder="Descuento instalación"
-                                value={formData.descuentoInstalacion}
-                                onChange={handleChange}
-                                style={styles.input}
-                            />
-
-                            <select
-                                name="instalacionGratis"
-                                value={formData.instalacionGratis}
-                                onChange={handleChange}
-                                style={styles.input}
-                            >
-                                <option value="0" style={styles.option}>Instalación con costo</option>
-                                <option value="1" style={styles.option}>Instalación gratis</option>
-                            </select>
-
-                            <input
-                                type="number"
-                                name="tiempoContratoMeses"
-                                placeholder="Tiempo contrato en meses"
-                                value={formData.tiempoContratoMeses}
-                                onChange={handleChange}
-                                style={styles.input}
-                            />
-
-                        </div>
-
-                        <div style={styles.modalFooter}>
-                            <button
-                                style={styles.secondaryButton}
-                                onClick={() => {
-                                    setShowModal(false);
-                                    limpiarFormulario();
-                                }}
-                            >
-                                Cancelar
-                            </button>
-
-                            <button
-                                style={styles.primaryButton}
-                                onClick={guardarServicio}
-                            >
-                                {modoEdicion ? 'Actualizar servicio' : 'Guardar servicio'}
-                            </button>
                         </div>
                     </div>
-                </div>
-            )}
-
-            {showDetalleModal && servicioDetalle && (
-                <div style={styles.modalOverlay}>
-                    <div
-                        style={{
-                            ...styles.modal,
-                            maxWidth: '1000px',
-                        }}
-                    >
-                        <div style={styles.modalHeader}>
-                            <h2 style={styles.modalTitle}>
-                                Detalle del Servicio
-                            </h2>
-
-                            <button
-                                style={styles.closeButton}
-                                onClick={() => {
-                                    setShowDetalleModal(false);
-                                    setServicioDetalle(null);
-                                }}
-                            >
-                                ✕
-                            </button>
-                        </div>
-
-                        <div style={styles.detailModalBody}>
-
-                            <div style={styles.infoBox}>
-                                <h3>General</h3>
-                                <div style={{ display: 'grid', gap: '10px' }}>
-                                    <div style={styles.copyRow}>
-                                        <div>
-                                            <span style={styles.copyLabel}>Servicio ID</span>
-
-                                            <p style={styles.copyValue}>
-                                                {servicioDetalle.servicioId}
-                                            </p>
-                                        </div>
-
-                                        <button
-                                            type="button"
-                                            title="Copiar Servicio ID"
-                                            aria-label="Copiar Servicio ID"
-                                            style={{
-                                                ...styles.copyButton,
-                                                ...(idCopiado === 'SERVICIO'
-                                                    ? styles.copyButtonSuccess
-                                                    : {}),
-                                            }}
-                                            onClick={() =>
-                                                copiarAlPortapapeles(
-                                                    servicioDetalle.servicioId,
-                                                    'SERVICIO'
-                                                )
-                                            }
-                                        >
-                                            {idCopiado === 'SERVICIO' ? (
-                                                <Check size={17} />
-                                            ) : (
-                                                <Copy size={17} />
-                                            )}
-                                        </button>
-                                    </div>
-
-                                    <div style={styles.copyRow}>
-                                        <div>
-                                            <span style={styles.copyLabel}>Cliente ID</span>
-
-                                            <p style={styles.copyValue}>
-                                                {servicioDetalle.clienteId}
-                                            </p>
-                                        </div>
-
-                                        <button
-                                            type="button"
-                                            title="Copiar Cliente ID"
-                                            aria-label="Copiar Cliente ID"
-                                            style={{
-                                                ...styles.copyButton,
-                                                ...(idCopiado === 'CLIENTE'
-                                                    ? styles.copyButtonSuccess
-                                                    : {}),
-                                            }}
-                                            onClick={() =>
-                                                copiarAlPortapapeles(
-                                                    servicioDetalle.clienteId,
-                                                    'CLIENTE'
-                                                )
-                                            }
-                                        >
-                                            {idCopiado === 'CLIENTE' ? (
-                                                <Check size={17} />
-                                            ) : (
-                                                <Copy size={17} />
-                                            )}
-                                        </button>
-                                    </div>
-                                </div>
-                                <p><strong>Plan:</strong> {servicioDetalle.nombrePlan}</p>
-                                <p><strong>Bajada:</strong> {servicioDetalle.velocidadBajada}</p>
-                                <p><strong>Subida:</strong> {servicioDetalle.velocidadSubida}</p>
-                                <p><strong>Precio:</strong> ${Number(servicioDetalle.precioMensual || 0).toFixed(2)}</p>
-                                <p><strong>Día de pago:</strong> {servicioDetalle.diaPago}</p>
-                                <p>
-                                    <strong>Sede:</strong>{' '}
-                                    {obtenerSedePorRouter(servicioDetalle.routerId)?.nombre ||
-                                        'Sin sede asignada'}
-                                </p>
-                                <p>
-                                    <strong>Router:</strong>{' '}
-                                    {obtenerNombreRouter(servicioDetalle.routerId)}
-                                </p>
-                            </div>
-
-                            <div style={styles.contractBox}>
-                                <p><strong>Contrato:</strong> {servicioDetalle.tipoContrato || 'No definido'}</p>
-                                <p>
-                                    <strong>Fecha de firma:</strong> {formatearFecha(servicioDetalle.fechaFirmaContrato)}
-                                </p>
-                                <p>
-                                    <strong>Fecha de instalación:</strong> {formatearFecha(servicioDetalle.fechaInstalacion)}
-                                </p>
-                                <p><strong>Canal:</strong> {servicioDetalle.canalContrato || 'No definido'}</p>
-                                <p><strong>Tiempo:</strong> {servicioDetalle.tiempoContratoMeses ? `${servicioDetalle.tiempoContratoMeses} meses` : 'No definido'}</p>
-
-                                <p><strong>Instalación:</strong> ${Number(servicioDetalle.precioInstalacion || 0).toFixed(2)}</p>
-                                <p><strong>Descuento:</strong> ${Number(servicioDetalle.descuentoInstalacion || 0).toFixed(2)}</p>
-                                <p><strong>Gratis:</strong> {servicioDetalle.instalacionGratis ? 'Sí' : 'No'}</p>
-                            </div>
-                            {servicioDetalle.tipoServicio !== 'RADIO' && (
-                                <div style={styles.techBox}>
-                                    <p><strong>PPPoE:</strong> {servicioDetalle.pppSecret || 'No asignado'}</p>
-                                    <p><strong>Queue:</strong> {servicioDetalle.queueName || 'No asignado'}</p>
-                                    <p><strong>IP:</strong> {servicioDetalle.ipCliente || 'No asignada'}</p>
-                                    <p><strong>MAC:</strong> {servicioDetalle.mac || 'No asignada'}</p>
-                                </div>
-                            )}
-
-                            {servicioDetalle.tipoServicio !== 'FIBRA' && (
-                                <div style={styles.gponBox}>
-                                    <p><strong>Tipo técnico:</strong> Fibra óptica / GPON</p>
-                                    <p><strong>Nodo fibra:</strong> {servicioDetalle.nombreNodoFibra || 'N/A'}</p>
-                                    <p><strong>NAP:</strong> {servicioDetalle.nombreNap || servicioDetalle.cajaNap || 'N/A'}</p>
-                                    <p><strong>Puerto NAP:</strong> {servicioDetalle.puertoNap || 'N/A'}</p>
-                                    <p><strong>ONU:</strong> {servicioDetalle.onuId || 'N/A'}</p>
-                                    <p><strong>VLAN:</strong> {servicioDetalle.vlan || 'N/A'}</p>
-                                    <p><strong>RX/TX:</strong> {servicioDetalle.senalRx || '-'} / {servicioDetalle.senalTx || '-'}</p>
-                                </div>
-                            )}
-
-                            {servicioDetalle.tipoServicio !== 'RADIO' && (
-                                <div style={styles.gponBox}>
-                                    <p><strong>Tipo técnico:</strong> WISP / Radio enlace</p>
-                                    <p><strong>Torre:</strong> {servicioDetalle.nombreTorre || 'N/A'}</p>
-                                    <p><strong>Sectorial:</strong> {servicioDetalle.nombreSectorial || servicioDetalle.sectorial || 'N/A'}</p>
-                                    <p><strong>Frecuencia:</strong> {servicioDetalle.frecuencia || 'N/A'}</p>
-                                    <p><strong>SSID:</strong> {servicioDetalle.ssid || 'N/A'}</p>
-                                    <p><strong>IP antena:</strong> {servicioDetalle.ipAntena || 'N/A'}</p>
-                                    <p><strong>Modelo antena:</strong> {servicioDetalle.modeloAntena || 'N/A'}</p>
-                                    <p><strong>Usuario CPE:</strong> {servicioDetalle.usuarioCpe || 'N/A'}</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-        </main>
+                )
+            }
+        </main >
     );
 }
 
