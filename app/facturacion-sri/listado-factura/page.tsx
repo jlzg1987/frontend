@@ -42,6 +42,9 @@ export default function FacturacionSriPage() {
     const [motivoAnulacion, setMotivoAnulacion] = useState('');
     const [procesandoAnulacion, setProcesandoAnulacion] = useState(false);
 
+    const [fechaDesde, setFechaDesde] = useState('');
+    const [fechaHasta, setFechaHasta] = useState('');
+
     function getToken() {
         if (typeof window === 'undefined') return '';
 
@@ -113,22 +116,46 @@ export default function FacturacionSriPage() {
         );
     }
 
+
     const filtradas = facturas.filter((f) => {
         const texto = `
-    ${f.numeroFactura || ''}
-    ${f.clienteNombre || ''}
-    ${f.clienteCedula || ''}
-    ${f.clienteCelular || ''}
-    ${f.clienteEmail || ''}
-    ${f.tipoCliente || ''}
-`.toLowerCase();
+        ${f.numeroFactura || ''}
+        ${f.clienteNombre || ''}
+        ${f.clienteCedula || ''}
+        ${f.clienteCelular || ''}
+        ${f.clienteEmail || ''}
+        ${f.tipoCliente || ''}
+    `.toLowerCase();
+
         const coincideTexto = texto.includes(busqueda.toLowerCase());
 
         const estado = f.estadoSri || 'SIN_PROCESAR';
+
         const coincideEstado =
             estadoFiltro === 'TODOS' || estadoFiltro === estado;
 
-        return coincideTexto && coincideEstado;
+        // =========================
+        // FILTRO POR FECHA
+        // =========================
+        let coincideFecha = true;
+
+        if (f.fechaFactura) {
+            const fechaFactura = new Date(f.fechaFactura);
+
+            if (fechaDesde) {
+                const desde = new Date(`${fechaDesde}T00:00:00`);
+                coincideFecha = coincideFecha && fechaFactura >= desde;
+            }
+
+            if (fechaHasta) {
+                const hasta = new Date(`${fechaHasta}T23:59:59.999`);
+                coincideFecha = coincideFecha && fechaFactura <= hasta;
+            }
+        } else if (fechaDesde || fechaHasta) {
+            coincideFecha = false;
+        }
+
+        return coincideTexto && coincideEstado && coincideFecha;
     });
 
     function colorEstadoSri(estado?: string) {
@@ -253,16 +280,18 @@ export default function FacturacionSriPage() {
                 <Card titulo="Pendientes" valor={facturas.filter(f => !f.estadoSri || f.estadoSri !== 'AUTORIZADO').length} />
                 <Card titulo="Errores" valor={facturas.filter(f => ['DEVUELTA', 'NO_AUTORIZADO', 'ERROR'].includes(f.estadoSri || '')).length} />
             </section>
-
             <section className="bg-slate-900/70 border border-slate-800 rounded-2xl p-4 mb-5">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+
+                    {/* BUSQUEDA */}
                     <input
                         value={busqueda}
                         onChange={(e) => setBusqueda(e.target.value)}
                         placeholder="Buscar por factura, cliente o cédula..."
-                        className="bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-cyan-500 md:col-span-2"
+                        className="bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-cyan-500 xl:col-span-2"
                     />
 
+                    {/* ESTADO */}
                     <select
                         value={estadoFiltro}
                         onChange={(e) => setEstadoFiltro(e.target.value)}
@@ -277,10 +306,70 @@ export default function FacturacionSriPage() {
                         <option value="DEVUELTA">Devuelta</option>
                         <option value="NO_AUTORIZADO">No autorizado</option>
                         <option value="ERROR">Error</option>
-                        <option value="ANULACION_SOLICITADA">Anulación solicitada</option>
-
+                        <option value="ANULACION_SOLICITADA">
+                            Anulación solicitada
+                        </option>
                     </select>
+
+                    {/* FECHA DESDE */}
+                    <div>
+                        <label className="block text-xs text-slate-400 mb-1">
+                            Desde
+                        </label>
+
+                        <input
+                            type="date"
+                            value={fechaDesde}
+                            onChange={(e) => setFechaDesde(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-cyan-500"
+                        />
+                    </div>
+
+                    {/* FECHA HASTA */}
+                    <div>
+                        <label className="block text-xs text-slate-400 mb-1">
+                            Hasta
+                        </label>
+
+                        <input
+                            type="date"
+                            value={fechaHasta}
+                            onChange={(e) => setFechaHasta(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-cyan-500"
+                        />
+                    </div>
+
                 </div>
+
+                {(busqueda || estadoFiltro !== 'TODOS' || fechaDesde || fechaHasta) && (
+                    <div className="flex items-center justify-between mt-4 pt-4 border-t border-slate-800">
+
+                        <p className="text-sm text-slate-400">
+                            Mostrando{' '}
+                            <span className="font-bold text-white">
+                                {filtradas.length}
+                            </span>{' '}
+                            de{' '}
+                            <span className="font-bold text-white">
+                                {facturas.length}
+                            </span>{' '}
+                            facturas
+                        </p>
+
+                        <button
+                            onClick={() => {
+                                setBusqueda('');
+                                setEstadoFiltro('TODOS');
+                                setFechaDesde('');
+                                setFechaHasta('');
+                            }}
+                            className="px-4 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-sm font-semibold"
+                        >
+                            Limpiar filtros
+                        </button>
+
+                    </div>
+                )}
             </section>
 
             <section className="bg-slate-900/70 border border-slate-800 rounded-2xl overflow-hidden">
@@ -298,6 +387,7 @@ export default function FacturacionSriPage() {
                             <thead className="bg-slate-950/80 text-slate-300">
                                 <tr>
                                     <th className="text-left p-4">Factura</th>
+                                    <th className="text-left p-4">Fecha</th>
                                     <th className="text-left p-4">Cliente</th>
                                     <th className="text-left p-4">Total</th>
                                     <th className="text-left p-4">Estado SRI</th>
@@ -318,6 +408,31 @@ export default function FacturacionSriPage() {
                                             <div className="text-xs text-slate-500">
                                                 ID: {f.facturaId}
                                             </div>
+                                        </td>
+
+                                        <td className="p-4">
+                                            {f.fechaFactura ? (
+                                                <>
+                                                    <div className="font-semibold text-slate-200">
+                                                        {new Date(f.fechaFactura).toLocaleDateString('es-EC', {
+                                                            day: '2-digit',
+                                                            month: '2-digit',
+                                                            year: 'numeric',
+                                                        })}
+                                                    </div>
+
+                                                    <div className="text-xs text-slate-500 mt-1">
+                                                        {new Date(f.fechaFactura).toLocaleTimeString('es-EC', {
+                                                            hour: '2-digit',
+                                                            minute: '2-digit',
+                                                        })}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <span className="text-slate-500 text-xs">
+                                                    Sin fecha
+                                                </span>
+                                            )}
                                         </td>
 
                                         <td className="p-4">
