@@ -4,7 +4,7 @@
 import { API_BASE, getToken } from '@/src/lib/api';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { Download } from 'lucide-react';
+import { Download, Search, X } from 'lucide-react';
 
 type Mensualidad = {
     mensualidadId: string;
@@ -57,6 +57,7 @@ export default function MensualidadesPage({
     const [mensualidades, setMensualidades] = useState<Mensualidad[]>([]);
     const [filtroEstado, setFiltroEstado] = useState<'TODAS' | Mensualidad['estado']>('TODAS');
     const [filtroRouterId, setFiltroRouterId] = useState('');
+    const [filtroBusqueda, setFiltroBusqueda] = useState('');
     const [descargandoPdf, setDescargandoPdf] = useState(false);
     const [loading, setLoading] = useState(false);
     const [mensaje, setMensaje] = useState('');
@@ -421,12 +422,30 @@ export default function MensualidadesPage({
             .sort((a, b) => a.nombreRouter.localeCompare(b.nombreRouter));
     }, [mensualidades]);
 
-    const mensualidadesDelRouter = filtroRouterId
-        ? mensualidades.filter(
-            (mensualidad) =>
-                String(mensualidad.routerId || '') === filtroRouterId
-        )
-        : mensualidades;
+    const mensualidadesDelRouter = useMemo(() => {
+        const termino = filtroBusqueda
+            .trim()
+            .toLocaleLowerCase('es');
+
+        return mensualidades.filter((mensualidad) => {
+            const coincideRouter = !filtroRouterId ||
+                String(mensualidad.routerId || '') === filtroRouterId;
+
+            if (!coincideRouter) return false;
+            if (!termino) return true;
+
+            const nombreCompleto = `${mensualidad.nombres || ''} ${mensualidad.apellidos || ''}`
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLocaleLowerCase('es');
+
+            return (
+                nombreCompleto.includes(termino) ||
+                String(mensualidad.cedula || '').toLocaleLowerCase('es').includes(termino) ||
+                String(mensualidad.ipCliente || '').toLocaleLowerCase('es').includes(termino)
+            );
+        });
+    }, [mensualidades, filtroRouterId, filtroBusqueda]);
 
     const mensualidadesFiltradas = filtroEstado === 'TODAS'
         ? mensualidadesDelRouter
@@ -636,24 +655,74 @@ export default function MensualidadesPage({
             )}
 
             <div className="mb-5 rounded-2xl border border-cyan-500/20 bg-slate-900 p-4">
-                <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-400">
-                    Filtrar por router
-                </label>
-                <select
-                    value={filtroRouterId}
-                    onChange={(e) => setFiltroRouterId(e.target.value)}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-500 md:max-w-md"
-                >
-                    <option value="">Todos los routers</option>
-                    {routersDisponibles.map((router) => (
-                        <option
-                            key={router.routerId}
-                            value={router.routerId}
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                        <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-400">
+                            Buscar cliente
+                        </label>
+                        <div className="relative">
+                            <Search
+                                size={18}
+                                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
+                            />
+                            <input
+                                type="text"
+                                value={filtroBusqueda}
+                                onChange={(e) => setFiltroBusqueda(e.target.value)}
+                                placeholder="Nombre, cédula o dirección IP"
+                                className="w-full rounded-xl border border-slate-700 bg-slate-950 py-3 pl-11 pr-11 text-white outline-none focus:border-cyan-500"
+                            />
+                            {filtroBusqueda && (
+                                <button
+                                    type="button"
+                                    onClick={() => setFiltroBusqueda('')}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+                                    aria-label="Limpiar búsqueda"
+                                >
+                                    <X size={18} />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="mb-2 block text-xs font-bold uppercase tracking-wide text-slate-400">
+                            Filtrar por router
+                        </label>
+                        <select
+                            value={filtroRouterId}
+                            onChange={(e) => setFiltroRouterId(e.target.value)}
+                            className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none focus:border-cyan-500"
                         >
-                            {router.nombreRouter}
-                        </option>
-                    ))}
-                </select>
+                            <option value="">Todos los routers</option>
+                            {routersDisponibles.map((router) => (
+                                <option key={router.routerId} value={router.routerId}>
+                                    {router.nombreRouter}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+
+                {(filtroBusqueda || filtroRouterId || filtroEstado !== 'TODAS') && (
+                    <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-800 pt-4">
+                        <span className="text-sm text-slate-400">
+                            {mensualidadesFiltradas.length} mensualidad(es) encontrada(s)
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setFiltroBusqueda('');
+                                setFiltroRouterId('');
+                                setFiltroEstado('TODAS');
+                            }}
+                            className="flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-sm font-semibold hover:bg-slate-700"
+                        >
+                            <X size={16} />
+                            Limpiar filtros
+                        </button>
+                    </div>
+                )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
@@ -744,7 +813,10 @@ export default function MensualidadesPage({
                                                 <button
                                                     onClick={() => {
                                                         setPagoSeleccionado(m);
-                                                        setValorPagado(String(m.valorMensual));
+                                                        setValorPagado(Number(m.valorMensual).toFixed(2));
+                                                        setFormaPago('EFECTIVO');
+                                                        setReferenciaPago('PAGO EN EFECTIVO');
+                                                        setMensaje('');
                                                     }}
                                                     className="bg-green-600 hover:bg-green-700 px-3 py-2 rounded-lg font-semibold"
                                                 >
@@ -794,9 +866,12 @@ export default function MensualidadesPage({
                         <label className="block text-sm mb-1">Valor pagado</label>
                         <input
                             type="number"
+                            min="0.01"
+                            step="0.01"
                             value={valorPagado}
                             onChange={(e) => setValorPagado(e.target.value)}
-                            className="w-full mb-4 rounded-xl bg-slate-800 border border-slate-700 px-4 py-2 outline-none"
+                            disabled={loading}
+                            className="w-full mb-4 rounded-xl bg-slate-800 border border-slate-700 px-4 py-2 outline-none disabled:opacity-50"
                         />
                         <label className="block text-sm mb-1">Forma de pago</label>
                         <select
@@ -815,29 +890,41 @@ export default function MensualidadesPage({
                         <input
                             value={referenciaPago}
                             onChange={(e) => setReferenciaPago(e.target.value)}
+                            disabled={loading || formaPago === 'EFECTIVO'}
                             placeholder={
                                 formaPago === 'EFECTIVO'
                                     ? 'Pago en efectivo'
                                     : 'Número de comprobante, banco, autorización...'
                             }
 
-                            className="w-full mb-4 rounded-xl bg-slate-800 border border-slate-700 px-4 py-2 outline-none"
+                            className="w-full mb-4 rounded-xl bg-slate-800 border border-slate-700 px-4 py-2 outline-none disabled:opacity-60"
                         />
 
                         <div className="flex justify-end gap-2">
                             <button
-                                onClick={() => setPagoSeleccionado(null)}
-                                className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-xl"
+                                onClick={() => {
+                                    setPagoSeleccionado(null);
+                                    setValorPagado('');
+                                    setFormaPago('EFECTIVO');
+                                    setReferenciaPago('');
+                                }}
+                                disabled={loading}
+                                className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-xl disabled:opacity-50"
                             >
                                 Cancelar
                             </button>
 
                             <button
                                 onClick={registrarPago}
-                                disabled={loading}
+                                disabled={
+                                    loading ||
+                                    !valorPagado ||
+                                    Number(valorPagado) <= 0 ||
+                                    (formaPago !== 'EFECTIVO' && !referenciaPago.trim())
+                                }
                                 className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-xl font-semibold disabled:opacity-50"
                             >
-                                Guardar pago
+                                {loading ? 'Registrando...' : 'Guardar pago'}
                             </button>
                         </div>
                     </div>
@@ -965,8 +1052,8 @@ export default function MensualidadesPage({
                                                     )
                                                 }
                                                 className={`w-full rounded-xl border p-4 text-left transition ${seleccionado
-                                                        ? 'border-purple-400 bg-purple-500/15'
-                                                        : 'border-slate-700 bg-slate-800 hover:border-slate-500'
+                                                    ? 'border-purple-400 bg-purple-500/15'
+                                                    : 'border-slate-700 bg-slate-800 hover:border-slate-500'
                                                     }`}
                                             >
                                                 <div className="flex items-center justify-between gap-3">
@@ -976,9 +1063,9 @@ export default function MensualidadesPage({
 
                                                     <span
                                                         className={`rounded-full px-2 py-1 text-xs font-bold ${servicio.estadoServicio ===
-                                                                'ACTIVO'
-                                                                ? 'bg-green-500/20 text-green-300'
-                                                                : 'bg-orange-500/20 text-orange-300'
+                                                            'ACTIVO'
+                                                            ? 'bg-green-500/20 text-green-300'
+                                                            : 'bg-orange-500/20 text-orange-300'
                                                             }`}
                                                     >
                                                         {
