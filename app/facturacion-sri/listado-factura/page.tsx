@@ -457,11 +457,40 @@ export default function FacturacionSriPage() {
                                         <td className="p-4 font-bold">
                                             ${Number(f.totalFinal || 0).toFixed(2)}
                                         </td>
-
                                         <td className="p-4">
-                                            <span className={`px-3 py-1 rounded-full border text-xs font-bold ${colorEstadoSri(f.estadoSri)}`}>
-                                                {f.estadoSri || 'SIN_PROCESAR'}
-                                            </span>
+                                            <div className="flex flex-col items-start gap-2">
+
+                                                <span
+                                                    className={`px-3 py-1 rounded-full border text-xs font-bold ${colorEstadoSri(f.estadoSri)}`}
+                                                >
+                                                    {f.estadoSri || 'SIN_PROCESAR'}
+                                                </span>
+
+                                                {f.mensajeSri && f.estadoSri !== 'AUTORIZADO' && (
+                                                    <div
+                                                        className="
+            max-w-[320px]
+            rounded-lg
+            border
+            border-red-500/30
+            bg-red-500/10
+            px-3
+            py-2
+            text-xs
+            leading-relaxed
+            text-red-200
+            break-words
+        "
+                                                    >
+                                                        <div className="font-bold text-red-300 mb-1">
+                                                            Respuesta del SRI
+                                                        </div>
+
+                                                        {f.mensajeSri}
+                                                    </div>
+                                                )}
+
+                                            </div>
                                         </td>
 
                                         <td className="p-4 max-w-[260px]">
