@@ -1025,14 +1025,28 @@ export default function ListadoFacturasInternasPage() {
                                         <td className="px-4 py-4 text-slate-300">
                                             {new Date(factura.fechaFactura).toLocaleDateString()}
                                         </td>
+                                        <td className="px-4 py-4 text-right whitespace-nowrap">
+                                            {(() => {
+                                                const subtotal = Number(factura.subtotal || 0);
+                                                const iva = subtotal * 0.15;
+                                                const totalConIva = subtotal + iva;
 
-                                        <td className="px-4 py-4 text-right">
-                                            <div className="font-black text-emerald-300">
-                                                ${Number(factura.totalFinal || 0).toFixed(2)}
-                                            </div>
-                                            <div className="text-xs text-slate-500">
-                                                Subtotal: ${Number(factura.subtotal || 0).toFixed(2)}
-                                            </div>
+                                                return (
+                                                    <>
+                                                        <div className="text-xs text-slate-400">
+                                                            Subtotal: ${subtotal.toFixed(2)}
+                                                        </div>
+
+                                                        <div className="text-xs text-slate-400">
+                                                            IVA 15%: ${iva.toFixed(2)}
+                                                        </div>
+
+                                                        <div className="mt-1 font-black text-emerald-300">
+                                                            Total: ${totalConIva.toFixed(2)}
+                                                        </div>
+                                                    </>
+                                                );
+                                            })()}
                                         </td>
 
                                         <td className="px-4 py-4 text-center">
@@ -1061,72 +1075,144 @@ export default function ListadoFacturasInternasPage() {
 
                                         </td>
 
-                                        <td className="px-4 py-4">
-                                            {factura.estado === 'PENDIENTE' && (
-                                                <button
-                                                    onClick={() => marcarFacturaComoPagada(factura)}
-                                                    className="
-            bg-emerald-600
-            hover:bg-emerald-500
-            text-white
-            font-bold
-            px-3
-            py-2
-            rounded-lg
-            text-xs
-        "
-                                                    style={{ marginBottom: 10 }}>
-                                                    Aprobar
-                                                </button>
-                                            )}
-                                            <div className="flex flex-col md:flex-row gap-2 justify-center">
-                                                <button
-                                                    onClick={() => procesarFacturaSriDesdeInterna(factura)}
-                                                    disabled={procesandoSriId === factura.facturaId || factura.estado === 'ANULADA'}
-                                                    className="bg-orange-500 hover:bg-orange-400 disabled:bg-slate-700 disabled:text-slate-400 text-white font-bold px-3 py-2 rounded-lg text-xs"
-                                                >
-                                                    {procesandoSriId === factura.facturaId ? 'SRI...' : 'SRI'}
-                                                </button>
-                                                <button
-                                                    onClick={() => enviarFacturaEmailListado(factura)}
-                                                    className="bg-blue-700 hover:bg-blue-800 text-white px-3 py-2 rounded-lg text-xs font-bold"
-                                                >
-                                                    Email
-                                                </button>
+                                        <td className="px-3 py-4">
+                                            <div className="flex min-w-[230px] flex-col items-center gap-2">
 
-                                                <button
-                                                    onClick={() => enviarFacturaWhatsappListado(factura)}
-                                                    className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-xs font-bold"
-                                                >
-                                                    WhatsApp
-                                                </button>
+                                                {/* FILA 1 */}
+                                                <div className="flex flex-wrap justify-center gap-2">
+                                                    {factura.estado === 'PENDIENTE' && (
+                                                        <button
+                                                            onClick={() => marcarFacturaComoPagada(factura)}
+                                                            className="
+                        bg-emerald-600
+                        hover:bg-emerald-500
+                        text-white
+                        font-bold
+                        px-3
+                        py-2
+                        rounded-lg
+                        text-xs
+                    "
+                                                        >
+                                                            Aprobar
+                                                        </button>
+                                                    )}
 
-                                                <button
-                                                    onClick={() => reimprimirFactura(factura)}
-                                                    className="bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold px-3 py-2 rounded-lg"
-                                                >
-                                                    PDF
-                                                </button>
+                                                    <button
+                                                        onClick={() => procesarFacturaSriDesdeInterna(factura)}
+                                                        disabled={
+                                                            procesandoSriId === factura.facturaId ||
+                                                            factura.estado === 'ANULADA'
+                                                        }
+                                                        className="
+                    bg-orange-500
+                    hover:bg-orange-400
+                    disabled:bg-slate-700
+                    disabled:text-slate-400
+                    text-white
+                    font-bold
+                    px-3
+                    py-2
+                    rounded-lg
+                    text-xs
+                "
+                                                    >
+                                                        {procesandoSriId === factura.facturaId
+                                                            ? 'SRI...'
+                                                            : 'SRI'}
+                                                    </button>
 
-                                                <button
-                                                    onClick={() =>
-                                                        window.open(
-                                                            `${API_BASE}/facturacion-interna/${factura.facturaId}/recibo`,
-                                                            '_blank'
-                                                        )
-                                                    }
-                                                    className="bg-indigo-500 hover:bg-indigo-400 text-white font-bold px-3 py-2 rounded-lg"
-                                                >
-                                                    Recibo
-                                                </button>
+                                                    <button
+                                                        onClick={() => enviarFacturaEmailListado(factura)}
+                                                        className="
+                    bg-blue-700
+                    hover:bg-blue-800
+                    text-white
+                    font-bold
+                    px-3
+                    py-2
+                    rounded-lg
+                    text-xs
+                "
+                                                    >
+                                                        Email
+                                                    </button>
 
-                                                <button
-                                                    onClick={() => anularFactura(factura)}
-                                                    disabled={factura.estado === 'ANULADA'}
-                                                    className="bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:text-slate-400 text-white font-bold px-3 py-2 rounded-lg"
-                                                >
-                                                    Anular
-                                                </button>
+                                                    <button
+                                                        onClick={() => enviarFacturaWhatsappListado(factura)}
+                                                        className="
+                    bg-green-600
+                    hover:bg-green-700
+                    text-white
+                    font-bold
+                    px-3
+                    py-2
+                    rounded-lg
+                    text-xs
+                "
+                                                    >
+                                                        WhatsApp
+                                                    </button>
+                                                </div>
+
+                                                {/* FILA 2 */}
+                                                <div className="flex flex-wrap justify-center gap-2">
+                                                    <button
+                                                        onClick={() => reimprimirFactura(factura)}
+                                                        className="
+                    bg-cyan-500
+                    hover:bg-cyan-400
+                    text-slate-950
+                    font-bold
+                    px-3
+                    py-2
+                    rounded-lg
+                    text-xs
+                "
+                                                    >
+                                                        PDF
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() =>
+                                                            window.open(
+                                                                `${API_BASE}/facturacion-interna/${factura.facturaId}/recibo`,
+                                                                '_blank'
+                                                            )
+                                                        }
+                                                        className="
+                    bg-indigo-500
+                    hover:bg-indigo-400
+                    text-white
+                    font-bold
+                    px-3
+                    py-2
+                    rounded-lg
+                    text-xs
+                "
+                                                    >
+                                                        Recibo
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() => anularFactura(factura)}
+                                                        disabled={factura.estado === 'ANULADA'}
+                                                        className="
+                    bg-red-600
+                    hover:bg-red-500
+                    disabled:bg-slate-700
+                    disabled:text-slate-400
+                    text-white
+                    font-bold
+                    px-3
+                    py-2
+                    rounded-lg
+                    text-xs
+                "
+                                                    >
+                                                        Anular
+                                                    </button>
+                                                </div>
                                             </div>
                                         </td>
                                     </tr>

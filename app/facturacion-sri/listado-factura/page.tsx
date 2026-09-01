@@ -454,8 +454,28 @@ export default function FacturacionSriPage() {
                                             </div>
                                         </td>
 
-                                        <td className="p-4 font-bold">
-                                            ${Number(f.totalFinal || 0).toFixed(2)}
+                                        <td className="p-4 whitespace-nowrap">
+                                            {(() => {
+                                                const subtotal = Number(f.totalFinal || 0);
+                                                const iva = subtotal * 0.15;
+                                                const totalConIva = subtotal + iva;
+
+                                                return (
+                                                    <>
+                                                        <div className="text-xs text-slate-400">
+                                                            Subtotal: ${subtotal.toFixed(2)}
+                                                        </div>
+
+                                                        <div className="text-xs text-slate-400">
+                                                            IVA 15%: ${iva.toFixed(2)}
+                                                        </div>
+
+                                                        <div className="mt-1 font-black text-emerald-300">
+                                                            Total: ${totalConIva.toFixed(2)}
+                                                        </div>
+                                                    </>
+                                                );
+                                            })()}
                                         </td>
                                         <td className="p-4">
                                             <div className="flex flex-col items-start gap-2">
@@ -466,7 +486,7 @@ export default function FacturacionSriPage() {
                                                     {f.estadoSri || 'SIN_PROCESAR'}
                                                 </span>
 
-                                                {f.mensajeSri && f.estadoSri !== 'AUTORIZADO' && (
+                                                {f.mensajeSri && f.estadoSri !== 'AUTORIZADO' && f.estadoSri !== 'NO_AUTORIZADO' && f.estadoSri !== 'ANULADO' && f.estadoSri !== 'PENDIENTE_ANULACION_SRI' && (
                                                     <div
                                                         className="
             max-w-[320px]

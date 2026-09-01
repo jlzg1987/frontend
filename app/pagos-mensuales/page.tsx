@@ -857,13 +857,47 @@ export default function MensualidadesPage({
 
                         <div className="mb-4 text-sm text-slate-300">
                             <p>
-                                Cliente: <strong>{pagoSeleccionado.nombres} {pagoSeleccionado.apellidos}</strong>
+                                Cliente:{' '}
+                                <strong>
+                                    {pagoSeleccionado.nombres} {pagoSeleccionado.apellidos}
+                                </strong>
                             </p>
+
                             <p>Periodo: {pagoSeleccionado.periodo}</p>
-                            <p>Valor: ${Number(pagoSeleccionado.valorMensual).toFixed(2)}</p>
+
+                            <div className="mt-3 rounded-xl border border-slate-700 bg-slate-800/60 p-3">
+                                <div className="flex justify-between">
+                                    <span>Subtotal:</span>
+                                    <span>
+                                        ${Number(pagoSeleccionado.valorMensual).toFixed(2)}
+                                    </span>
+                                </div>
+
+                                <div className="mt-1 flex justify-between text-slate-400">
+                                    <span>IVA 15%:</span>
+                                    <span>
+                                        $
+                                        {(
+                                            Number(pagoSeleccionado.valorMensual) * 0.15
+                                        ).toFixed(2)}
+                                    </span>
+                                </div>
+
+                                <div className="my-2 border-t border-slate-700" />
+
+                                <div className="flex justify-between text-base font-bold text-green-400">
+                                    <span>Total:</span>
+                                    <span>
+                                        $
+                                        {(
+                                            Number(pagoSeleccionado.valorMensual) * 1.15
+                                        ).toFixed(2)}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
 
-                        <label className="block text-sm mb-1">Valor pagado</label>
+                        <label className="block text-sm mb-1">Valor pagado (no incluye IVA)</label>
                         <input
                             type="number"
                             min="0.01"
