@@ -103,9 +103,11 @@ type SedeRouter = {
 export default function ContratosServiciosPage({
     onAbrirFacturainterna,
     onAbrirPerfilAdministrativo,
+    ocultarResumen = false,
 }: {
     onAbrirFacturainterna: () => void;
     onAbrirPerfilAdministrativo: (servicioId: string) => void;
+    ocultarResumen?: boolean;
 }) {
     const [servicios, setServicios] = useState<Servicio[]>([]);
     const [loading, setLoading] = useState(true);
@@ -1034,92 +1036,50 @@ export default function ContratosServiciosPage({
     return (
         <main style={styles.page}>
 
-
-            <section style={styles.summarySection}>
-                <div style={styles.summaryHeader}>
-                    <div>
-                        <p style={styles.summarySubtitle}>
-                            Estado general:{' '}
-                            <strong style={styles.summaryRouterName}>
-                                {nombreSedeSeleccionada}
-                            </strong>
-                            {' · '}
-                            <strong style={styles.summaryRouterName}>
-                                {nombreRouterSeleccionado}
-                            </strong>
-                        </p>
+            {!ocultarResumen && (
+                <section style={styles.summarySection}>
+                    <div style={styles.summaryHeader}>
+                        <div>
+                            <p style={styles.summarySubtitle}>
+                                Estado general:{' '}
+                                <strong style={styles.summaryRouterName}>
+                                    {nombreSedeSeleccionada}
+                                </strong>
+                                {' · '}
+                                <strong style={styles.summaryRouterName}>
+                                    {nombreRouterSeleccionado}
+                                </strong>
+                            </p>
+                        </div>
                     </div>
-                </div>
 
-                <div style={styles.statusSummaryGrid}>
-                    {tarjetasEstado.map((tarjeta) => {
-                        const Icono = tarjeta.icono;
+                    <div style={styles.statusSummaryGrid}>
+                        {tarjetasEstado.map((tarjeta) => {
+                            const Icono = tarjeta.icono;
 
-                        return (
-                            <button
-                                type="button"
-                                key={tarjeta.titulo}
-                                onClick={() => setEstadoFiltro(tarjeta.estado)}
-                                aria-pressed={estadoFiltro === tarjeta.estado}
-                                style={{
-                                    ...styles.statusSummaryCard,
-                                    background: tarjeta.fondo,
-                                    borderColor:
-                                        estadoFiltro === tarjeta.estado
-                                            ? tarjeta.color
-                                            : `${tarjeta.color}38`,
-                                    boxShadow:
-                                        estadoFiltro === tarjeta.estado
-                                            ? `0 0 0 2px ${tarjeta.color}25, 0 16px 34px rgba(0,0,0,0.28)`
-                                            : styles.statusSummaryCard.boxShadow,
-                                    transform:
-                                        estadoFiltro === tarjeta.estado
-                                            ? 'translateY(-2px)'
-                                            : 'translateY(0)',
-                                }}
-                            >
-                                <div
+                            return (
+                                <button
+                                    type="button"
+                                    key={tarjeta.titulo}
+                                    onClick={() => setEstadoFiltro(tarjeta.estado)}
+                                    aria-pressed={estadoFiltro === tarjeta.estado}
                                     style={{
-                                        ...styles.summaryIcon,
-                                        color: tarjeta.color,
-                                        background: `${tarjeta.color}18`,
-                                        borderColor: `${tarjeta.color}30`,
+                                        ...styles.statusSummaryCard,
+                                        background: tarjeta.fondo,
+                                        borderColor:
+                                            estadoFiltro === tarjeta.estado
+                                                ? tarjeta.color
+                                                : `${tarjeta.color}38`,
+                                        boxShadow:
+                                            estadoFiltro === tarjeta.estado
+                                                ? `0 0 0 2px ${tarjeta.color}25, 0 16px 34px rgba(0,0,0,0.28)`
+                                                : styles.statusSummaryCard.boxShadow,
+                                        transform:
+                                            estadoFiltro === tarjeta.estado
+                                                ? 'translateY(-2px)'
+                                                : 'translateY(0)',
                                     }}
                                 >
-                                    <Icono size={22} />
-                                </div>
-                                <div>
-                                    <p style={styles.summaryCardLabel}>{tarjeta.titulo}</p>
-                                    <strong style={{ ...styles.summaryCardValue, color: tarjeta.color }}>
-                                        {tarjeta.valor}
-                                    </strong>
-                                    <p style={styles.summaryCardDetail}>{tarjeta.detalle}</p>
-                                </div>
-                            </button>
-                        );
-                    })}
-                </div>
-
-                <div style={styles.financialSummaryGrid}>
-                    {tarjetasFinancieras.map((tarjeta) => {
-                        const Icono = tarjeta.icono;
-
-                        return (
-                            <article
-                                key={tarjeta.titulo}
-                                style={{
-                                    ...styles.financialCard,
-                                    background: tarjeta.fondo,
-                                    borderColor: `${tarjeta.color}35`,
-                                }}
-                            >
-                                <div style={styles.financialCardHeader}>
-                                    <div>
-                                        <p style={{ ...styles.financialTitle, color: tarjeta.color }}>
-                                            {tarjeta.titulo}
-                                        </p>
-                                        <p style={styles.financialDescription}>{tarjeta.descripcion}</p>
-                                    </div>
                                     <div
                                         style={{
                                             ...styles.summaryIcon,
@@ -1130,29 +1090,73 @@ export default function ContratosServiciosPage({
                                     >
                                         <Icono size={22} />
                                     </div>
-                                </div>
-
-                                <div style={styles.financialRows}>
-                                    <div style={styles.financialRow}>
-                                        <span>Subtotal sin IVA</span>
-                                        <strong>{formatearDinero(tarjeta.valores.subtotal)}</strong>
-                                    </div>
-                                    <div style={styles.financialRow}>
-                                        <span>IVA (15 %)</span>
-                                        <strong>{formatearDinero(tarjeta.valores.iva)}</strong>
-                                    </div>
-                                    <div style={styles.financialTotalRow}>
-                                        <span>Total con IVA</span>
-                                        <strong style={{ color: tarjeta.color }}>
-                                            {formatearDinero(tarjeta.valores.total)}
+                                    <div>
+                                        <p style={styles.summaryCardLabel}>{tarjeta.titulo}</p>
+                                        <strong style={{ ...styles.summaryCardValue, color: tarjeta.color }}>
+                                            {tarjeta.valor}
                                         </strong>
+                                        <p style={styles.summaryCardDetail}>{tarjeta.detalle}</p>
                                     </div>
-                                </div>
-                            </article>
-                        );
-                    })}
-                </div>
-            </section>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div style={styles.financialSummaryGrid}>
+                        {tarjetasFinancieras.map((tarjeta) => {
+                            const Icono = tarjeta.icono;
+
+                            return (
+                                <article
+                                    key={tarjeta.titulo}
+                                    style={{
+                                        ...styles.financialCard,
+                                        background: tarjeta.fondo,
+                                        borderColor: `${tarjeta.color}35`,
+                                    }}
+                                >
+                                    <div style={styles.financialCardHeader}>
+                                        <div>
+                                            <p style={{ ...styles.financialTitle, color: tarjeta.color }}>
+                                                {tarjeta.titulo}
+                                            </p>
+                                            <p style={styles.financialDescription}>{tarjeta.descripcion}</p>
+                                        </div>
+                                        <div
+                                            style={{
+                                                ...styles.summaryIcon,
+                                                color: tarjeta.color,
+                                                background: `${tarjeta.color}18`,
+                                                borderColor: `${tarjeta.color}30`,
+                                            }}
+                                        >
+                                            <Icono size={22} />
+                                        </div>
+                                    </div>
+
+                                    <div style={styles.financialRows}>
+                                        <div style={styles.financialRow}>
+                                            <span>Subtotal sin IVA</span>
+                                            <strong>{formatearDinero(tarjeta.valores.subtotal)}</strong>
+                                        </div>
+                                        <div style={styles.financialRow}>
+                                            <span>IVA (15 %)</span>
+                                            <strong>{formatearDinero(tarjeta.valores.iva)}</strong>
+                                        </div>
+                                        <div style={styles.financialTotalRow}>
+                                            <span>Total con IVA</span>
+                                            <strong style={{ color: tarjeta.color }}>
+                                                {formatearDinero(tarjeta.valores.total)}
+                                            </strong>
+                                        </div>
+                                    </div>
+                                </article>
+                            );
+                        })}
+                    </div>
+                </section>
+            )}
+
             <section style={styles.header}>
 
                 <button style={styles.primaryButton}

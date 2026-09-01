@@ -229,6 +229,8 @@ export default function DashboardPage() {
     const [SolicitudDesarrolloId, setSolicitudDesarrolloId] = useState<string>('');
     const [CarritoId, setCarritoId] = useState<string>('');
 
+    const [ocultarResumenContratos, setOcultarResumenContratos] = useState(false);
+
     const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
 
     const [modulosPermitidos, setModulosPermitidos] = useState<ModuloPermitido[]>([]);
@@ -465,7 +467,6 @@ export default function DashboardPage() {
             title: 'Clientes',
             desc: 'Registrar, buscar y administrar clientes ISP.',
             icon: Users,
-            href: '/Clientes',
             color: 'bg-blue-600',
             permiso: 'CLIENTES',
         },
@@ -473,7 +474,6 @@ export default function DashboardPage() {
             title: 'Buscar clientes en sistema',
             desc: 'Administrar servicios de internet, planes, PPPoE, GPON y estados.',
             icon: Wifi,
-            href: '/contratos-servicios',
             color: 'bg-cyan-600',
             permiso: 'CONTRATOS_SERVICIOS',
         },
@@ -481,7 +481,6 @@ export default function DashboardPage() {
             title: 'Listado de pagos mensuales',
             desc: 'Control de mensualidades, deudas y cortes.',
             icon: CreditCard,
-            href: '/pagos',
             color: 'bg-green-600',
             permiso: 'PAGOS',
         },
@@ -489,7 +488,6 @@ export default function DashboardPage() {
             title: 'Facturación',
             desc: 'Facturas, notas de venta y comprobantes.',
             icon: ReceiptText,
-            href: '/facturacion',
             color: 'bg-indigo-600',
             permiso: 'FACTURACION',
         },
@@ -497,7 +495,6 @@ export default function DashboardPage() {
             title: 'MikroTik',
             desc: 'Control de cortes, perfiles y clientes activos.',
             icon: Router,
-            href: '/mikrotik',
             color: 'bg-orange-600',
             permiso: 'MIKROTIK',
         },
@@ -505,7 +502,6 @@ export default function DashboardPage() {
             title: 'Tickets',
             desc: 'Soporte técnico y atención al cliente.',
             icon: Wrench,
-            href: '/tickets',
             color: 'bg-red-600',
             permiso: 'TICKETS',
         },
@@ -513,7 +509,6 @@ export default function DashboardPage() {
             title: 'Usuarios',
             desc: 'Administrar técnicos, cajeros y administradores.',
             icon: ShieldCheck,
-            href: '/usuarios',
             color: 'bg-slate-700',
             permiso: 'USUARIOS',
         },
@@ -521,7 +516,6 @@ export default function DashboardPage() {
             title: 'Listado de facturación',
             desc: 'Consultar y administrar las facturas generadas.',
             icon: ReceiptText,
-            href: '/facturacion',
             color: 'bg-cyan-700',
             permiso: 'FACTURACION',
         },
@@ -1237,6 +1231,7 @@ export default function DashboardPage() {
                                                             return;
                                                         }
                                                         if (item.title === 'Buscar clientes en sistema') {
+                                                            setOcultarResumenContratos(true);
                                                             setVistaActual('contratosServicios');
                                                             return;
                                                         }
@@ -1322,7 +1317,10 @@ export default function DashboardPage() {
                         {vistaActual === 'PerfilAdministrativo' && servicioIdPerfil && (
                             <PerfilAdministrativoPage
                                 servicioId={servicioIdPerfil}
-                                onVolver={() => setVistaActual('contratosServicios')}
+                                onVolver={() => {
+                                    setOcultarResumenContratos(false);
+                                    setVistaActual('contratosServicios');
+                                }}
                                 onAbrirListadoMorosos={() => setVistaActual('mikrotikCortes')}
                             />
                         )}
@@ -1599,13 +1597,17 @@ export default function DashboardPage() {
                         )}
                         {vistaActual === 'contratosServicios' && (
                             <ContratosServiciosPage
-                                onAbrirFacturainterna={() => setVistaActual('facturamanual')}
+                                ocultarResumen={ocultarResumenContratos}
+
+                                onAbrirFacturainterna={() =>
+                                    setVistaActual('facturamanual')
+                                }
+
                                 onAbrirPerfilAdministrativo={(servicioId) => {
                                     setServicioIdPerfil(servicioId);
                                     setVistaActual('PerfilAdministrativo');
                                 }}
                             />
-
                         )}
 
                         {vistaActual === 'infraestructura' && (
@@ -1661,7 +1663,10 @@ export default function DashboardPage() {
                             <GestionIspPage
                                 onVolver={() => setVistaActual('dashboard')}
                                 onAbrirCliente={() => setVistaActual('Clientes')}
-                                onAbrirServicioCliente={() => setVistaActual('contratosServicios')}
+                                onAbrirServicioCliente={() => {
+                                    setOcultarResumenContratos(false);
+                                    setVistaActual('contratosServicios');
+                                }}
                                 onAbrirImprimirServicioCliente={() => setVistaActual('contratospdf')}
                                 onAbrirImprimirAutorizacionCliente={() => setVistaActual('autorizacionesinstalacion')}
                                 onAbrirImprimirfichaCliente={() => setVistaActual('fichastecnicas')}
