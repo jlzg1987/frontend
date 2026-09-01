@@ -27,6 +27,23 @@ type Mensualidad = {
     velocidadSubida: string;
     nombreRouter: string;
 };
+type ServicioManual = {
+    servicioId: string;
+    clienteId: string;
+    cedula: string;
+    nombres: string;
+    apellidos: string;
+    telefono?: string;
+    nombrePlan: string;
+    precioMensual: number;
+    velocidadBajada?: string;
+    velocidadSubida?: string;
+    nombreRouter?: string | null;
+    routerId?: number | null;
+    ipCliente?: string | null;
+    estadoServicio: string;
+};
+
 
 type FacturacionInternaProps = {
     onAbrirFacturasinternas: () => void;
@@ -53,6 +70,23 @@ export default function MensualidadesPage({
     const [anioManual, setAnioManual] = useState(new Date().getFullYear());
     const [mesManual, setMesManual] = useState(new Date().getMonth() + 1);
 
+    const [tipoBusquedaManual, setTipoBusquedaManual] =
+        useState<'CEDULA' | 'CLIENTE_ID'>('CEDULA');
+
+    const [busquedaManual, setBusquedaManual] = useState('');
+    const [buscandoCliente, setBuscandoCliente] = useState(false);
+
+    const [serviciosManual, setServiciosManual] =
+        useState<ServicioManual[]>([]);
+
+    const [clienteManual, setClienteManual] = useState<{
+        clienteId: string;
+        cedula: string;
+        nombres: string;
+        apellidos: string;
+        telefono?: string;
+    } | null>(null);
+
     function cambiarFormaPago(valor: string) {
         setFormaPago(valor);
 
@@ -60,6 +94,64 @@ export default function MensualidadesPage({
             setReferenciaPago('PAGO EN EFECTIVO');
         } else {
             setReferenciaPago('');
+        }
+    }
+
+    async function buscarClienteManual() {
+        const valor = busquedaManual.trim();
+
+        if (!valor) {
+            setMensaje(
+                tipoBusquedaManual === 'CEDULA'
+                    ? 'Ingrese la cédula del cliente'
+                    : 'Ingrese el clienteId'
+            );
+            return;
+        }
+
+        try {
+            setBuscandoCliente(true);
+            setMensaje('');
+            setClienteManual(null);
+            setServiciosManual([]);
+            setServicioIdManual('');
+
+            const data = await requestApi(
+                '/mensualidades/buscar-servicios',
+                {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        cedula:
+                            tipoBusquedaManual === 'CEDULA'
+                                ? valor
+                                : undefined,
+
+                        clienteId:
+                            tipoBusquedaManual === 'CLIENTE_ID'
+                                ? valor
+                                : undefined,
+                    }),
+                }
+            );
+
+            const servicios = Array.isArray(data.servicios)
+                ? data.servicios
+                : [];
+
+            setClienteManual(data.cliente || null);
+            setServiciosManual(servicios);
+
+            // Seleccionar automáticamente si solamente tiene un contrato.
+            if (servicios.length === 1) {
+                setServicioIdManual(servicios[0].servicioId);
+            }
+        } catch (error: any) {
+            setMensaje(
+                error.message ||
+                'No se pudo encontrar al cliente'
+            );
+        } finally {
+            setBuscandoCliente(false);
         }
     }
 
@@ -401,31 +493,56 @@ export default function MensualidadesPage({
             setDescargandoPdf(false);
         }
     }
+    function cerrarModalManual() {
+        setModalManual(false);
+        setTipoBusquedaManual('CEDULA');
+        setBusquedaManual('');
+        setClienteManual(null);
+        setServiciosManual([]);
+        setServicioIdManual('');
+    }
 
     async function crearMensualidadManual() {
+        if (!servicioIdManual) {
+            setMensaje('Seleccione el contrato del cliente');
+            return;
+        }
+
         try {
             setLoading(true);
+            setMensaje('');
 
-            await requestApi('/mensualidades/crear-manual', {
-                method: 'POST',
-                body: JSON.stringify({
-                    servicioId: servicioIdManual,
-                    anio: anioManual,
-                    mes: mesManual,
-                }),
-            });
+            const resultado = await requestApi(
+                '/mensualidades/crear-manual',
+                {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        servicioId: servicioIdManual,
+                        anio: anioManual,
+                        mes: mesManual,
+                    }),
+                }
+            );
 
-            setMensaje('Mensualidad creada manualmente');
-            setModalManual(false);
-            setServicioIdManual('');
+            setMensaje(
+                resultado.message ||
+                `Mensualidad ${anioManual}-${String(
+                    mesManual
+                ).padStart(2, '0')} creada correctamente`
+            );
+
+            cerrarModalManual();
             await cargarMensualidades();
-
         } catch (error: any) {
-            setMensaje(error.message);
+            setMensaje(
+                error.message ||
+                'No se pudo crear la mensualidad'
+            );
         } finally {
             setLoading(false);
         }
     }
+
 
     return (
         <div className="min-h-screen bg-slate-950 text-white p-6">
@@ -728,68 +845,254 @@ export default function MensualidadesPage({
             )}
 
             {modalManual && (
-                <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-                    <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6">
-                        <h2 className="text-xl font-bold mb-4">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+                    <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-slate-700 bg-slate-900 p-6">
+                        <h2 className="mb-1 text-xl font-bold">
                             Crear mensualidad manual
                         </h2>
 
-                        <label className="block text-sm mb-1">
-                            Servicio ID
-                        </label>
-                        <input
-                            value={servicioIdManual}
-                            onChange={(e) => setServicioIdManual(e.target.value)}
-                            placeholder="Pega aquí el servicioId"
-                            className="w-full mb-4 rounded-xl bg-slate-800 border border-slate-700 px-4 py-2 outline-none"
-                        />
+                        <p className="mb-5 text-sm text-slate-400">
+                            Busque al cliente y seleccione el contrato al
+                            que se generará la mensualidad.
+                        </p>
 
-                        <label className="block text-sm mb-1">
-                            Año
+                        <label className="mb-1 block text-sm">
+                            Buscar mediante
                         </label>
-                        <input
-                            type="number"
-                            value={anioManual}
-                            onChange={(e) => setAnioManual(Number(e.target.value))}
-                            className="w-full mb-4 rounded-xl bg-slate-800 border border-slate-700 px-4 py-2 outline-none"
-                        />
 
-                        <label className="block text-sm mb-1">
-                            Mes
-                        </label>
                         <select
-                            value={mesManual}
-                            onChange={(e) => setMesManual(Number(e.target.value))}
-                            className="w-full mb-4 rounded-xl bg-slate-800 border border-slate-700 px-4 py-2 outline-none"
+                            value={tipoBusquedaManual}
+                            onChange={(e) => {
+                                setTipoBusquedaManual(
+                                    e.target.value as
+                                    | 'CEDULA'
+                                    | 'CLIENTE_ID'
+                                );
+
+                                setBusquedaManual('');
+                                setClienteManual(null);
+                                setServiciosManual([]);
+                                setServicioIdManual('');
+                            }}
+                            className="mb-4 w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 outline-none focus:border-purple-500"
                         >
-                            <option value={1}>Enero</option>
-                            <option value={2}>Febrero</option>
-                            <option value={3}>Marzo</option>
-                            <option value={4}>Abril</option>
-                            <option value={5}>Mayo</option>
-                            <option value={6}>Junio</option>
-                            <option value={7}>Julio</option>
-                            <option value={8}>Agosto</option>
-                            <option value={9}>Septiembre</option>
-                            <option value={10}>Octubre</option>
-                            <option value={11}>Noviembre</option>
-                            <option value={12}>Diciembre</option>
+                            <option value="CEDULA">
+                                Cédula del cliente
+                            </option>
+
+                            <option value="CLIENTE_ID">
+                                Cliente ID
+                            </option>
                         </select>
 
-                        <div className="flex justify-end gap-2">
+                        <label className="mb-1 block text-sm">
+                            {tipoBusquedaManual === 'CEDULA'
+                                ? 'Número de cédula'
+                                : 'Cliente ID'}
+                        </label>
+
+                        <div className="mb-5 flex gap-2">
+                            <input
+                                value={busquedaManual}
+                                onChange={(e) =>
+                                    setBusquedaManual(e.target.value)
+                                }
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        buscarClienteManual();
+                                    }
+                                }}
+                                placeholder={
+                                    tipoBusquedaManual === 'CEDULA'
+                                        ? 'Ejemplo: 0801234567'
+                                        : 'Ingrese el clienteId'
+                                }
+                                className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 outline-none focus:border-purple-500"
+                            />
+
                             <button
-                                onClick={() => setModalManual(false)}
-                                className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-xl"
+                                type="button"
+                                onClick={buscarClienteManual}
+                                disabled={
+                                    buscandoCliente ||
+                                    !busquedaManual.trim()
+                                }
+                                className="rounded-xl bg-cyan-600 px-4 py-3 font-semibold hover:bg-cyan-700 disabled:opacity-50"
+                            >
+                                {buscandoCliente
+                                    ? 'Buscando...'
+                                    : 'Buscar'}
+                            </button>
+                        </div>
+
+                        {clienteManual && (
+                            <div className="mb-5 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-4">
+                                <p className="font-bold text-cyan-200">
+                                    {clienteManual.nombres}{' '}
+                                    {clienteManual.apellidos}
+                                </p>
+
+                                <p className="mt-1 text-sm text-slate-300">
+                                    Cédula: {clienteManual.cedula}
+                                </p>
+
+                                <p className="text-sm text-slate-400">
+                                    Cliente ID: {clienteManual.clienteId}
+                                </p>
+                            </div>
+                        )}
+
+                        {serviciosManual.length > 0 && (
+                            <>
+                                <label className="mb-2 block text-sm font-semibold">
+                                    Seleccione el contrato
+                                </label>
+
+                                <div className="mb-5 space-y-3">
+                                    {serviciosManual.map((servicio) => {
+                                        const seleccionado =
+                                            servicioIdManual ===
+                                            servicio.servicioId;
+
+                                        return (
+                                            <button
+                                                key={servicio.servicioId}
+                                                type="button"
+                                                onClick={() =>
+                                                    setServicioIdManual(
+                                                        servicio.servicioId
+                                                    )
+                                                }
+                                                className={`w-full rounded-xl border p-4 text-left transition ${seleccionado
+                                                        ? 'border-purple-400 bg-purple-500/15'
+                                                        : 'border-slate-700 bg-slate-800 hover:border-slate-500'
+                                                    }`}
+                                            >
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <span className="font-bold">
+                                                        {servicio.nombrePlan}
+                                                    </span>
+
+                                                    <span
+                                                        className={`rounded-full px-2 py-1 text-xs font-bold ${servicio.estadoServicio ===
+                                                                'ACTIVO'
+                                                                ? 'bg-green-500/20 text-green-300'
+                                                                : 'bg-orange-500/20 text-orange-300'
+                                                            }`}
+                                                    >
+                                                        {
+                                                            servicio.estadoServicio
+                                                        }
+                                                    </span>
+                                                </div>
+
+                                                <div className="mt-2 grid grid-cols-1 gap-1 text-sm text-slate-300 sm:grid-cols-2">
+                                                    <p>
+                                                        Valor: $
+                                                        {Number(
+                                                            servicio.precioMensual
+                                                        ).toFixed(2)}
+                                                    </p>
+
+                                                    <p>
+                                                        Router:{' '}
+                                                        {servicio.nombreRouter ||
+                                                            'Sin router'}
+                                                    </p>
+
+                                                    <p>
+                                                        IP:{' '}
+                                                        {servicio.ipCliente ||
+                                                            'Sin IP'}
+                                                    </p>
+
+                                                    <p>
+                                                        Velocidad:{' '}
+                                                        {servicio.velocidadBajada ||
+                                                            '-'}
+                                                        /
+                                                        {servicio.velocidadSubida ||
+                                                            '-'}
+                                                    </p>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </>
+                        )}
+
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <div>
+                                <label className="mb-1 block text-sm">
+                                    Año
+                                </label>
+
+                                <input
+                                    type="number"
+                                    value={anioManual}
+                                    onChange={(e) =>
+                                        setAnioManual(
+                                            Number(e.target.value)
+                                        )
+                                    }
+                                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 outline-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="mb-1 block text-sm">
+                                    Mes
+                                </label>
+
+                                <select
+                                    value={mesManual}
+                                    onChange={(e) =>
+                                        setMesManual(
+                                            Number(e.target.value)
+                                        )
+                                    }
+                                    className="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 outline-none"
+                                >
+                                    <option value={1}>Enero</option>
+                                    <option value={2}>Febrero</option>
+                                    <option value={3}>Marzo</option>
+                                    <option value={4}>Abril</option>
+                                    <option value={5}>Mayo</option>
+                                    <option value={6}>Junio</option>
+                                    <option value={7}>Julio</option>
+                                    <option value={8}>Agosto</option>
+                                    <option value={9}>Septiembre</option>
+                                    <option value={10}>Octubre</option>
+                                    <option value={11}>Noviembre</option>
+                                    <option value={12}>Diciembre</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={cerrarModalManual}
+                                className="rounded-xl bg-slate-700 px-4 py-2 hover:bg-slate-600"
                             >
                                 Cancelar
                             </button>
 
                             <button
+                                type="button"
                                 onClick={crearMensualidadManual}
-                                disabled={loading || !servicioIdManual}
-                                className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-xl font-semibold disabled:opacity-50"
+                                disabled={
+                                    loading ||
+                                    buscandoCliente ||
+                                    !servicioIdManual
+                                }
+                                className="rounded-xl bg-purple-600 px-4 py-2 font-semibold hover:bg-purple-700 disabled:opacity-50"
                             >
-                                Crear
+                                {loading
+                                    ? 'Creando...'
+                                    : 'Crear mensualidad'}
                             </button>
                         </div>
                     </div>
