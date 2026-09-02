@@ -32,6 +32,8 @@ export default function PerfilAdministrativoPage({
     const [datosCopiados, setDatosCopiados] = useState(false);
     const [campoCopiado, setCampoCopiado] = useState<string | null>(null);
 
+    const [errorFotoPerfil, setErrorFotoPerfil] = useState(false);
+
     const [nuevoTicket, setNuevoTicket] = useState({
         titulo: "",
         descripcion: "",
@@ -41,6 +43,7 @@ export default function PerfilAdministrativoPage({
 
 
     useEffect(() => {
+        setErrorFotoPerfil(false);
         cargarPerfil();
     }, [servicioId]);
 
@@ -278,33 +281,51 @@ export default function PerfilAdministrativoPage({
             <div className="bg-slate-900 border border-cyan-500/20 rounded-2xl p-6">
                 <div className="flex gap-6 items-center">
 
-                    {/* FOTO / INICIALES */}
+                    {/* FOTO / AVATAR */}
                     <div className="shrink-0">
-                        {perfil.cliente?.fotoPerfil ? (
-                            <Image
+
+                        {perfil.cliente?.fotoPerfil && !errorFotoPerfil ? (
+
+                            <img
                                 src={perfil.cliente.fotoPerfil}
                                 alt={`${perfil.cliente?.nombres || ""} ${perfil.cliente?.apellidos || ""}`}
-                                width={120}
-                                height={120}
                                 className="w-[120px] h-[120px] rounded-full border-4 border-cyan-500 object-cover"
+                                onError={() => setErrorFotoPerfil(true)}
                             />
+
                         ) : (
+
                             <div
                                 className="
-                        w-[120px] h-[120px]
-                        rounded-full
-                        border-4 border-cyan-500
-                        bg-gradient-to-br from-cyan-500/20 to-blue-600/20
-                        flex items-center justify-center
-                        shadow-lg shadow-cyan-500/10
-                    "
+                w-[120px]
+                h-[120px]
+                rounded-full
+                border-4
+                border-cyan-500
+                bg-gradient-to-br
+                from-cyan-500/20
+                to-blue-600/20
+                flex
+                items-center
+                justify-center
+                shadow-lg
+                shadow-cyan-500/10
+            "
                             >
-                                <span className="text-4xl font-bold text-cyan-400 uppercase">
-                                    {`${perfil.cliente?.nombres?.charAt(0) || ""}${perfil.cliente?.apellidos?.charAt(0) || ""
-                                        }`}
+                                <span
+                                    className="
+                    text-4xl
+                    font-bold
+                    text-cyan-400
+                    uppercase
+                "
+                                >
+                                    {`${perfil.cliente?.nombres?.charAt(0) || ""}${perfil.cliente?.apellidos?.charAt(0) || ""}`}
                                 </span>
                             </div>
+
                         )}
+
                     </div>
 
                     <div className="flex-1">
