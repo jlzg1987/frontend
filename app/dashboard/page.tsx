@@ -1025,7 +1025,14 @@ export default function DashboardPage() {
     }
 
     return (
-        <main className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-950 to-blue-950">
+        <main
+            className="min-h-screen"
+            style={{
+                background:
+                    'linear-gradient(135deg, #020617 0%, #020617 50%, #172554 100%)',
+                minHeight: '100vh',
+            }}
+        >
             <BotNotificaciones
                 onAbrirAlertas={() => setVistaActual('AlertasWireless')}
             />
