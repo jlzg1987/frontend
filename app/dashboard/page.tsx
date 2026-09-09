@@ -1035,6 +1035,8 @@ export default function DashboardPage() {
         >
             <BotNotificaciones
                 onAbrirAlertas={() => setVistaActual('AlertasWireless')}
+                onAbrirPagos={() => setVistaActual('pagos')}
+                onAbrirFacturaManual={() => setVistaActual('facturamanual')}
             />
             <div className="flex min-h-screen">
                 <aside className="hidden md:flex w-72 bg-slate-900 border-r border-slate-800 p-6 flex-col">
