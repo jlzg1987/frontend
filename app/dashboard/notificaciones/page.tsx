@@ -264,10 +264,74 @@ export default function BotNotificaciones({
     onAbrirFacturaManual,
     onAbrirAlertas,
     onAbrirPagos,
+    onAbrirFacturasInternas,
+    onAbrirContratosServicios,
+    onAbrirClientes,
+    onAbrirProformas,
+    onAbrirMikrotik,
+    onAbrirConfiguracionMikrotik,
+    onAbrirCortesMikrotik,
+    onAbrirMonitoreoNodos,
+    onAbrirRoutersMikrotik,
+    onAbrirInfraestructura,
+    onAbrirWirelessMonitoreo,
+    onAbrirAlertasWireless,
+    onAbrirEquiposOffline,
+    onAbrirEquiposWireless,
+    onAbrirTickets,
+    onAbrirAdministracionISP,
+    onAbrirPlanesInternet,
+    onAbrirPublicidad,
+    onAbrirImportarClientes,
+    onAbrirSpeedTestAnalytics,
+    onAbrirConfiguracionSedes,
+    onAbrirCategoriasGastos,
+    onAbrirGastosMensuales,
+    onAbrirUsuarios,
+    onAbrirMenuLateral,
+    onAbrirListaUsuarios,
+    onAbrirAdministrarRoles,
+    onAbrirInventario,
+    onAbrirProductosServicios,
+    onAbrirTiendaOnline,
+    onAbrirDesarrolloSistema,
+    onAbrirConfiguracionFacturacion,
 }: {
+    onAbrirConfiguracionFacturacion: () => void;
     onAbrirFacturaManual: () => void;
     onAbrirAlertas: () => void;
     onAbrirPagos: () => void;
+    onAbrirFacturasInternas: () => void;
+    onAbrirContratosServicios: () => void;
+    onAbrirClientes: () => void;
+    onAbrirProformas: () => void;
+    onAbrirMikrotik: () => void;
+    onAbrirConfiguracionMikrotik: () => void;
+    onAbrirCortesMikrotik: () => void;
+    onAbrirMonitoreoNodos: () => void;
+    onAbrirRoutersMikrotik: () => void;
+    onAbrirInfraestructura: () => void;
+    onAbrirWirelessMonitoreo: () => void;
+    onAbrirAlertasWireless: () => void;
+    onAbrirEquiposOffline: () => void;
+    onAbrirEquiposWireless: () => void;
+    onAbrirTickets: () => void;
+    onAbrirAdministracionISP: () => void;
+    onAbrirPlanesInternet: () => void;
+    onAbrirPublicidad: () => void;
+    onAbrirImportarClientes: () => void;
+    onAbrirSpeedTestAnalytics: () => void;
+    onAbrirConfiguracionSedes: () => void;
+    onAbrirCategoriasGastos: () => void;
+    onAbrirGastosMensuales: () => void;
+    onAbrirUsuarios: () => void;
+    onAbrirMenuLateral: () => void;
+    onAbrirListaUsuarios: () => void;
+    onAbrirAdministrarRoles: () => void;
+    onAbrirInventario: () => void;
+    onAbrirProductosServicios: () => void;
+    onAbrirTiendaOnline: () => void;
+    onAbrirDesarrolloSistema: () => void;
 }) {
 
 
@@ -801,6 +865,7 @@ export default function BotNotificaciones({
 
         if (
             texto.includes("llevame a notificaciones") ||
+            texto.includes("llévame a notificaciones") ||
             texto.includes("ir a notificaciones") ||
             texto.includes("abre las notificaciones") ||
             texto.includes("abrir notificaciones") ||
@@ -847,6 +912,1738 @@ export default function BotNotificaciones({
             return;
         }
 
+        // ========================================================
+        // IR A TICKETS / SOPORTE
+        // ========================================================
+
+        if (
+            texto === "tickets" ||
+            texto === "ticket" ||
+            texto === "soporte" ||
+            texto === "soporte tecnico" ||
+            texto === "tickets de soporte" ||
+            texto === "incidencias" ||
+            texto === "reclamos" ||
+            texto === "problemas de clientes" ||
+
+            texto.includes("llevame a tickets") ||
+            texto.includes("ir a tickets") ||
+            texto.includes("abre tickets") ||
+            texto.includes("abrir tickets") ||
+            texto.includes("ver tickets") ||
+            texto.includes("mostrar tickets") ||
+
+            texto.includes("quiero ver los tickets") ||
+            texto.includes("quiero revisar los tickets") ||
+            texto.includes("revisar tickets") ||
+            texto.includes("revisa los tickets") ||
+
+            texto.includes("llevame a soporte") ||
+            texto.includes("ir a soporte") ||
+            texto.includes("abre soporte") ||
+            texto.includes("abrir soporte") ||
+            texto.includes("ver soporte") ||
+
+            texto.includes("quiero ver soporte") ||
+            texto.includes("quiero revisar soporte") ||
+            texto.includes("soporte tecnico") ||
+
+            texto.includes("crear un ticket") ||
+            texto.includes("crear ticket") ||
+            texto.includes("nuevo ticket") ||
+            texto.includes("registrar ticket") ||
+            texto.includes("registrar un ticket") ||
+            texto.includes("agregar ticket") ||
+
+            texto.includes("reportar un problema") ||
+            texto.includes("reportar problema") ||
+            texto.includes("registrar un problema") ||
+            texto.includes("problema de un cliente") ||
+
+            texto.includes("ver incidencias") ||
+            texto.includes("revisar incidencias") ||
+            texto.includes("abrir incidencias") ||
+
+            texto.includes("ver reclamos") ||
+            texto.includes("revisar reclamos") ||
+            texto.includes("reclamos de clientes") ||
+
+            texto.includes("tickets pendientes") ||
+            texto.includes("tickets abiertos") ||
+            texto.includes("tickets sin resolver") ||
+            texto.includes("problemas pendientes")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo tickets de soporte."
+            );
+
+            setAbierto(false);
+
+            setTimeout(
+                () => {
+                    onAbrirTickets();
+                },
+                500
+            );
+
+            return;
+        }
+
+        // ========================================================
+        // IR A IMPORTAR CLIENTES
+        // ========================================================
+
+        if (
+            texto === "importar clientes" ||
+            texto === "importacion de clientes" ||
+            texto === "cargar clientes" ||
+            texto === "subir clientes" ||
+            texto === "migrar clientes" ||
+            texto === "traer clientes" ||
+
+            texto.includes("llevame a importar clientes") ||
+            texto.includes("ir a importar clientes") ||
+            texto.includes("abre importar clientes") ||
+            texto.includes("abrir importar clientes") ||
+            texto.includes("quiero importar clientes") ||
+
+            texto.includes("quiero cargar clientes") ||
+            texto.includes("quiero subir clientes") ||
+            texto.includes("quiero migrar clientes") ||
+            texto.includes("quiero traer clientes") ||
+
+            texto.includes("cargar una lista de clientes") ||
+            texto.includes("cargar lista de clientes") ||
+            texto.includes("subir una lista de clientes") ||
+            texto.includes("subir lista de clientes") ||
+
+            texto.includes("importar una lista de clientes") ||
+            texto.includes("importar lista de clientes") ||
+            texto.includes("importar archivo de clientes") ||
+            texto.includes("subir archivo de clientes") ||
+
+            texto.includes("importar clientes desde excel") ||
+            texto.includes("cargar clientes desde excel") ||
+            texto.includes("subir clientes desde excel") ||
+
+            texto.includes("pasar clientes al sistema") ||
+            texto.includes("meter clientes al sistema") ||
+            texto.includes("cargar clientes al sistema") ||
+            texto.includes("agregar clientes por archivo")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo importación de clientes."
+            );
+
+            setAbierto(false);
+
+            setTimeout(
+                () => {
+                    onAbrirImportarClientes();
+                },
+                500
+            );
+
+            return;
+        }
+
+        // ========================================================
+        // IR A LISTADO DE USUARIOS
+        // ========================================================
+
+        if (
+            texto === "lista de usuarios" ||
+            texto === "listado de usuarios" ||
+            texto === "usuarios registrados" ||
+            texto === "ver usuarios registrados" ||
+            texto === "todos los usuarios" ||
+
+            texto.includes("llevame a la lista de usuarios") ||
+            texto.includes("llevame al listado de usuarios") ||
+            texto.includes("ir a la lista de usuarios") ||
+            texto.includes("abre la lista de usuarios") ||
+            texto.includes("abrir lista de usuarios") ||
+
+            texto.includes("quiero ver la lista de usuarios") ||
+            texto.includes("quiero ver los usuarios registrados") ||
+            texto.includes("quiero ver todos los usuarios") ||
+            texto.includes("muestrame los usuarios") ||
+            texto.includes("mostrar los usuarios") ||
+
+            texto.includes("ver usuarios registrados") ||
+            texto.includes("revisar usuarios registrados") ||
+            texto.includes("consultar usuarios") ||
+            texto.includes("buscar usuarios") ||
+            texto.includes("buscar un usuario") ||
+
+            texto.includes("lista de cuentas") ||
+            texto.includes("ver las cuentas registradas") ||
+            texto.includes("usuarios del sistema") ||
+            texto.includes("ver usuarios del sistema") ||
+            texto.includes("lista de usuarios del sistema")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo la lista de usuarios."
+            );
+
+            setAbierto(false);
+
+            setTimeout(() => {
+                onAbrirListaUsuarios();
+            }, 500);
+
+            return;
+        }
+
+        // ========================================================
+        // IR A ADMINISTRAR ROLES
+        // ========================================================
+
+        if (
+            texto === "roles" ||
+            texto === "rol" ||
+            texto === "administrar roles" ||
+            texto === "gestion de roles" ||
+            texto === "roles de usuarios" ||
+            texto === "permisos" ||
+            texto === "permisos de usuarios" ||
+            texto === "niveles de acceso" ||
+
+            texto.includes("llevame a roles") ||
+            texto.includes("ir a roles") ||
+            texto.includes("abre roles") ||
+            texto.includes("abrir roles") ||
+            texto.includes("ver roles") ||
+            texto.includes("mostrar roles") ||
+
+            texto.includes("llevame a administrar roles") ||
+            texto.includes("abre administrar roles") ||
+            texto.includes("quiero administrar los roles") ||
+            texto.includes("quiero gestionar los roles") ||
+
+            texto.includes("quiero ver los roles") ||
+            texto.includes("quiero revisar los roles") ||
+            texto.includes("revisar roles") ||
+            texto.includes("ver roles de usuarios") ||
+
+            texto.includes("crear un rol") ||
+            texto.includes("crear rol") ||
+            texto.includes("nuevo rol") ||
+            texto.includes("agregar un rol") ||
+            texto.includes("agregar rol") ||
+            texto.includes("registrar un rol") ||
+
+            texto.includes("quiero crear un rol") ||
+            texto.includes("quiero agregar un rol") ||
+
+            texto.includes("ver permisos") ||
+            texto.includes("administrar permisos") ||
+            texto.includes("configurar permisos") ||
+            texto.includes("permisos de los usuarios") ||
+            texto.includes("cambiar permisos") ||
+
+            texto.includes("ver niveles de acceso") ||
+            texto.includes("administrar niveles de acceso") ||
+            texto.includes("configurar niveles de acceso") ||
+
+            texto.includes("quien tiene permiso") ||
+            texto.includes("quienes tienen permiso") ||
+            texto.includes("acceso de usuarios")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo administración de roles y permisos."
+            );
+
+            setAbierto(false);
+
+            setTimeout(() => {
+                onAbrirAdministrarRoles();
+            }, 500);
+
+            return;
+        }
+
+        // ========================================================
+        // IR A ADMINISTRAR MENÚ LATERAL
+        // ========================================================
+
+        if (
+            texto === "menu" ||
+            texto === "menu lateral" ||
+            texto === "administrar menu" ||
+            texto === "configurar menu" ||
+            texto === "gestion de menu" ||
+            texto === "opciones del menu" ||
+
+            texto.includes("llevame al menu") ||
+            texto.includes("ir al menu") ||
+            texto.includes("abre el menu") ||
+            texto.includes("abrir el menu") ||
+            texto.includes("ver el menu") ||
+
+            texto.includes("llevame al menu lateral") ||
+            texto.includes("ir al menu lateral") ||
+            texto.includes("abre el menu lateral") ||
+            texto.includes("abrir menu lateral") ||
+            texto.includes("ver menu lateral") ||
+
+            texto.includes("quiero administrar el menu") ||
+            texto.includes("quiero configurar el menu") ||
+            texto.includes("administrar el menu lateral") ||
+            texto.includes("configurar el menu lateral") ||
+            texto.includes("editar el menu lateral") ||
+
+            texto.includes("quiero editar el menu") ||
+            texto.includes("editar el menu") ||
+            texto.includes("modificar el menu") ||
+            texto.includes("organizar el menu") ||
+
+            texto.includes("ver opciones del menu") ||
+            texto.includes("administrar opciones del menu") ||
+            texto.includes("configurar opciones del menu") ||
+
+            texto.includes("agregar opcion al menu") ||
+            texto.includes("agregar una opcion al menu") ||
+            texto.includes("crear opcion de menu") ||
+            texto.includes("nueva opcion de menu")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo administración del menú."
+            );
+
+            setAbierto(false);
+
+            setTimeout(() => {
+                onAbrirMenuLateral();
+            }, 500);
+
+            return;
+        }
+
+        // ========================================================
+        // IR A CONFIGURACIÓN DE FACTURACIÓN
+        // ========================================================
+
+        if (
+            texto === "configuracion de facturacion" ||
+            texto === "configuracion facturacion" ||
+            texto === "configurar facturacion" ||
+            texto === "configurar facturas" ||
+            texto === "datos de facturacion" ||
+            texto === "configuracion sri" ||
+
+            texto.includes("llevame a configuracion de facturacion") ||
+            texto.includes("ir a configuracion de facturacion") ||
+            texto.includes("abre configuracion de facturacion") ||
+            texto.includes("abrir configuracion de facturacion") ||
+
+            texto.includes("quiero configurar la facturacion") ||
+            texto.includes("quiero configurar facturacion") ||
+            texto.includes("configurar la facturacion") ||
+            texto.includes("revisar configuracion de facturacion") ||
+
+            texto.includes("llevame a configurar facturas") ||
+            texto.includes("quiero configurar las facturas") ||
+            texto.includes("configurar las facturas") ||
+            texto.includes("configuracion de facturas") ||
+
+            texto.includes("ver datos de facturacion") ||
+            texto.includes("configurar datos de facturacion") ||
+            texto.includes("cambiar datos de facturacion") ||
+            texto.includes("editar datos de facturacion") ||
+
+            texto.includes("llevame a configuracion sri") ||
+            texto.includes("abre configuracion sri") ||
+            texto.includes("configurar sri") ||
+            texto.includes("configuracion del sri") ||
+
+            texto.includes("configurar facturacion electronica") ||
+            texto.includes("configuracion de facturacion electronica") ||
+            texto.includes("quiero configurar facturacion electronica") ||
+
+            texto.includes("configurar datos de la empresa para facturar") ||
+            texto.includes("datos de la empresa para facturacion")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo configuración de facturación."
+            );
+
+            setAbierto(false);
+
+            setTimeout(() => {
+                onAbrirConfiguracionFacturacion();
+            }, 500);
+
+            return;
+        }
+
+        // ========================================================
+        // IR A SPEED TEST / TEST DE VELOCIDAD
+        // ========================================================
+
+        if (
+            texto === "speed test" ||
+            texto === "speedtest" ||
+            texto === "test de velocidad" ||
+            texto === "prueba de velocidad" ||
+            texto === "medir velocidad" ||
+            texto === "velocidad de internet" ||
+            texto === "medir el internet" ||
+
+            texto.includes("llevame al test de velocidad") ||
+            texto.includes("llevame a test de velocidad") ||
+            texto.includes("ir al test de velocidad") ||
+            texto.includes("abre el test de velocidad") ||
+            texto.includes("abrir test de velocidad") ||
+            texto.includes("ver test de velocidad") ||
+
+            texto.includes("llevame al speed test") ||
+            texto.includes("ir al speed test") ||
+            texto.includes("abre speed test") ||
+            texto.includes("abrir speed test") ||
+            texto.includes("ver speed test") ||
+
+            texto.includes("quiero hacer un test de velocidad") ||
+            texto.includes("quiero hacer el test de velocidad") ||
+            texto.includes("hacer un test de velocidad") ||
+            texto.includes("hacer prueba de velocidad") ||
+
+            texto.includes("quiero medir la velocidad") ||
+            texto.includes("medir la velocidad") ||
+            texto.includes("medir velocidad de internet") ||
+            texto.includes("quiero medir el internet") ||
+            texto.includes("quiero medir mi internet") ||
+
+            texto.includes("quiero ver la velocidad") ||
+            texto.includes("ver velocidad de internet") ||
+            texto.includes("revisar velocidad de internet") ||
+            texto.includes("comprobar velocidad de internet") ||
+
+            texto.includes("como esta la velocidad") ||
+            texto.includes("como esta el internet") ||
+            texto.includes("revisar el internet") ||
+
+            texto.includes("ver resultados de velocidad") ||
+            texto.includes("resultados del speed test") ||
+            texto.includes("resultados del test de velocidad") ||
+            texto.includes("analisis de velocidad") ||
+            texto.includes("estadisticas de velocidad")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo el test de velocidad."
+            );
+
+            setAbierto(false);
+
+            setTimeout(() => {
+                onAbrirSpeedTestAnalytics();
+            }, 500);
+
+            return;
+        }
+
+        // ========================================================
+        // IR A CONFIGURACIÓN DE SEDES
+        // ========================================================
+
+        if (
+            texto === "sedes" ||
+            texto === "sede" ||
+            texto === "sucursales" ||
+            texto === "sucursal" ||
+            texto === "configuracion de sedes" ||
+            texto === "administrar sedes" ||
+            texto === "gestion de sedes" ||
+
+            texto.includes("llevame a sedes") ||
+            texto.includes("ir a sedes") ||
+            texto.includes("abre sedes") ||
+            texto.includes("abrir sedes") ||
+            texto.includes("ver sedes") ||
+            texto.includes("mostrar sedes") ||
+
+            texto.includes("llevame a configuracion de sedes") ||
+            texto.includes("abre configuracion de sedes") ||
+            texto.includes("ir a configuracion de sedes") ||
+
+            texto.includes("quiero ver las sedes") ||
+            texto.includes("quiero revisar las sedes") ||
+            texto.includes("revisar las sedes") ||
+            texto.includes("administrar las sedes") ||
+            texto.includes("gestionar las sedes") ||
+
+            texto.includes("agregar una sede") ||
+            texto.includes("agregar sede") ||
+            texto.includes("crear una sede") ||
+            texto.includes("crear sede") ||
+            texto.includes("nueva sede") ||
+            texto.includes("registrar una sede") ||
+            texto.includes("registrar sede") ||
+
+            texto.includes("quiero agregar una sede") ||
+            texto.includes("quiero crear una sede") ||
+            texto.includes("quiero registrar una sede") ||
+
+            texto.includes("ver sucursales") ||
+            texto.includes("abre sucursales") ||
+            texto.includes("administrar sucursales") ||
+            texto.includes("configurar sucursales") ||
+            texto.includes("agregar una sucursal") ||
+            texto.includes("crear una sucursal") ||
+            texto.includes("nueva sucursal") ||
+
+            texto.includes("ver oficinas") ||
+            texto.includes("administrar oficinas") ||
+            texto.includes("agregar una oficina")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo configuración de sedes."
+            );
+
+            setAbierto(false);
+
+            setTimeout(() => {
+                onAbrirConfiguracionSedes();
+            }, 500);
+
+            return;
+        }
+
+        // ========================================================
+        // IR A CATEGORÍAS DE GASTOS
+        // ========================================================
+
+        if (
+            texto === "categorias de gastos" ||
+            texto === "categorias gastos" ||
+            texto === "categoria de gastos" ||
+            texto === "tipos de gastos" ||
+            texto === "tipo de gasto" ||
+
+            texto.includes("llevame a categorias de gastos") ||
+            texto.includes("ir a categorias de gastos") ||
+            texto.includes("abre categorias de gastos") ||
+            texto.includes("abrir categorias de gastos") ||
+            texto.includes("ver categorias de gastos") ||
+            texto.includes("mostrar categorias de gastos") ||
+
+            texto.includes("quiero ver las categorias de gastos") ||
+            texto.includes("quiero revisar las categorias de gastos") ||
+            texto.includes("revisar categorias de gastos") ||
+            texto.includes("administrar categorias de gastos") ||
+            texto.includes("gestionar categorias de gastos") ||
+
+            texto.includes("crear categoria de gasto") ||
+            texto.includes("crear una categoria de gasto") ||
+            texto.includes("nueva categoria de gasto") ||
+            texto.includes("agregar categoria de gasto") ||
+            texto.includes("agregar una categoria de gasto") ||
+            texto.includes("registrar categoria de gasto") ||
+
+            texto.includes("quiero crear una categoria de gasto") ||
+            texto.includes("quiero agregar una categoria de gasto") ||
+            texto.includes("quiero registrar una categoria de gasto") ||
+
+            texto.includes("ver tipos de gastos") ||
+            texto.includes("crear tipo de gasto") ||
+            texto.includes("agregar tipo de gasto") ||
+            texto.includes("nuevo tipo de gasto") ||
+
+            texto.includes("configurar gastos") ||
+            texto.includes("organizar gastos") ||
+            texto.includes("clasificar gastos") ||
+            texto.includes("configurar categorias de gastos")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo categorías de gastos."
+            );
+
+            setAbierto(false);
+
+            setTimeout(() => {
+                onAbrirCategoriasGastos();
+            }, 500);
+
+            return;
+        }
+
+
+        // ========================================================
+        // IR A GASTOS MENSUALES
+        // ========================================================
+
+        if (
+            texto === "gastos" ||
+            texto === "gastos mensuales" ||
+            texto === "gastos del mes" ||
+            texto === "egresos" ||
+            texto === "egresos mensuales" ||
+
+            texto.includes("llevame a gastos") ||
+            texto.includes("ir a gastos") ||
+            texto.includes("abre gastos") ||
+            texto.includes("abrir gastos") ||
+            texto.includes("ver gastos") ||
+            texto.includes("mostrar gastos") ||
+
+            texto.includes("llevame a gastos mensuales") ||
+            texto.includes("ir a gastos mensuales") ||
+            texto.includes("abre gastos mensuales") ||
+            texto.includes("ver gastos mensuales") ||
+
+            texto.includes("quiero ver los gastos") ||
+            texto.includes("quiero revisar los gastos") ||
+            texto.includes("revisar los gastos") ||
+            texto.includes("ver los gastos del mes") ||
+            texto.includes("revisar los gastos del mes") ||
+
+            texto.includes("registrar un gasto") ||
+            texto.includes("registrar gasto") ||
+            texto.includes("agregar un gasto") ||
+            texto.includes("agregar gasto") ||
+            texto.includes("nuevo gasto") ||
+            texto.includes("crear un gasto") ||
+
+            texto.includes("quiero registrar un gasto") ||
+            texto.includes("quiero agregar un gasto") ||
+            texto.includes("quiero ingresar un gasto") ||
+            texto.includes("ingresar un gasto") ||
+
+            texto.includes("ver egresos") ||
+            texto.includes("revisar egresos") ||
+            texto.includes("registrar egreso") ||
+            texto.includes("registrar un egreso") ||
+
+            texto.includes("cuanto hemos gastado") ||
+            texto.includes("cuanto se ha gastado") ||
+            texto.includes("gastos de este mes") ||
+            texto.includes("gastos del negocio") ||
+            texto.includes("gastos de la empresa")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo gastos mensuales."
+            );
+
+            setAbierto(false);
+
+            setTimeout(() => {
+                onAbrirGastosMensuales();
+            }, 500);
+
+            return;
+        }
+
+        // ========================================================
+        // IR A PLANES DE INTERNET
+        // ========================================================
+
+        if (
+            texto === "planes" ||
+            texto === "planes de internet" ||
+            texto === "planes internet" ||
+            texto === "plan de internet" ||
+            texto === "plan internet" ||
+            texto === "velocidades de internet" ||
+            texto === "tarifas de internet" ||
+
+            texto.includes("llevame a planes") ||
+            texto.includes("ir a planes") ||
+            texto.includes("abre planes") ||
+            texto.includes("abrir planes") ||
+            texto.includes("ver planes") ||
+            texto.includes("mostrar planes") ||
+
+            texto.includes("llevame a planes de internet") ||
+            texto.includes("ir a planes de internet") ||
+            texto.includes("abre planes de internet") ||
+            texto.includes("ver planes de internet") ||
+
+            texto.includes("quiero ver los planes") ||
+            texto.includes("quiero ver los planes de internet") ||
+            texto.includes("revisar planes de internet") ||
+            texto.includes("administrar planes de internet") ||
+            texto.includes("gestionar planes de internet") ||
+
+            texto.includes("crear un plan de internet") ||
+            texto.includes("crear plan de internet") ||
+            texto.includes("nuevo plan de internet") ||
+            texto.includes("nuevo plan") ||
+            texto.includes("agregar un plan") ||
+            texto.includes("agregar plan") ||
+            texto.includes("registrar un plan") ||
+
+            texto.includes("crear una velocidad") ||
+            texto.includes("agregar una velocidad") ||
+            texto.includes("ver velocidades") ||
+            texto.includes("velocidades disponibles") ||
+
+            texto.includes("ver los megas") ||
+            texto.includes("planes por megas") ||
+            texto.includes("planes de megas") ||
+
+            texto.includes("ver tarifas") ||
+            texto.includes("tarifas de los planes") ||
+            texto.includes("precios de los planes") ||
+            texto.includes("precio de los planes")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo planes de Internet."
+            );
+
+            setAbierto(false);
+
+            setTimeout(
+                () => {
+                    onAbrirPlanesInternet();
+                },
+                500
+            );
+
+            return;
+        }
+
+        // ========================================================
+        // IR A PUBLICIDAD
+        // ========================================================
+
+        if (
+            texto === "publicidad" ||
+            texto === "publicidades" ||
+            texto === "anuncios" ||
+            texto === "promociones" ||
+            texto === "campañas" ||
+            texto === "campañas publicitarias" ||
+            texto === "ofertas" ||
+
+            texto.includes("llevame a publicidad") ||
+            texto.includes("ir a publicidad") ||
+            texto.includes("abre publicidad") ||
+            texto.includes("abrir publicidad") ||
+            texto.includes("ver publicidad") ||
+            texto.includes("mostrar publicidad") ||
+
+            texto.includes("quiero ver la publicidad") ||
+            texto.includes("quiero revisar la publicidad") ||
+            texto.includes("revisar publicidad") ||
+            texto.includes("administrar publicidad") ||
+            texto.includes("gestionar publicidad") ||
+
+            texto.includes("crear publicidad") ||
+            texto.includes("crear una publicidad") ||
+            texto.includes("nueva publicidad") ||
+            texto.includes("agregar publicidad") ||
+            texto.includes("registrar publicidad") ||
+
+            texto.includes("crear un anuncio") ||
+            texto.includes("nuevo anuncio") ||
+            texto.includes("agregar un anuncio") ||
+            texto.includes("publicar un anuncio") ||
+            texto.includes("ver los anuncios") ||
+
+            texto.includes("crear una promocion") ||
+            texto.includes("nueva promocion") ||
+            texto.includes("agregar una promocion") ||
+            texto.includes("ver promociones") ||
+            texto.includes("quiero hacer una promocion") ||
+
+            texto.includes("crear una campaña") ||
+            texto.includes("nueva campaña") ||
+            texto.includes("ver campañas") ||
+            texto.includes("administrar campañas") ||
+
+            texto.includes("crear una oferta") ||
+            texto.includes("nueva oferta") ||
+            texto.includes("ver ofertas") ||
+            texto.includes("publicar una oferta")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo publicidad."
+            );
+
+            setAbierto(false);
+
+            setTimeout(
+                () => {
+                    onAbrirPublicidad();
+                },
+                500
+            );
+
+            return;
+        }
+
+        // ========================================================
+        // IR A TIENDA ONLINE NETCOMP
+        // ========================================================
+
+        if (
+            texto === "tienda" ||
+            texto === "tienda online" ||
+            texto === "tienda netcomp" ||
+            texto === "tienda virtual" ||
+            texto === "catalogo de la tienda" ||
+            texto === "productos de la tienda" ||
+
+            texto.includes("llevame a la tienda") ||
+            texto.includes("ir a la tienda") ||
+            texto.includes("abre la tienda") ||
+            texto.includes("abrir la tienda") ||
+            texto.includes("ver la tienda") ||
+            texto.includes("mostrar la tienda") ||
+
+            texto.includes("llevame a la tienda online") ||
+            texto.includes("ir a la tienda online") ||
+            texto.includes("abre la tienda online") ||
+            texto.includes("abrir tienda online") ||
+            texto.includes("ver tienda online") ||
+
+            texto.includes("llevame a la tienda netcomp") ||
+            texto.includes("abre la tienda netcomp") ||
+            texto.includes("ver la tienda netcomp") ||
+
+            texto.includes("quiero ver la tienda") ||
+            texto.includes("quiero revisar la tienda") ||
+            texto.includes("quiero entrar a la tienda") ||
+
+            texto.includes("ver productos de la tienda") ||
+            texto.includes("ver los productos en venta") ||
+            texto.includes("productos en venta") ||
+            texto.includes("que tenemos en la tienda") ||
+
+            texto.includes("administrar la tienda") ||
+            texto.includes("gestionar la tienda") ||
+            texto.includes("administrar tienda online") ||
+
+            texto.includes("agregar producto a la tienda") ||
+            texto.includes("agregar un producto a la tienda") ||
+            texto.includes("publicar un producto") ||
+            texto.includes("vender un producto") ||
+            texto.includes("poner un producto en venta") ||
+
+            texto.includes("catalogo de la tienda") ||
+            texto.includes("ver catalogo de la tienda") ||
+            texto.includes("abre el catalogo de la tienda")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo la tienda online."
+            );
+
+            setAbierto(false);
+
+            setTimeout(() => {
+                onAbrirTiendaOnline();
+            }, 500);
+
+            return;
+        }
+
+        // ========================================================
+        // IR A PRODUCTOS Y SERVICIOS
+        // ========================================================
+
+        if (
+            texto === "productos y servicios" ||
+            texto === "productos servicios" ||
+            texto === "producto y servicio" ||
+            texto === "catalogo" ||
+            texto === "catalogo de productos" ||
+            texto === "catalogo de servicios" ||
+
+            texto.includes("llevame a productos y servicios") ||
+            texto.includes("ir a productos y servicios") ||
+            texto.includes("abre productos y servicios") ||
+            texto.includes("abrir productos y servicios") ||
+            texto.includes("ver productos y servicios") ||
+            texto.includes("mostrar productos y servicios") ||
+
+            texto.includes("quiero ver los productos y servicios") ||
+            texto.includes("quiero revisar los productos y servicios") ||
+            texto.includes("administrar productos y servicios") ||
+            texto.includes("gestionar productos y servicios") ||
+
+            texto.includes("llevame al catalogo") ||
+            texto.includes("abre el catalogo") ||
+            texto.includes("ver el catalogo") ||
+            texto.includes("quiero ver el catalogo") ||
+
+            texto.includes("ver productos") ||
+            texto.includes("revisar productos") ||
+            texto.includes("administrar productos") ||
+            texto.includes("gestionar productos") ||
+
+            texto.includes("crear un producto") ||
+            texto.includes("crear producto") ||
+            texto.includes("nuevo producto") ||
+            texto.includes("agregar un producto") ||
+            texto.includes("registrar un producto") ||
+
+            texto.includes("ver servicios") ||
+            texto.includes("revisar servicios") ||
+            texto.includes("administrar servicios") ||
+            texto.includes("gestionar servicios") ||
+
+            texto.includes("crear un servicio") ||
+            texto.includes("crear servicio") ||
+            texto.includes("nuevo servicio") ||
+            texto.includes("agregar un servicio") ||
+            texto.includes("registrar un servicio") ||
+
+            texto.includes("que productos tenemos") ||
+            texto.includes("que servicios tenemos") ||
+            texto.includes("que productos ofrecemos") ||
+            texto.includes("que servicios ofrecemos")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo productos y servicios."
+            );
+
+            setAbierto(false);
+
+            setTimeout(() => {
+                onAbrirProductosServicios();
+            }, 500);
+
+            return;
+        }
+
+        // ========================================================
+        // IR A INVENTARIO
+        // ========================================================
+
+        if (
+            texto === "inventario" ||
+            texto === "bodega" ||
+            texto === "stock" ||
+            texto === "existencias" ||
+            texto === "materiales" ||
+            texto === "inventario de equipos" ||
+
+            texto.includes("llevame al inventario") ||
+            texto.includes("ir al inventario") ||
+            texto.includes("abre inventario") ||
+            texto.includes("abre el inventario") ||
+            texto.includes("abrir inventario") ||
+            texto.includes("ver inventario") ||
+            texto.includes("mostrar inventario") ||
+
+            texto.includes("quiero ver el inventario") ||
+            texto.includes("quiero revisar el inventario") ||
+            texto.includes("revisar inventario") ||
+            texto.includes("administrar inventario") ||
+            texto.includes("gestionar inventario") ||
+
+            texto.includes("llevame a bodega") ||
+            texto.includes("abre la bodega") ||
+            texto.includes("ir a bodega") ||
+            texto.includes("ver la bodega") ||
+            texto.includes("quiero ver la bodega") ||
+
+            texto.includes("ver el stock") ||
+            texto.includes("revisar el stock") ||
+            texto.includes("cuanto stock hay") ||
+            texto.includes("que tenemos en stock") ||
+            texto.includes("ver existencias") ||
+            texto.includes("revisar existencias") ||
+
+            texto.includes("ver materiales") ||
+            texto.includes("revisar materiales") ||
+            texto.includes("que materiales tenemos") ||
+            texto.includes("materiales disponibles") ||
+
+            texto.includes("ver equipos en inventario") ||
+            texto.includes("revisar equipos en inventario") ||
+            texto.includes("equipos disponibles") ||
+
+            texto.includes("registrar producto") ||
+            texto.includes("registrar un producto") ||
+            texto.includes("agregar producto") ||
+            texto.includes("agregar un producto") ||
+
+            texto.includes("registrar equipo") ||
+            texto.includes("agregar equipo") ||
+            texto.includes("registrar material") ||
+            texto.includes("agregar material")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo inventario."
+            );
+
+            setAbierto(false);
+
+            setTimeout(() => {
+                onAbrirInventario();
+            }, 500);
+
+            return;
+        }
+
+        // ========================================================
+        // IR A DESARROLLO DE SISTEMAS / SOFTWARE
+        // ========================================================
+
+        if (
+            texto === "desarrollo" ||
+            texto === "desarrollo de software" ||
+            texto === "desarrollo de sistemas" ||
+            texto === "sistemas" ||
+            texto === "software" ||
+            texto === "proyectos de software" ||
+            texto === "proyectos de desarrollo" ||
+
+            texto.includes("llevame a desarrollo") ||
+            texto.includes("ir a desarrollo") ||
+            texto.includes("abre desarrollo") ||
+            texto.includes("abrir desarrollo") ||
+            texto.includes("ver desarrollo") ||
+
+            texto.includes("llevame a desarrollo de software") ||
+            texto.includes("ir a desarrollo de software") ||
+            texto.includes("abre desarrollo de software") ||
+            texto.includes("abrir desarrollo de software") ||
+            texto.includes("quiero ver desarrollo de software") ||
+
+            texto.includes("llevame a desarrollo de sistemas") ||
+            texto.includes("abre desarrollo de sistemas") ||
+            texto.includes("quiero ver desarrollo de sistemas") ||
+
+            texto.includes("llevame a sistemas") ||
+            texto.includes("abre sistemas") ||
+            texto.includes("ir a sistemas") ||
+            texto.includes("ver sistemas") ||
+
+            texto.includes("quiero ver los proyectos de software") ||
+            texto.includes("ver proyectos de software") ||
+            texto.includes("revisar proyectos de software") ||
+            texto.includes("proyectos de desarrollo") ||
+
+            texto.includes("quiero ver los proyectos") ||
+            texto.includes("revisar los proyectos de desarrollo") ||
+            texto.includes("administrar proyectos de software") ||
+
+            texto.includes("quiero desarrollar un sistema") ||
+            texto.includes("crear un sistema") ||
+            texto.includes("nuevo sistema") ||
+            texto.includes("nuevo proyecto de software") ||
+            texto.includes("crear proyecto de software") ||
+
+            texto.includes("programacion") ||
+            texto.includes("proyectos de programacion") ||
+            texto.includes("trabajos de desarrollo")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo desarrollo de software."
+            );
+
+            setAbierto(false);
+
+            setTimeout(() => {
+                onAbrirDesarrolloSistema();
+            }, 500);
+
+            return;
+        }
+
+        // ========================================================
+        // IR A ALERTAS CRÍTICAS WIRELESS
+        // ========================================================
+
+        if (
+            texto === "alertas criticas" ||
+            texto === "alertas criticas wireless" ||
+            texto === "equipos offline" ||
+            texto === "equipos fuera de linea" ||
+            texto === "equipos caidos" ||
+            texto === "antenas caidas" ||
+            texto === "nodos caidos" ||
+
+            texto.includes("llevame a alertas criticas") ||
+            texto.includes("ir a alertas criticas") ||
+            texto.includes("abre alertas criticas") ||
+            texto.includes("abrir alertas criticas") ||
+            texto.includes("ver alertas criticas") ||
+
+            texto.includes("quiero ver los equipos offline") ||
+            texto.includes("quiero ver equipos offline") ||
+            texto.includes("ver equipos offline") ||
+            texto.includes("abre equipos offline") ||
+            texto.includes("equipos sin conexion") ||
+
+            texto.includes("que equipos estan caidos") ||
+            texto.includes("que equipos estan offline") ||
+            texto.includes("que equipos estan fuera de linea") ||
+
+            texto.includes("hay equipos caidos") ||
+            texto.includes("hay equipos offline") ||
+            texto.includes("hay antenas caidas") ||
+
+            texto.includes("revisar equipos caidos") ||
+            texto.includes("revisar equipos offline") ||
+            texto.includes("revisar equipos fuera de linea") ||
+
+            texto.includes("problemas criticos wireless") ||
+            texto.includes("fallas criticas wireless") ||
+            texto.includes("fallas criticas de red")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo alertas críticas Wireless."
+            );
+
+            setAbierto(false);
+
+            setTimeout(
+                () => {
+                    onAbrirEquiposOffline();
+                },
+                500
+            );
+
+            return;
+        }
+
+        // ========================================================
+        // IR A ALERTAS WIRELESS
+        // ========================================================
+
+        if (
+            texto === "alertas wireless" ||
+            texto === "alertas de wireless" ||
+            texto === "alertas de red" ||
+            texto === "alertas inalambricas" ||
+            texto === "avisos wireless" ||
+            texto === "fallas wireless" ||
+
+            texto.includes("llevame a alertas wireless") ||
+            texto.includes("ir a alertas wireless") ||
+            texto.includes("abre alertas wireless") ||
+            texto.includes("abrir alertas wireless") ||
+            texto.includes("ver alertas wireless") ||
+            texto.includes("mostrar alertas wireless") ||
+
+            texto.includes("quiero ver las alertas wireless") ||
+            texto.includes("quiero revisar las alertas wireless") ||
+            texto.includes("revisar alertas wireless") ||
+            texto.includes("revisa las alertas wireless") ||
+
+            texto.includes("que alertas hay en wireless") ||
+            texto.includes("que alertas hay en la red") ||
+            texto.includes("hay alertas wireless") ||
+
+            texto.includes("que problemas hay en wireless") ||
+            texto.includes("que problemas tiene wireless") ||
+            texto.includes("que fallas hay en wireless") ||
+            texto.includes("ver fallas wireless") ||
+
+            texto.includes("revisar problemas wireless") ||
+            texto.includes("revisar fallas wireless") ||
+            texto.includes("ver problemas de red wireless")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo alertas Wireless."
+            );
+
+            setAbierto(false);
+
+            setTimeout(
+                () => {
+                    onAbrirAlertasWireless();
+                },
+                500
+            );
+
+            return;
+        }
+
+        // ========================================================
+        // IR A EQUIPOS WIRELESS
+        // ========================================================
+
+        if (
+            texto === "equipos wireless" ||
+            texto === "equipos inalambricos" ||
+            texto === "equipos de wireless" ||
+            texto === "antenas" ||
+            texto === "antenas wireless" ||
+            texto === "radios wireless" ||
+            texto === "radios" ||
+
+            texto.includes("llevame a equipos wireless") ||
+            texto.includes("ir a equipos wireless") ||
+            texto.includes("abre equipos wireless") ||
+            texto.includes("abrir equipos wireless") ||
+            texto.includes("ver equipos wireless") ||
+            texto.includes("mostrar equipos wireless") ||
+
+            texto.includes("quiero ver los equipos wireless") ||
+            texto.includes("quiero revisar los equipos wireless") ||
+            texto.includes("revisar equipos wireless") ||
+            texto.includes("revisa los equipos wireless") ||
+
+            texto.includes("quiero ver las antenas") ||
+            texto.includes("ver las antenas") ||
+            texto.includes("ver antenas") ||
+            texto.includes("abre las antenas") ||
+            texto.includes("revisar las antenas") ||
+            texto.includes("revisa las antenas") ||
+
+            texto.includes("quiero ver los radios") ||
+            texto.includes("ver radios wireless") ||
+            texto.includes("revisar radios wireless") ||
+
+            texto.includes("administrar equipos wireless") ||
+            texto.includes("gestionar equipos wireless") ||
+            texto.includes("administrar antenas") ||
+
+            texto.includes("registrar equipo wireless") ||
+            texto.includes("registrar un equipo wireless") ||
+            texto.includes("agregar equipo wireless") ||
+            texto.includes("agregar un equipo wireless") ||
+            texto.includes("nuevo equipo wireless") ||
+
+            texto.includes("registrar una antena") ||
+            texto.includes("agregar una antena") ||
+            texto.includes("nueva antena")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo equipos Wireless."
+            );
+
+            setAbierto(false);
+
+            setTimeout(
+                () => {
+                    onAbrirEquiposWireless();
+                },
+                500
+            );
+
+            return;
+        }
+
+        // ========================================================
+        // IR A MONITOREO WIRELESS
+        // ========================================================
+
+        if (
+            texto === "wireless" ||
+            texto === "monitoreo wireless" ||
+            texto === "monitoreo inalambrico" ||
+            texto === "red wireless" ||
+            texto === "red inalambrica" ||
+            texto === "antenas wireless" ||
+
+            texto.includes("llevame a wireless") ||
+            texto.includes("ir a wireless") ||
+            texto.includes("abre wireless") ||
+            texto.includes("abrir wireless") ||
+            texto.includes("ver wireless") ||
+
+            texto.includes("llevame a monitoreo wireless") ||
+            texto.includes("ir a monitoreo wireless") ||
+            texto.includes("abre monitoreo wireless") ||
+            texto.includes("abrir monitoreo wireless") ||
+            texto.includes("ver monitoreo wireless") ||
+
+            texto.includes("quiero monitorear wireless") ||
+            texto.includes("quiero revisar wireless") ||
+            texto.includes("revisar la red wireless") ||
+            texto.includes("revisa la red wireless") ||
+
+            texto.includes("quiero ver las antenas") ||
+            texto.includes("revisar las antenas") ||
+            texto.includes("estado de las antenas") ||
+
+            texto.includes("quiero ver los clientes wireless") ||
+            texto.includes("revisar clientes wireless") ||
+            texto.includes("clientes inalambricos") ||
+
+            texto.includes("revisar señal wireless") ||
+            texto.includes("revisar la señal wireless") ||
+            texto.includes("ver señal wireless") ||
+            texto.includes("estado de la señal wireless") ||
+
+            texto.includes("problemas de señal") ||
+            texto.includes("revisar problemas wireless")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo monitoreo Wireless."
+            );
+
+            setAbierto(false);
+
+            setTimeout(
+                () => {
+                    onAbrirWirelessMonitoreo();
+                },
+                500
+            );
+
+            return;
+        }
+        // ========================================================
+        // IR A ADMINISTRAR / AGREGAR MIKROTIK
+        // ========================================================
+
+        if (
+            texto === "agregar mikrotik" ||
+            texto === "agregar un mikrotik" ||
+            texto === "nuevo mikrotik" ||
+            texto === "crear mikrotik" ||
+            texto === "registrar mikrotik" ||
+            texto === "registrar un mikrotik" ||
+            texto === "administrar mikrotik" ||
+            texto === "administrar routers" ||
+            texto === "routers mikrotik" ||
+            texto === "nodos mikrotik" ||
+
+            texto.includes("quiero agregar un mikrotik") ||
+            texto.includes("quiero agregar mikrotik") ||
+            texto.includes("quiero registrar un mikrotik") ||
+            texto.includes("quiero registrar mikrotik") ||
+
+            texto.includes("agregar router mikrotik") ||
+            texto.includes("agregar un router mikrotik") ||
+            texto.includes("registrar router mikrotik") ||
+            texto.includes("registrar un router mikrotik") ||
+
+            texto.includes("nuevo router mikrotik") ||
+            texto.includes("crear router mikrotik") ||
+            texto.includes("crear un router mikrotik") ||
+
+            texto.includes("llevame a routers mikrotik") ||
+            texto.includes("ir a routers mikrotik") ||
+            texto.includes("abre routers mikrotik") ||
+            texto.includes("abrir routers mikrotik") ||
+
+            texto.includes("llevame a administrar mikrotik") ||
+            texto.includes("abre administrar mikrotik") ||
+            texto.includes("administrar nodos mikrotik")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo administración de routers MikroTik."
+            );
+
+            setAbierto(false);
+
+            setTimeout(
+                () => {
+                    onAbrirRoutersMikrotik();
+                },
+                500
+            );
+
+            return;
+        }
+
+        // ========================================================
+        // IR A CONFIGURACIÓN MIKROTIK
+        // ========================================================
+
+        if (
+            texto === "configuracion mikrotik" ||
+            texto === "configurar mikrotik" ||
+            texto.includes("llevame a configuracion mikrotik") ||
+            texto.includes("ir a configuracion mikrotik") ||
+            texto.includes("abre configuracion mikrotik") ||
+            texto.includes("abrir configuracion mikrotik") ||
+            texto.includes("configura mikrotik") ||
+            texto.includes("configuracion de mikrotik")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo configuración MikroTik."
+            );
+
+            setAbierto(false);
+
+            setTimeout(
+                () => {
+                    onAbrirConfiguracionMikrotik();
+                },
+                500
+            );
+
+            return;
+        }
+
+        // ========================================================
+        // IR A CORTES / REACTIVACIÓN DE SERVICIOS
+        // ========================================================
+
+        if (
+            texto === "cortes" ||
+            texto === "corte" ||
+            texto === "corte de sistema" ||
+            texto === "corte de servicio" ||
+            texto === "cortes de servicio" ||
+            texto === "reactivar servicio" ||
+            texto === "reactivar servicios" ||
+            texto === "habilitar servicio" ||
+            texto === "habilitar servicios" ||
+
+            texto.includes("llevame a cortes") ||
+            texto.includes("ir a cortes") ||
+            texto.includes("abre cortes") ||
+            texto.includes("abrir cortes") ||
+
+            texto.includes("corte de sistema") ||
+            texto.includes("corte del sistema") ||
+            texto.includes("corte de servicio") ||
+            texto.includes("cortes de servicios") ||
+
+            texto.includes("reactivar un servicio") ||
+            texto.includes("reactivar servicio") ||
+            texto.includes("reactivar servicios") ||
+            texto.includes("quiero reactivar un servicio") ||
+
+            texto.includes("habilitar un servicio") ||
+            texto.includes("habilitar servicio") ||
+            texto.includes("habilitar servicios") ||
+            texto.includes("quiero habilitar un servicio")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo cortes y reactivación de servicios."
+            );
+
+            setAbierto(false);
+
+            setTimeout(
+                () => {
+                    onAbrirCortesMikrotik();
+                },
+                500
+            );
+
+            return;
+        }
+
+        // ========================================================
+        // IR A MIKROTIK
+        // ========================================================
+
+        if (
+            texto === "mikrotik" ||
+            texto.includes("llevame a mikrotik") ||
+            texto.includes("ir a mikrotik") ||
+            texto.includes("abre mikrotik") ||
+            texto.includes("abrir mikrotik") ||
+            texto.includes("ver mikrotik") ||
+            texto.includes("mikrotik")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo MikroTik."
+            );
+
+            setAbierto(false);
+
+            setTimeout(
+                () => {
+                    onAbrirMikrotik();
+                },
+                500
+            );
+
+            return;
+        }
+
+        // ========================================================
+        // IR A INFRAESTRUCTURA
+        // ========================================================
+
+        if (
+            texto === "infraestructura" ||
+            texto === "infraestructura de red" ||
+            texto === "red fisica" ||
+            texto === "red física" ||
+            texto === "equipos de red" ||
+            texto === "estructura de red" ||
+
+            texto.includes("llevame a infraestructura") ||
+            texto.includes("ir a infraestructura") ||
+            texto.includes("abre infraestructura") ||
+            texto.includes("abrir infraestructura") ||
+            texto.includes("ver infraestructura") ||
+            texto.includes("mostrar infraestructura") ||
+
+            texto.includes("quiero ver la infraestructura") ||
+            texto.includes("quiero revisar la infraestructura") ||
+            texto.includes("revisar infraestructura") ||
+            texto.includes("revisa la infraestructura") ||
+
+            texto.includes("quiero ver la red fisica") ||
+            texto.includes("quiero ver la red física") ||
+            texto.includes("revisar la red fisica") ||
+            texto.includes("revisar la red física") ||
+
+            texto.includes("quiero ver torres") ||
+            texto.includes("quiero ver fibra") ||
+            texto.includes("quiero ver nap") ||
+            texto.includes("quiero ver los equipos wireless") ||
+            texto.includes("quiero revisar la infraestructura de red")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo infraestructura de red."
+            );
+
+            setAbierto(false);
+
+            setTimeout(
+                () => {
+                    onAbrirInfraestructura();
+                },
+                500
+            );
+
+            return;
+        }
+
+        // ========================================================
+        // IR A MONITOREO DE RED / NODOS
+        // ========================================================
+
+        if (
+            texto === "monitoreo" ||
+            texto === "monitoreo de red" ||
+            texto === "monitoreo de nodos" ||
+            texto === "monitorear red" ||
+            texto === "monitorear la red" ||
+            texto === "monitoreemos la red" ||
+            texto === "supervisar red" ||
+            texto === "supervisar la red" ||
+
+            texto.includes("abrir monitoreo") ||
+            texto.includes("abre monitoreo") ||
+            texto.includes("ir a monitoreo") ||
+            texto.includes("llevame a monitoreo") ||
+
+            texto.includes("ver monitoreo") ||
+            texto.includes("ver la red") ||
+            texto.includes("revisar la red") ||
+            texto.includes("revisa la red") ||
+
+            texto.includes("monitorear los nodos") ||
+            texto.includes("monitorear nodos") ||
+            texto.includes("ver los nodos") ||
+            texto.includes("revisar los nodos") ||
+
+            texto.includes("estado de la red") ||
+            texto.includes("estado de los nodos") ||
+            texto.includes("supervisar los nodos")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo monitoreo de red."
+            );
+
+            setAbierto(false);
+
+            setTimeout(
+                () => {
+                    onAbrirMonitoreoNodos();
+                },
+                500
+            );
+
+            return;
+        }
+
+        // ========================================================
+        // IR A CONTRATOS / BUSCAR CLIENTES
+        // ========================================================
+
+        if (
+            texto === "buscar clientes" ||
+            texto === "buscar cliente" ||
+            texto === "contratos" ||
+            texto === "contratos de servicio" ||
+            texto === "contrato de servicio" ||
+            texto === "crear contrato" ||
+            texto === "crear un contrato" ||
+            texto === "nuevo contrato" ||
+            texto === "nuevo contrato de servicio" ||
+            texto.includes("quiero buscar un cliente") ||
+            texto.includes("quiero buscar clientes") ||
+            texto.includes("buscar clientes en sistema") ||
+            texto.includes("busqueda de clientes") ||
+            texto.includes("abre busqueda de clientes") ||
+            texto.includes("busqueda de cliente") ||
+            texto.includes("abre busqueda de cliente") ||
+            texto.includes("buscar cliente en sistema") ||
+            texto.includes("llevame a contratos") ||
+            texto.includes("ir a contratos") ||
+            texto.includes("abre contratos") ||
+            texto.includes("abrir contratos") ||
+            texto.includes("crear contrato de servicio") ||
+            texto.includes("crear un contrato de servicio") ||
+            texto.includes("quiero crear un contrato") ||
+            texto.includes("quiero crear contrato") ||
+            texto.includes("hacer un contrato") ||
+            texto.includes("hacer contrato")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo contratos de servicio."
+            );
+
+            setAbierto(false);
+
+            setTimeout(
+                () => {
+                    onAbrirContratosServicios();
+                },
+                500
+            );
+
+            return;
+        }
+
+        // ========================================================
+        // IR A CLIENTES
+        // ========================================================
+
+        if (
+            texto === "clientes" ||
+            texto === "cliente" ||
+            texto === "administrar clientes" ||
+            texto === "gestion de clientes" ||
+            texto.includes("llevame a clientes") ||
+            texto.includes("ir a clientes") ||
+            texto.includes("abre clientes") ||
+            texto.includes("abrir clientes") ||
+            texto.includes("ver clientes") ||
+            texto.includes("mostrar clientes") ||
+            texto.includes("administrar clientes") ||
+            texto.includes("gestionar clientes") ||
+            texto.includes("registrar cliente") ||
+            texto.includes("registrar un cliente") ||
+            texto.includes("nuevo cliente") ||
+            texto.includes("crear cliente") ||
+            texto.includes("crear un cliente")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo clientes."
+            );
+
+            setAbierto(false);
+
+            setTimeout(
+                () => {
+                    onAbrirClientes();
+                },
+                500
+            );
+
+            return;
+        }
+
+        // ========================================================
+        // IR A LISTADO DE FACTURAS INTERNAS
+        // ========================================================
+
+        if (
+            texto === "facturas internas" ||
+            texto === "listado de facturas" ||
+            texto === "listado de facturas internas" ||
+            texto.includes("llevame a facturas internas") ||
+            texto.includes("llevame a listado de facturas") ||
+            texto.includes("llevame a listado facturas") ||
+            texto.includes("ir a facturas internas") ||
+            texto.includes("ir a facturas") ||
+            texto.includes("facturas") ||
+            texto.includes("ir a listado de facturas") ||
+            texto.includes("ir a listado facturas") ||
+            texto.includes("quiero ir a listdo de factura") ||
+            texto.includes("quiero ir a facturas") ||
+            texto.includes("abre facturas internas") ||
+            texto.includes("abre listado de facturas") ||
+            texto.includes("abre listado de facturacion") ||
+            texto.includes("abre listado de facturación") ||
+            texto.includes("abrir facturas internas") ||
+            texto.includes("ver facturas internas") ||
+            texto.includes("llevame al listado de facturas") ||
+            texto.includes("abre el listado de facturas") ||
+            texto.includes("ver listado de facturas")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo el listado de facturas internas."
+            );
+
+            setAbierto(false);
+
+            setTimeout(
+                () => {
+                    onAbrirFacturasInternas();
+                },
+                500
+            );
+
+            return;
+        }
+
+        // ========================================================
+        // IR A FACTURA MANUAL
+        // ========================================================
+
+        if (
+            texto === "factura manual" ||
+            texto === "facturacion manual" ||
+            texto.includes("llevame a factura manual") ||
+            texto.includes("ir a factura manual") ||
+            texto.includes("abre facturacion") ||
+            texto.includes("abre facturación") ||
+            texto.includes("ir facturacion") ||
+            texto.includes("ir facturación") ||
+            texto.includes("abre factura") ||
+            texto.includes("abrir factura") ||
+            texto.includes("crear factura") ||
+            texto.includes("queiro crear factura") ||
+            texto.includes("queiro a crear factura") ||
+            texto.includes("nueva factura") ||
+            texto.includes("facturar") ||
+            texto.includes("hacer una factura")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo factura manual."
+            );
+
+            setAbierto(false);
+
+            setTimeout(
+                () => {
+                    onAbrirFacturaManual();
+                },
+                500
+            );
+
+            return;
+        }
+
 
         // ========================================================
         // IR A PAGOS / MENSUALIDADES
@@ -856,6 +2653,8 @@ export default function BotNotificaciones({
             texto === "pagos" ||
             texto === "mensualidades" ||
             texto.includes("llevame a pagos") ||
+            texto.includes("llévame a pagos") ||
+            texto.includes("Llévame a pagos") ||
             texto.includes("ir a pagos") ||
             texto.includes("abre pagos") ||
             texto.includes("abrir pagos") ||
@@ -883,13 +2682,190 @@ export default function BotNotificaciones({
         }
 
         // ========================================================
-        // COMANDO NO IMPLEMENTADO TODAVÍA
+        // IR A ADMINISTRACIÓN ISP
         // ========================================================
 
+        if (
+            texto === "administracion" ||
+            texto === "administracion isp" ||
+            texto === "administrar isp" ||
+            texto === "gestion isp" ||
+            texto === "gestion del isp" ||
+            texto === "panel isp" ||
+            texto === "administrar internet" ||
+            texto === "administrar el internet" ||
+            texto === "administrar el negocio" ||
+            texto === "gestion del negocio" ||
+
+            texto.includes("llevame a administracion") ||
+            texto.includes("ir a administracion") ||
+            texto.includes("abre administracion") ||
+            texto.includes("abrir administracion") ||
+            texto.includes("ver administracion") ||
+
+            texto.includes("llevame a administracion isp") ||
+            texto.includes("abre administracion isp") ||
+            texto.includes("ir a administracion isp") ||
+            texto.includes("quiero administrar el isp") ||
+
+            texto.includes("quiero administrar el internet") ||
+            texto.includes("quiero administrar internet") ||
+            texto.includes("quiero administrar mi isp") ||
+            texto.includes("quiero gestionar el isp") ||
+
+            texto.includes("abre gestion isp") ||
+            texto.includes("ir a gestion isp") ||
+            texto.includes("llevame a gestion isp") ||
+
+            texto.includes("abre el panel isp") ||
+            texto.includes("llevame al panel isp") ||
+            texto.includes("ir al panel isp") ||
+
+            texto.includes("quiero administrar el negocio") ||
+            texto.includes("vamos a administrar el negocio") ||
+            texto.includes("gestion del negocio") ||
+            texto.includes("administracion del negocio") ||
+
+            texto.includes("configurar mi isp") ||
+            texto.includes("configurar el isp") ||
+            texto.includes("administrar mi red isp")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo administración ISP."
+            );
+
+            setAbierto(false);
+
+            setTimeout(
+                () => {
+                    onAbrirAdministracionISP();
+                },
+                500
+            );
+
+            return;
+        }
+
+        // ========================================================
+        // IR A USUARIOS
+        // ========================================================
+
+        if (
+            texto === "usuarios" ||
+            texto === "usuario" ||
+            texto === "administrar usuarios" ||
+            texto === "gestion de usuarios" ||
+            texto === "cuentas de usuarios" ||
+            texto === "personal" ||
+
+            texto.includes("llevame a usuarios") ||
+            texto.includes("ir a usuarios") ||
+            texto.includes("abre usuarios") ||
+            texto.includes("abrir usuarios") ||
+            texto.includes("ver usuarios") ||
+            texto.includes("mostrar usuarios") ||
+
+            texto.includes("quiero ver los usuarios") ||
+            texto.includes("quiero revisar los usuarios") ||
+            texto.includes("revisar usuarios") ||
+            texto.includes("administrar usuarios") ||
+            texto.includes("gestionar usuarios") ||
+
+            texto.includes("crear un usuario") ||
+            texto.includes("crear usuario") ||
+            texto.includes("nuevo usuario") ||
+            texto.includes("agregar un usuario") ||
+            texto.includes("agregar usuario") ||
+            texto.includes("registrar un usuario") ||
+            texto.includes("registrar usuario") ||
+
+            texto.includes("quiero crear un usuario") ||
+            texto.includes("quiero agregar un usuario") ||
+            texto.includes("quiero registrar un usuario") ||
+
+            texto.includes("ver las cuentas") ||
+            texto.includes("cuentas de usuarios") ||
+            texto.includes("administrar cuentas") ||
+
+            texto.includes("ver el personal") ||
+            texto.includes("administrar personal") ||
+            texto.includes("gestionar personal") ||
+
+            texto.includes("ver accesos") ||
+            texto.includes("administrar accesos") ||
+            texto.includes("gestionar accesos") ||
+
+            texto.includes("ver permisos de usuarios") ||
+            texto.includes("administrar permisos") ||
+            texto.includes("permisos de usuarios")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo administración de usuarios."
+            );
+
+            setAbierto(false);
+
+            setTimeout(() => {
+                onAbrirUsuarios();
+            }, 500);
+
+            return;
+        }
+
+        // ========================================================
+        // IR A PROFORMAS
+        // ========================================================
+
+        if (
+            texto === "proformas" ||
+            texto === "proforma" ||
+            texto === "crear proforma" ||
+            texto === "crear una proforma" ||
+            texto === "nueva proforma" ||
+            texto.includes("llevame a proformas") ||
+            texto.includes("ir a proformas") ||
+            texto.includes("abre proformas") ||
+            texto.includes("Abre proformas") ||
+            texto.includes("abrir proformas") ||
+            texto.includes("ver proformas") ||
+            texto.includes("mostrar proformas") ||
+            texto.includes("quiero crear una proforma") ||
+            texto.includes("quiero hacer una proforma") ||
+            texto.includes("hacer una proforma")
+        ) {
+
+            responderDante(
+                "Claro. Abriendo proformas."
+            );
+
+            setAbierto(false);
+
+            setTimeout(
+                () => {
+                    onAbrirProformas();
+                },
+                500
+            );
+
+            return;
+        }
+
+        // ========================================================
+        // INFORMACIÓN / COMANDO NO DISPONIBLE
+        // ========================================================
+
+        responderDante(
+            "Aún no está procesada esa información. Solicítalo a mi creador Jose. "
+        );
+
         console.log(
-            "DANTE: comando todavía no implementado:",
+            "DANTE: solicitud fuera de los comandos disponibles:",
             limpio
         );
+
+        return;
     }
 
     // ========================================================
@@ -1115,6 +3091,7 @@ export default function BotNotificaciones({
             procesarComandoDante(
                 despuesDeDante
             );
+            return;
         }
     }
 
@@ -1361,7 +3338,7 @@ export default function BotNotificaciones({
                     Math.min(
                         100,
                         Math.round(
-                            rms * 2500
+                            rms * 1200
                         )
                     );
 

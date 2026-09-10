@@ -1037,6 +1037,43 @@ export default function DashboardPage() {
                 onAbrirAlertas={() => setVistaActual('AlertasWireless')}
                 onAbrirPagos={() => setVistaActual('pagos')}
                 onAbrirFacturaManual={() => setVistaActual('facturamanual')}
+                onAbrirFacturasInternas={() => setVistaActual('facturasinternas')}
+                onAbrirContratosServicios={() => {
+                    setOcultarResumenContratos(false);
+                    setVistaActual('contratosServicios');
+                }}
+                onAbrirClientes={() => setVistaActual('Clientes')}
+                onAbrirProformas={() => setVistaActual('PROFORMAS')}
+                onAbrirMikrotik={() => setVistaActual('mikrotik')}
+                onAbrirConfiguracionMikrotik={() =>
+                    setVistaActual('mikroikconfiguracion')
+                }
+                onAbrirCortesMikrotik={() => setVistaActual('mikrotikCortes')}
+                onAbrirMonitoreoNodos={() => setVistaActual('Monitoreonodos')}
+                onAbrirRoutersMikrotik={() => setVistaActual('mikrotikRouters')}
+                onAbrirInfraestructura={() => setVistaActual('infraestructura')}
+                onAbrirWirelessMonitoreo={() => setVistaActual('MonitoreoWireless')}
+                onAbrirAlertasWireless={() => setVistaActual('AlertasWireless')}
+                onAbrirEquiposOffline={() => setVistaActual('EquiposOffline')}
+                onAbrirEquiposWireless={() => setVistaActual('EquiposWireless')}
+                onAbrirTickets={() => setVistaActual('tickets')}
+                onAbrirAdministracionISP={() => setVistaActual('administracion')}
+                onAbrirPlanesInternet={() => setVistaActual('PlanInternet')}
+                onAbrirPublicidad={() => setVistaActual('Publicidad')}
+                onAbrirImportarClientes={() => setVistaActual('ImportarClientes')}
+                onAbrirSpeedTestAnalytics={() => setVistaActual('SpeedTestAnalytics')}
+                onAbrirConfiguracionSedes={() => setVistaActual('ConfiguracionSedes')}
+                onAbrirCategoriasGastos={() => setVistaActual('CategoriasGastos')}
+                onAbrirGastosMensuales={() => setVistaActual('GastosMensuales')}
+                onAbrirUsuarios={() => setVistaActual('usuarios')}
+                onAbrirMenuLateral={() => setVistaActual('Menulateral')}
+                onAbrirListaUsuarios={() => setVistaActual('ListdoUsuario')}
+                onAbrirAdministrarRoles={() => setVistaActual('Administrarroles')}
+                onAbrirInventario={() => setVistaActual('inventario')}
+                onAbrirProductosServicios={() => setVistaActual('productoservicio')}
+                onAbrirTiendaOnline={() => setVistaActual('TiendaOnline')}
+                onAbrirDesarrolloSistema={() => setVistaActual('DesarrolloSistema')}
+                onAbrirConfiguracionFacturacion={() => setVistaActual('confg')}
             />
             <div className="flex min-h-screen">
                 <aside className="hidden md:flex w-72 bg-slate-900 border-r border-slate-800 p-6 flex-col">

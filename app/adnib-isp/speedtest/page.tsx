@@ -37,6 +37,14 @@ type Estadisticas = {
     clientesNetcomp: number;
     externos: number;
 };
+type VisitaTest = {
+    id: number;
+    ip: string | null;
+    userAgent: string | null;
+    referer: string | null;
+    esClienteNetcomp: number | boolean;
+    fecha: string;
+};
 
 export default function SpeedTestAnalyticsPage() {
     const [pruebas, setPruebas] = useState<PruebaVelocidad[]>([]);
@@ -44,28 +52,81 @@ export default function SpeedTestAnalyticsPage() {
     const [loading, setLoading] = useState(true);
     const [filtro, setFiltro] = useState<"TODOS" | "CLIENTES" | "EXTERNOS">("TODOS");
     const [busqueda, setBusqueda] = useState("");
+    const [visitas, setVisitas] = useState<VisitaTest[]>([]);
 
     async function cargarDatos() {
         try {
             setLoading(true);
+
             const token = getToken();
 
-            const [resPruebas, resStats] = await Promise.all([
-                fetch(`${API_BASE}/pruebas-velocidad`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                }),
-                fetch(`${API_BASE}/pruebas-velocidad/estadisticas`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                }),
+            const [
+                resPruebas,
+                resStats,
+                resVisitas
+            ] = await Promise.all([
+                fetch(
+                    `${API_BASE}/pruebas-velocidad`,
+                    {
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                        },
+                    }
+                ),
+
+                fetch(
+                    `${API_BASE}/pruebas-velocidad/estadisticas`,
+                    {
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                        },
+                    }
+                ),
+
+                fetch(
+                    `${API_BASE}/pruebas-velocidad/visitas`,
+                    {
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                        },
+                    }
+                ),
             ]);
 
-            const jsonPruebas = await resPruebas.json();
-            const jsonStats = await resStats.json();
+            const jsonPruebas =
+                await resPruebas.json();
 
-            if (jsonPruebas.ok) setPruebas(jsonPruebas.data || []);
-            if (jsonStats.ok) setEstadisticas(jsonStats.data || null);
+            const jsonStats =
+                await resStats.json();
+
+            const jsonVisitas =
+                await resVisitas.json();
+
+            if (jsonPruebas.ok) {
+                setPruebas(
+                    jsonPruebas.data || []
+                );
+            }
+
+            if (jsonStats.ok) {
+                setEstadisticas(
+                    jsonStats.data || null
+                );
+            }
+
+            if (jsonVisitas.ok) {
+                setVisitas(
+                    jsonVisitas.data || []
+                );
+            }
+
         } catch (error) {
-            console.error("Error cargando SpeedTest Analytics:", error);
+
+            console.error(
+                "Error cargando SpeedTest Analytics:",
+                error
+            );
+
         } finally {
             setLoading(false);
         }
@@ -96,6 +157,17 @@ export default function SpeedTestAnalyticsPage() {
         if (!fecha) return "-";
         return new Date(fecha).toLocaleString("es-EC");
     }
+
+    const totalVisitas = visitas.length;
+
+    const visitasClientes = visitas.filter(
+        (v) =>
+            v.esClienteNetcomp === true ||
+            v.esClienteNetcomp === 1
+    ).length;
+
+    const visitasExternos =
+        totalVisitas - visitasClientes;
 
     return (
         <main
@@ -163,6 +235,34 @@ export default function SpeedTestAnalyticsPage() {
                     </div>
                 ) : (
                     <>
+                        <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-3" style={{ marginBottom: 20 }}>
+
+                            <Card
+                                titulo="Visitas al test"
+                                valor={totalVisitas}
+                                icono={Users}
+                                color="#22d3ee"
+                                colorFinal="#2563eb"
+                            />
+
+                            <Card
+                                titulo="Visitas clientes"
+                                valor={visitasClientes}
+                                icono={CheckCircle2}
+                                color="#34d399"
+                                colorFinal="#059669"
+                            />
+
+                            <Card
+                                titulo="Visitas externas"
+                                valor={visitasExternos}
+                                icono={Globe2}
+                                color="#a78bfa"
+                                colorFinal="#7c3aed"
+                            />
+
+                        </section>
+
                         <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
                             <Card titulo="Total pruebas" valor={estadisticas?.totalPruebas || 0} icono={Activity} color="#22d3ee" colorFinal="#2563eb" />
                             <Card titulo="Prom. descarga" valor={`${formatoNumero(estadisticas?.promedioDescarga)} Mbps`} icono={ArrowDownToLine} color="#10b981" colorFinal="#22c55e" />
@@ -288,6 +388,143 @@ export default function SpeedTestAnalyticsPage() {
                                     </tbody>
                                 </table>
                             </div>
+                        </section>
+
+                        <section
+                            className="mt-8 rounded-3xl border p-5"
+                            style={{
+                                borderColor: "rgba(34,211,238,0.16)",
+                                background:
+                                    "linear-gradient(145deg, rgba(15,23,42,0.98), rgba(8,15,30,0.97))",
+                                boxShadow:
+                                    "0 22px 55px rgba(2,6,23,0.38)",
+                            }}
+                        >
+                            <div className="mb-5 flex items-center gap-3">
+
+                                <div
+                                    className="flex h-10 w-10 items-center justify-center rounded-xl"
+                                    style={{
+                                        background:
+                                            "linear-gradient(135deg, #06b6d4, #2563eb)",
+                                    }}
+                                >
+                                    <Globe2 className="h-5 w-5 text-white" />
+                                </div>
+
+                                <div>
+                                    <h2 className="text-xl font-black">
+                                        Conexiones al SpeedTest
+                                    </h2>
+
+                                    <p className="text-sm text-slate-400">
+                                        Usuarios que ingresaron a la página del test.
+                                    </p>
+                                </div>
+
+                            </div>
+
+                            <div className="overflow-x-auto">
+
+                                <table className="w-full min-w-[900px] border-collapse text-sm">
+
+                                    <thead>
+                                        <tr className="border-b border-slate-800 text-left text-slate-400">
+
+                                            <th className="p-3">
+                                                Tipo
+                                            </th>
+
+                                            <th className="p-3">
+                                                IP
+                                            </th>
+
+                                            <th className="p-3">
+                                                Fecha
+                                            </th>
+
+                                            <th className="p-3">
+                                                Procedencia
+                                            </th>
+
+                                            <th className="p-3">
+                                                Navegador
+                                            </th>
+
+                                        </tr>
+                                    </thead>
+
+                                    <tbody>
+
+                                        {visitas.length === 0 ? (
+
+                                            <tr>
+                                                <td
+                                                    colSpan={5}
+                                                    className="p-6 text-center text-slate-400"
+                                                >
+                                                    No existen conexiones registradas.
+                                                </td>
+                                            </tr>
+
+                                        ) : (
+
+                                            visitas.map((v) => {
+
+                                                const esCliente =
+                                                    v.esClienteNetcomp === true ||
+                                                    v.esClienteNetcomp === 1;
+
+                                                return (
+
+                                                    <tr
+                                                        key={v.id}
+                                                        className="border-b border-slate-800/70 hover:bg-slate-800/40"
+                                                    >
+
+                                                        <td className="p-3">
+
+                                                            <span
+                                                                className={`rounded-full px-3 py-1 text-xs font-bold ${esCliente
+                                                                    ? "bg-emerald-500/15 text-emerald-300"
+                                                                    : "bg-cyan-500/15 text-cyan-300"
+                                                                    }`}
+                                                            >
+                                                                {esCliente
+                                                                    ? "Cliente"
+                                                                    : "Externo"}
+                                                            </span>
+
+                                                        </td>
+
+                                                        <td className="p-3 font-semibold text-slate-200">
+                                                            {v.ip || "-"}
+                                                        </td>
+
+                                                        <td className="p-3 text-slate-400">
+                                                            {formatoFecha(v.fecha)}
+                                                        </td>
+
+                                                        <td className="max-w-[260px] truncate p-3 text-slate-400">
+                                                            {v.referer || "Acceso directo"}
+                                                        </td>
+
+                                                        <td className="max-w-[320px] truncate p-3 text-slate-500">
+                                                            {v.userAgent || "-"}
+                                                        </td>
+
+                                                    </tr>
+                                                );
+                                            })
+
+                                        )}
+
+                                    </tbody>
+
+                                </table>
+
+                            </div>
+
                         </section>
                     </>
                 )}
