@@ -237,6 +237,7 @@ export default function WirelessMonitoreoProPage() {
                         <RedNeuronalWireless
                             key={redKey}
                             resultados={resultados}
+
                         />
                     ) : (
                         <div className="flex h-[300px] items-center justify-center rounded-xl border border-slate-700 bg-slate-900 text-cyan-300">

@@ -138,6 +138,24 @@ export default function RedNeuronalWireless({
                 autoPauseRedraw={false}
                 onNodeClick={(node: any) => {
                     setNodoSeleccionado(node);
+
+                    // ====================================================
+                    // INFORMAR A DANTE DEL NODO SELECCIONADO
+                    // ====================================================
+
+                    if (
+                        typeof window !== "undefined"
+                    ) {
+
+                        window.dispatchEvent(
+                            new CustomEvent(
+                                "dante:wireless-nodo-seleccionado",
+                                {
+                                    detail: node,
+                                }
+                            )
+                        );
+                    }
                 }}
                 backgroundColor="#020617"
                 nodeRelSize={5}

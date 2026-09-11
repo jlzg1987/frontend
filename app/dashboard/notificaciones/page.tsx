@@ -255,6 +255,48 @@ function normalizarTextoDante(
         .trim();
 }
 
+// ============================================================
+// CLIENTE / SERVICIO SELECCIONADO POR DANTE
+// ============================================================
+
+type ServicioClienteDante = {
+    servicioId: string;
+    clienteId: string;
+    nombres: string;
+    apellidos: string;
+    cedula: string;
+    telefono?: string;
+    email?: string;
+    ipCliente?: string;
+    pppSecret?: string;
+    estadoServicio?: string;
+    nombrePlan?: string;
+};
+
+
+type ContextoConversacionDante = {
+
+    tema:
+    | "CLIENTE"
+    | "WIRELESS"
+    | "MIKROTIK"
+    | "AGENDA"
+    | "PAGOS"
+    | "GENERAL";
+
+    entidadId?: string | null;
+
+    entidadNombre?: string | null;
+
+    ultimaIntencion?: string | null;
+
+    esperandoRespuesta?: boolean;
+
+    datoPendiente?: string | null;
+
+    actualizadoEn: number;
+};
+
 
 // ============================================================
 // COMPONENTE
@@ -484,6 +526,9 @@ export default function BotNotificaciones({
             "APAGADO"
         );
 
+    const monitoreoRedDanteRef =
+        useRef(false);
+
     const [nivelMicrofono, setNivelMicrofono] = useState(0);
 
     const audioContextRef =
@@ -508,6 +553,3043 @@ export default function BotNotificaciones({
         setMostrarDetallesDante,
     ] = useState(false);
 
+
+    // ========================================================
+    // CLIENTE ACTUAL EN CONTEXTO DE DANTE
+    // ========================================================
+
+    const servicioClienteDanteRef =
+        useRef<ServicioClienteDante | null>(null);
+
+    // ========================================================
+    // CONTEXTO CONVERSACIONAL ACTUAL DE DANTE
+    // ========================================================
+
+    const contextoDanteRef =
+        useRef<ContextoConversacionDante>({
+            tema: "GENERAL",
+            actualizadoEn: Date.now(),
+        });
+
+    // ========================================================
+    // DANTE - MONITOREO AUTOMÁTICO DE ALERTAS CRÍTICAS
+    // ========================================================
+
+    const alertasCriticasConocidasRef =
+        useRef<Set<string>>(new Set());
+
+    const primeraRevisionAlertasRef =
+        useRef(true);
+
+    const DANTE_ALERTAS_STORAGE_KEY =
+        "dante_alertas_criticas_conocidas";
+
+    // ========================================================
+    // DANTE - ACTUALIZAR CONTEXTO CONVERSACIONAL
+    // ========================================================
+
+    function actualizarContextoDante(
+        datos: Partial<ContextoConversacionDante>
+    ) {
+
+        contextoDanteRef.current = {
+
+            ...contextoDanteRef.current,
+
+            ...datos,
+
+            actualizadoEn:
+                Date.now(),
+
+        };
+
+
+        console.log(
+            "DANTE CONTEXTO ACTUAL:",
+            contextoDanteRef.current
+        );
+    }
+
+
+    // ========================================================
+    // DANTE - LIMPIAR CONTEXTO CONVERSACIONAL
+    // ========================================================
+
+    function limpiarContextoDante() {
+
+        contextoDanteRef.current = {
+
+            tema:
+                "GENERAL",
+
+            entidadId:
+                null,
+
+            entidadNombre:
+                null,
+
+            ultimaIntencion:
+                null,
+
+            esperandoRespuesta:
+                false,
+
+            datoPendiente:
+                null,
+
+            actualizadoEn:
+                Date.now(),
+
+        };
+
+
+        servicioClienteDanteRef.current =
+            null;
+
+
+        perfilClienteDanteRef.current =
+            null;
+
+
+        console.log(
+            "DANTE: contexto conversacional limpiado."
+        );
+    }
+
+    // ========================================================
+    // DANTE - CARGAR ALERTAS CONOCIDAS DEL NAVEGADOR
+    // ========================================================
+
+    function cargarAlertasConocidasDante() {
+
+        if (typeof window === "undefined") {
+            return;
+        }
+
+        try {
+
+            const guardadas =
+                localStorage.getItem(
+                    DANTE_ALERTAS_STORAGE_KEY
+                );
+
+            if (!guardadas) {
+                return;
+            }
+
+            const ids =
+                JSON.parse(guardadas);
+
+            if (!Array.isArray(ids)) {
+                return;
+            }
+
+            alertasCriticasConocidasRef.current =
+                new Set(
+                    ids.filter(
+                        (id) =>
+                            typeof id === "string" &&
+                            id.trim() !== ""
+                    )
+                );
+
+            console.log(
+                "DANTE: Alertas conocidas recuperadas:",
+                alertasCriticasConocidasRef.current.size
+            );
+
+        } catch (error) {
+
+            console.error(
+                "DANTE: Error recuperando alertas conocidas:",
+                error
+            );
+        }
+    }
+    // ========================================================
+    // DANTE - REVISSA RECORDATORIOS
+    // ========================================================
+    async function revisarRecordatoriosDante() {
+
+        try {
+
+            const token =
+                getToken();
+
+            const res =
+                await fetch(
+                    `${API_BASE}/dante/recordatorios/pendientes`,
+                    {
+                        headers: {
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+
+                        cache:
+                            "no-store",
+                    }
+                );
+
+            const data =
+                await res.json();
+
+            if (
+                !res.ok ||
+                data.ok === false
+            ) {
+                return;
+            }
+
+            const recordatorios =
+                Array.isArray(data.recordatorios)
+                    ? data.recordatorios
+                    : [];
+
+            if (
+                recordatorios.length === 0
+            ) {
+                return;
+            }
+
+
+            // ================================================
+            // HABLAMOS EL PRIMER RECORDATORIO
+            // ================================================
+
+            const recordatorio =
+                recordatorios[0];
+
+
+            responderDante(
+                `Tengo un recordatorio. ${recordatorio.contenido}`
+            );
+
+
+            // ================================================
+            // MARCAR COMO NOTIFICADO
+            // ================================================
+
+            await fetch(
+                `${API_BASE}/dante/recordatorios/${recordatorio.memoria_id}/notificado`,
+                {
+                    method:
+                        "PATCH",
+
+                    headers: {
+                        Authorization:
+                            `Bearer ${token}`,
+                    },
+                }
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                "DANTE: Error revisando recordatorios:",
+                error
+            );
+        }
+    }
+    // ========================================================
+    // DANTE - GUARDAR ALERTAS CONOCIDAS
+    // ========================================================
+
+    function guardarAlertasConocidasDante() {
+
+        if (typeof window === "undefined") {
+            return;
+        }
+
+        try {
+
+            const ids =
+                Array.from(
+                    alertasCriticasConocidasRef.current
+                );
+
+            localStorage.setItem(
+                DANTE_ALERTAS_STORAGE_KEY,
+                JSON.stringify(ids)
+            );
+
+        } catch (error) {
+
+            console.error(
+                "DANTE: Error guardando alertas conocidas:",
+                error
+            );
+        }
+    }
+
+
+    // ========================================================
+    // DANTE - REVISAR ALERTAS CRÍTICAS NUEVAS
+    // ========================================================
+
+    async function revisarAlertasCriticasDante() {
+
+        try {
+
+            const token =
+                getToken();
+
+
+            const res =
+                await fetch(
+                    `${API_BASE}/notificaciones-sistema/alertas/criticas`,
+                    {
+                        headers: {
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+                    }
+                );
+
+
+            if (!res.ok) {
+
+                console.error(
+                    "DANTE: Error consultando alertas críticas:",
+                    res.status
+                );
+
+                return;
+            }
+
+
+            const data =
+                await res.json();
+
+
+            const lista =
+                Array.isArray(data.datos)
+                    ? data.datos
+                    : Array.isArray(data.alertas)
+                        ? data.alertas
+                        : Array.isArray(data)
+                            ? data
+                            : [];
+
+
+            // ====================================================
+            // PRIMERA REVISIÓN
+            // SOLO GUARDAMOS LAS ALERTAS EXISTENTES
+            // NO LAS ANUNCIAMOS
+            // ====================================================
+
+            if (
+                primeraRevisionAlertasRef.current
+            ) {
+
+                // ====================================================
+                // SI NO EXISTE HISTORIAL EN LOCALSTORAGE
+                // ESTA ES LA PRIMERA VEZ REAL QUE DANTE LAS VE
+                // ====================================================
+
+                if (
+                    alertasCriticasConocidasRef.current.size === 0
+                ) {
+
+                    lista.forEach(
+                        (alerta: any) => {
+
+                            if (alerta.alertaId) {
+
+                                alertasCriticasConocidasRef.current.add(
+                                    alerta.alertaId
+                                );
+                            }
+                        }
+                    );
+
+
+                    guardarAlertasConocidasDante();
+
+
+                    console.log(
+                        "DANTE: Primera carga. Alertas existentes registradas:",
+                        lista.length
+                    );
+
+
+                    primeraRevisionAlertasRef.current =
+                        false;
+
+                    return;
+                }
+
+
+                // ====================================================
+                // YA EXISTÍA HISTORIAL
+                // ENTONCES SÍ DEBEMOS COMPARAR
+                // ====================================================
+
+                primeraRevisionAlertasRef.current =
+                    false;
+            }
+
+
+            // ====================================================
+            // DETECTAR ÚNICAMENTE ALERTAS NUEVAS
+            // ====================================================
+
+            const alertasNuevas =
+                lista.filter(
+                    (alerta: any) => {
+
+                        if (
+                            !alerta.alertaId
+                        ) {
+
+                            return false;
+                        }
+
+
+                        return (
+                            !alertasCriticasConocidasRef.current.has(
+                                alerta.alertaId
+                            )
+                        );
+                    }
+                );
+
+
+            // ====================================================
+            // NO HAY NADA NUEVO
+            // DANTE NO HABLA
+            // ====================================================
+
+            if (
+                alertasNuevas.length === 0
+            ) {
+
+                console.log(
+                    "DANTE: No hay alertas críticas nuevas."
+                );
+
+                return;
+            }
+
+
+            // ====================================================
+            // GUARDAR NUEVAS ALERTAS COMO CONOCIDAS
+            // ====================================================
+
+            alertasNuevas.forEach(
+                (alerta: any) => {
+
+                    alertasCriticasConocidasRef.current.add(
+                        alerta.alertaId
+                    );
+                }
+            );
+            // GUARDAMOS TAMBIÉN EN EL NAVEGADOR
+            guardarAlertasConocidasDante();
+
+            console.log(
+                "DANTE: NUEVAS ALERTAS CRÍTICAS:",
+                alertasNuevas
+            );
+
+
+            // ====================================================
+            // UNA ALERTA NUEVA
+            // ====================================================
+
+            if (
+                alertasNuevas.length === 1
+            ) {
+
+                const alerta =
+                    alertasNuevas[0];
+
+
+                const equipo =
+                    alerta.nombreEquipo ||
+                    "un equipo Wireless";
+
+
+                const mensaje =
+                    alerta.mensaje ||
+                    "se generó una alerta crítica";
+
+
+                const ip =
+                    alerta.ipGestion
+                        ? ` IP ${alerta.ipGestion}.`
+                        : "";
+
+
+                responderDante(
+                    `Atención. Tengo una nueva alerta crítica. ` +
+                    `${equipo}. ${mensaje}.${ip}`
+                );
+
+
+                return;
+            }
+
+
+            // ====================================================
+            // VARIAS ALERTAS NUEVAS
+            // ====================================================
+
+            responderDante(
+                `Atención. Se han generado ${alertasNuevas.length} nuevas alertas críticas Wireless.`
+            );
+
+        } catch (error) {
+
+            console.error(
+                "DANTE: Error revisando alertas críticas:",
+                error
+            );
+        }
+    }
+    // ========================================================
+    // DANTE - GUARDA COMPROMISO DE PAGOS
+    // ========================================================
+
+    async function guardarCompromisoPagoDante(
+        cliente: {
+            clienteId?: string;
+            nombres?: string;
+            apellidos?: string;
+            cedula?: string;
+            servicioId?: string;
+        },
+        dias: number
+    ) {
+
+        try {
+
+            const token =
+                getToken();
+
+
+            if (
+                !cliente ||
+                !dias ||
+                dias <= 0
+            ) {
+
+                responderDante(
+                    "No tengo suficiente información para guardar el compromiso de pago."
+                );
+
+                return;
+            }
+
+
+            const fechaCompromiso =
+                new Date();
+
+
+            fechaCompromiso.setDate(
+                fechaCompromiso.getDate() +
+                dias
+            );
+
+
+            const nombreCliente =
+                `${cliente.nombres || ""} ${cliente.apellidos || ""}`
+                    .trim();
+
+
+            const fechaTexto =
+                fechaCompromiso.toLocaleDateString(
+                    "es-EC"
+                );
+
+
+            const contenido =
+                `${nombreCliente} indicó que realizará el pago en ${dias} días, con fecha prevista ${fechaTexto}.`;
+
+
+            // =================================================
+            // GUARDAR EN MEMORIA
+            // =================================================
+
+            const resMemoria =
+                await fetch(
+                    `${API_BASE}/dante/memorias`,
+                    {
+                        method:
+                            "POST",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json",
+
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+
+                        body: JSON.stringify({
+
+                            tipoMemoria:
+                                "PAGOS",
+
+                            categoria:
+                                "COMPROMISO_PAGO",
+
+                            contenido,
+
+                            entidadTipo:
+                                "CLIENTE",
+
+                            entidadId:
+                                cliente.clienteId || null,
+
+                            importancia:
+                                7,
+
+                            recordarEn:
+                                fechaCompromiso.toISOString(),
+
+                            datosJson: {
+
+                                estado:
+                                    "PENDIENTE",
+
+                                diasCompromiso:
+                                    dias,
+
+                                fechaCompromiso:
+                                    fechaCompromiso.toISOString(),
+
+                                clienteId:
+                                    cliente.clienteId || null,
+
+                                servicioId:
+                                    cliente.servicioId || null,
+
+                            },
+
+                        }),
+                    }
+                );
+
+
+            const dataMemoria =
+                await resMemoria.json();
+
+
+            if (
+                !resMemoria.ok ||
+                dataMemoria.ok === false
+            ) {
+
+                throw new Error(
+                    dataMemoria.mensaje ||
+                    dataMemoria.message ||
+                    "No se pudo guardar el compromiso."
+                );
+            }
+
+
+            // =================================================
+            // GUARDAR TAMBIÉN EN HISTORIAL
+            // =================================================
+
+            await fetch(
+                `${API_BASE}/dante/historial`,
+                {
+                    method:
+                        "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json",
+
+                        Authorization:
+                            `Bearer ${token}`,
+                    },
+
+                    body:
+                        JSON.stringify({
+
+                            tipo:
+                                "MEMORIA",
+
+                            textoUsuario:
+                                `Cliente informa que pagará en ${dias} días.`,
+
+                            respuestaDante:
+                                `Compromiso de pago registrado para ${fechaTexto}.`,
+
+                            accion:
+                                "GUARDAR_COMPROMISO_PAGO",
+
+                            resultado:
+                                "OK",
+
+                            datosJson: {
+
+                                clienteId:
+                                    cliente.clienteId ||
+                                    null,
+
+                                servicioId:
+                                    cliente.servicioId ||
+                                    null,
+
+                                nombreCliente,
+
+                                dias,
+
+                                fechaCompromiso:
+                                    fechaCompromiso.toISOString(),
+
+                            },
+
+                        }),
+                }
+            );
+
+
+            responderDante(
+                `De acuerdo. He registrado que ${nombreCliente} se comprometió a pagar en ${dias} días, aproximadamente el ${fechaTexto}.`
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                "DANTE: Error guardando compromiso de pago:",
+                error
+            );
+
+
+            responderDante(
+                "No pude guardar el compromiso de pago."
+            );
+        }
+    }
+    // ========================================================
+    // DANTE - Descripcion ANTECEDENTES HISTÓRICOS
+    // ========================================================
+    function descripcionHistoricaFechaDante(
+        fechaValor: string | null
+    ) {
+
+        if (!fechaValor) {
+            return "anteriormente";
+        }
+
+
+        const fecha =
+            new Date(
+                fechaValor
+            );
+
+
+        const ahora =
+            new Date();
+
+
+        const diferenciaMs =
+            ahora.getTime() -
+            fecha.getTime();
+
+
+        const dias =
+            Math.floor(
+                diferenciaMs /
+                (
+                    1000 *
+                    60 *
+                    60 *
+                    24
+                )
+            );
+
+
+        if (
+            dias <= 0
+        ) {
+            return "hoy";
+        }
+
+
+        if (
+            dias === 1
+        ) {
+            return "ayer";
+        }
+
+
+        if (
+            dias <= 7
+        ) {
+            return `hace ${dias} días`;
+        }
+
+
+        return `el ${fecha.toLocaleDateString(
+            "es-EC"
+        )}`;
+    }
+
+    // ========================================================
+    // DANTE - OBTENER CLIENTE ACTUAL DEL CONTEXTO
+    // ========================================================
+
+    function obtenerClienteActualDante() {
+
+        const contexto =
+            contextoDanteRef.current;
+
+        const cliente =
+            servicioClienteDanteRef.current;
+
+
+        if (
+            contexto.tema !== "CLIENTE" ||
+            !cliente
+        ) {
+
+            return null;
+        }
+
+
+        return cliente;
+    }
+    // ============================================================
+    // DISTANCIA LEVENSHTEIN
+    // ============================================================
+
+    function distanciaLevenshtein(
+        a: string,
+        b: string
+    ) {
+
+        const matriz: number[][] =
+            Array.from(
+                {
+                    length: b.length + 1,
+                },
+                () =>
+                    Array(
+                        a.length + 1
+                    ).fill(0)
+            );
+
+
+        for (
+            let i = 0;
+            i <= b.length;
+            i++
+        ) {
+
+            matriz[i][0] = i;
+        }
+
+
+        for (
+            let j = 0;
+            j <= a.length;
+            j++
+        ) {
+
+            matriz[0][j] = j;
+        }
+
+
+        for (
+            let i = 1;
+            i <= b.length;
+            i++
+        ) {
+
+            for (
+                let j = 1;
+                j <= a.length;
+                j++
+            ) {
+
+                const costo =
+                    b[i - 1] === a[j - 1]
+                        ? 0
+                        : 1;
+
+
+                matriz[i][j] =
+                    Math.min(
+
+                        matriz[i - 1][j] + 1,
+
+                        matriz[i][j - 1] + 1,
+
+                        matriz[i - 1][j - 1] +
+                        costo
+                    );
+            }
+        }
+
+
+        return matriz[b.length][a.length];
+    }
+
+
+    // ============================================================
+    // COMPARAR PALABRAS DE FORMA FLEXIBLE
+    // ============================================================
+
+    function palabrasSimilares(
+        buscada: string,
+        real: string
+    ) {
+
+        if (
+            buscada === real
+        ) {
+            return true;
+        }
+
+
+        if (
+            real.includes(buscada) ||
+            buscada.includes(real)
+        ) {
+            return true;
+        }
+
+
+        const distancia =
+            distanciaLevenshtein(
+                buscada,
+                real
+            );
+
+
+        // palabras cortas:
+        // máximo 1 letra diferente
+
+        if (
+            buscada.length <= 5
+        ) {
+
+            return distancia <= 1;
+        }
+
+
+        // palabras medianas:
+        // máximo 2 letras diferentes
+
+        if (
+            buscada.length <= 10
+        ) {
+
+            return distancia <= 2;
+        }
+
+
+        // palabras largas:
+        // máximo 3 letras diferentes
+
+        return distancia <= 3;
+    }
+
+
+    // ============================================================
+    // COMPARAR NOMBRES COMPLETOS
+    // ============================================================
+
+    function nombreCoincideDante(
+        busqueda: string,
+        nombreSistema: string
+    ) {
+
+        const buscadas =
+            normalizarTextoDante(
+                busqueda
+            )
+                .split(" ")
+                .filter(Boolean);
+
+
+        const reales =
+            normalizarTextoDante(
+                nombreSistema
+            )
+                .split(" ")
+                .filter(Boolean);
+
+
+        if (
+            buscadas.length === 0 ||
+            reales.length === 0
+        ) {
+
+            return false;
+        }
+
+
+        return buscadas.every(
+            palabraBuscada =>
+
+                reales.some(
+                    palabraReal =>
+                        palabrasSimilares(
+                            palabraBuscada,
+                            palabraReal
+                        )
+                )
+        );
+    }
+
+    // ========================================================
+    // PERFIL ADMINISTRATIVO ACTUAL EN CONTEXTO DE DANTE
+    // ========================================================
+
+    const perfilClienteDanteRef =
+        useRef<any | null>(null);
+
+    // ========================================================
+    // BUSCAR CLIENTE / SERVICIO
+    // ========================================================
+
+    async function buscarClienteDante(
+        terminoBusqueda: string
+    ) {
+
+        const termino =
+            normalizarTextoDante(
+                terminoBusqueda
+            );
+
+        if (!termino) {
+
+            responderDante(
+                "Indícame el nombre, cédula, teléfono o IP del cliente."
+            );
+
+            return;
+        }
+
+        try {
+
+            responderDante(
+                `Buscando al cliente ${terminoBusqueda}.`
+            );
+
+
+            const res =
+                await fetch(
+                    `${API_BASE}/cliente-servicio`
+                );
+
+
+            const data =
+                await res.json();
+
+
+            if (
+                !res.ok ||
+                data.ok === false
+            ) {
+
+                responderDante(
+                    "No pude consultar los servicios de clientes."
+                );
+
+                return;
+            }
+
+
+            const servicios:
+                ServicioClienteDante[] =
+                Array.isArray(data.servicios)
+                    ? data.servicios
+                    : [];
+
+
+            // ====================================================
+            // BUSCAR COINCIDENCIAS
+            // ====================================================
+            const coincidencias =
+                servicios.filter(
+                    (servicio) => {
+
+                        const nombreCompleto =
+                            `${servicio.nombres || ""} ${servicio.apellidos || ""}`;
+
+
+                        const cedula =
+                            normalizarTextoDante(
+                                servicio.cedula || ""
+                            );
+
+
+                        const telefono =
+                            normalizarTextoDante(
+                                servicio.telefono || ""
+                            );
+
+
+                        const email =
+                            normalizarTextoDante(
+                                servicio.email || ""
+                            );
+
+
+                        const ip =
+                            normalizarTextoDante(
+                                servicio.ipCliente || ""
+                            );
+
+
+                        const pppoe =
+                            normalizarTextoDante(
+                                servicio.pppSecret || ""
+                            );
+
+
+                        const coincideNombre =
+                            nombreCoincideDante(
+                                termino,
+                                nombreCompleto
+                            );
+
+
+                        return (
+                            coincideNombre ||
+                            cedula.includes(termino) ||
+                            telefono.includes(termino) ||
+                            email.includes(termino) ||
+                            ip.includes(termino) ||
+                            pppoe.includes(termino)
+                        );
+                    }
+                );
+
+            // ====================================================
+            // NO ENCONTRADO
+            // ====================================================
+
+            if (
+                coincidencias.length === 0
+            ) {
+
+                servicioClienteDanteRef.current =
+                    null;
+
+
+                responderDante(
+                    `No encontré ningún cliente que coincida con ${terminoBusqueda}.`
+                );
+
+                return;
+            }
+
+
+            // ====================================================
+            // VARIAS COINCIDENCIAS
+            // ====================================================
+
+            if (
+                coincidencias.length > 1
+            ) {
+
+                const nombres =
+                    coincidencias
+                        .slice(0, 4)
+                        .map(
+                            (servicio) =>
+                                `${servicio.nombres} ${servicio.apellidos}`
+                        )
+                        .join(", ");
+
+
+                responderDante(
+                    `Encontré ${coincidencias.length} coincidencias. ` +
+                    `Entre ellas: ${nombres}. ` +
+                    `Indícame la cédula o la IP para identificar al cliente correctamente.`
+                );
+
+                return;
+            }
+
+
+            // ====================================================
+            // CLIENTE ENCONTRADO
+            // ====================================================
+
+            const servicio =
+                coincidencias[0];
+
+
+            servicioClienteDanteRef.current =
+                servicio;
+
+            // ====================================================
+            // DANTE - ACTUALIZAR CONTEXTO CONVERSACIONAL
+            // ====================================================
+            actualizarContextoDante({
+
+                tema:
+                    "CLIENTE",
+
+                entidadId:
+                    servicio.clienteId,
+
+                entidadNombre:
+                    `${servicio.nombres || ""} ${servicio.apellidos || ""}`
+                        .trim(),
+
+                ultimaIntencion:
+                    "BUSCAR_CLIENTE",
+
+                esperandoRespuesta:
+                    false,
+
+                datoPendiente:
+                    null,
+
+            });
+
+            console.log(
+                "DANTE CONTEXTO ACTUAL:",
+                contextoDanteRef.current
+            );
+
+            console.log(
+                "DANTE CLIENTE ENCONTRADO:",
+                servicio
+            );
+
+
+            console.log(
+                "DANTE SERVICIO ID:",
+                servicio.servicioId
+            );
+
+
+            responderDante(
+                `Encontré a ${servicio.nombres} ${servicio.apellidos}. ` +
+                `Su servicio está ${servicio.estadoServicio || "registrado"}.`
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                "Error buscando cliente con Dante:",
+                error
+            );
+
+
+            responderDante(
+                "Ocurrió un error al buscar al cliente."
+            );
+        }
+    }
+
+    // ========================================================
+    // CONSULTAR PERFIL ADMINISTRATIVO DEL CLIENTE
+    // ========================================================
+
+    async function consultarPerfilClienteDante() {
+
+        const servicio =
+            servicioClienteDanteRef.current;
+
+
+        if (
+            !servicio?.servicioId
+        ) {
+
+            responderDante(
+                "Primero debes indicarme qué cliente deseas consultar."
+            );
+
+            return;
+        }
+
+
+        try {
+
+            const token =
+                getToken();
+
+
+            responderDante(
+                `Consultando la información de ${servicio.nombres} ${servicio.apellidos}.`
+            );
+
+
+            const res =
+                await fetch(
+                    `${API_BASE}/clientes/perfiles/administrativo/${servicio.servicioId}`,
+                    {
+                        headers: {
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+                    }
+                );
+
+
+            const data =
+                await res.json();
+
+
+            if (
+                !res.ok ||
+                data.ok === false
+            ) {
+
+                responderDante(
+                    "No pude consultar el perfil administrativo de este cliente."
+                );
+
+                return;
+            }
+
+
+            const perfil =
+                data.datos;
+
+
+            if (
+                !perfil
+            ) {
+
+                responderDante(
+                    "El cliente fue encontrado, pero no tiene información administrativa disponible."
+                );
+
+                return;
+            }
+
+
+            // GUARDAMOS EL PERFIL EN CONTEXTO
+            perfilClienteDanteRef.current =
+                perfil;
+            actualizarContextoDante({
+
+                tema:
+                    "CLIENTE",
+
+                entidadId:
+                    perfil.cliente?.clienteId ||
+                    servicio.clienteId ||
+                    null,
+
+                entidadNombre:
+                    `${perfil.cliente?.nombres || servicio.nombres || ""} ${perfil.cliente?.apellidos || servicio.apellidos || ""}`
+                        .trim(),
+
+                ultimaIntencion:
+                    "CONSULTAR_PERFIL_CLIENTE",
+
+            });
+            console.log(
+                "DANTE PERFIL CLIENTE:",
+                perfil
+            );
+
+
+            const nombre =
+                `${perfil.cliente?.nombres || ""} ${perfil.cliente?.apellidos || ""}`
+                    .trim();
+
+            const memoriasHistoricas =
+                await obtenerContextoHistoricoDante(
+                    nombre
+                );
+
+            const cedula =
+                perfil.cliente?.cedula ||
+                "no registrada";
+
+
+            const estadoCliente =
+                perfil.cliente?.estadoCliente ||
+                "sin estado";
+
+
+            const estadoServicio =
+                perfil.servicio?.estadoServicio ||
+                "sin estado";
+
+
+            const ip =
+                perfil.servicio?.ipCliente ||
+                "sin IP asignada";
+
+
+            const plan =
+                perfil.plan?.nombrePlan ||
+                "sin plan asignado";
+
+
+            const velocidadBajada =
+                perfil.plan?.velocidadBajada;
+
+
+            const velocidadSubida =
+                perfil.plan?.velocidadSubida;
+
+
+            const pendientes =
+                Number(
+                    perfil.facturacion?.totalPendientes ||
+                    0
+                );
+
+
+            const ticketsAbiertos =
+                Number(
+                    perfil.tickets?.resumen?.abiertos ||
+                    0
+                );
+
+
+            let respuesta =
+                `Información de ${nombre}. ` +
+                `Cédula ${cedula}. ` +
+                `Cliente ${estadoCliente}. ` +
+                `Servicio ${estadoServicio}. ` +
+                `Plan ${plan}. `;
+
+
+            if (
+                velocidadBajada ||
+                velocidadSubida
+            ) {
+
+                respuesta +=
+                    `Velocidad ${velocidadBajada || "-"} de bajada y ${velocidadSubida || "-"} de subida. `;
+            }
+
+
+            respuesta +=
+                `IP ${ip}. `;
+
+
+            if (
+                pendientes === 0
+            ) {
+
+                respuesta +=
+                    "No tiene mensualidades pendientes. ";
+
+            } else if (
+                pendientes === 1
+            ) {
+
+                respuesta +=
+                    "Tiene 1 mensualidad pendiente. ";
+
+            } else {
+
+                respuesta +=
+                    `Tiene ${pendientes} mensualidades pendientes. `;
+            }
+
+
+            if (
+                ticketsAbiertos === 0
+            ) {
+
+                respuesta +=
+                    "No tiene tickets abiertos.";
+
+            } else if (
+                ticketsAbiertos === 1
+            ) {
+
+                respuesta +=
+                    "Tiene 1 ticket abierto.";
+
+            } else {
+
+                respuesta +=
+                    `Tiene ${ticketsAbiertos} tickets abiertos.`;
+            }
+
+            const contextoHistorico =
+                construirAntecedentesHistoricosDante(
+                    memoriasHistoricas
+                );
+
+
+            respuesta +=
+                contextoHistorico;
+
+            responderDante(
+                respuesta
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                "Error consultando perfil con Dante:",
+                error
+            );
+
+
+            responderDante(
+                "Ocurrió un error al consultar la información del cliente."
+            );
+        }
+    }
+
+    // ========================================================
+    // DANTE - HACER PING AL CLIENTE ACTUAL
+    // ========================================================
+
+    async function hacerPingClienteDante() {
+
+        const servicio =
+            servicioClienteDanteRef.current;
+
+
+        if (
+            !servicio?.servicioId
+        ) {
+
+            responderDante(
+                "Primero debes indicarme qué cliente deseas consultar."
+            );
+
+            return;
+        }
+
+
+        try {
+
+            const token =
+                getToken();
+
+
+            responderDante(
+                `Consultando la conexión de ${servicio.nombres} ${servicio.apellidos}.`
+            );
+
+
+            const res =
+                await fetch(
+                    `${API_BASE}/clientes/perfiles/administrativo/${servicio.servicioId}/ping`,
+                    {
+                        headers: {
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+                    }
+                );
+
+
+            const data =
+                await res.json();
+
+
+            if (
+                !res.ok ||
+                data.ok === false
+            ) {
+
+                responderDante(
+                    data.mensaje ||
+                    "No pude consultar la conexión de este cliente."
+                );
+
+                return;
+            }
+
+
+            const estado =
+                data.data;
+
+
+            console.log(
+                "DANTE PING CLIENTE:",
+                estado
+            );
+
+
+            if (
+                !estado
+            ) {
+
+                responderDante(
+                    "No recibí información de conexión para este cliente."
+                );
+
+                return;
+            }
+
+
+            const nombre =
+                `${servicio.nombres} ${servicio.apellidos}`.trim();
+
+
+            const ip =
+                estado.ipCliente ||
+                servicio.ipCliente ||
+                "sin IP";
+
+
+            // ====================================================
+            // CLIENTE ONLINE
+            // ====================================================
+
+            if (
+                estado.online
+            ) {
+
+                const ping =
+                    typeof estado.pingPromedioMs === "number"
+                        ? estado.pingPromedioMs.toFixed(1)
+                        : null;
+
+
+                const latencia =
+                    estado.latencia ||
+                    "sin clasificación";
+
+
+                const recibidos =
+                    Number(
+                        estado.recibidos ||
+                        0
+                    );
+
+
+                const enviados =
+                    Number(
+                        estado.enviados ||
+                        0
+                    );
+
+
+                let respuesta =
+                    `${nombre} está conectado. ` +
+                    `IP ${ip}. `;
+
+
+                if (
+                    ping
+                ) {
+
+                    respuesta +=
+                        `Ping promedio ${ping} milisegundos. `;
+                }
+
+
+                respuesta +=
+                    `Latencia ${latencia}. ` +
+                    `Paquetes recibidos ${recibidos} de ${enviados}.`;
+
+                actualizarContextoDante({
+
+                    tema:
+                        "CLIENTE",
+
+                    entidadId:
+                        servicio.clienteId,
+
+                    entidadNombre:
+                        `${servicio.nombres || ""} ${servicio.apellidos || ""}`
+                            .trim(),
+
+                    ultimaIntencion:
+                        "PING_CLIENTE",
+
+                });
+
+                responderDante(
+                    respuesta
+                );
+
+
+                return;
+            }
+
+
+            // ====================================================
+            // CLIENTE OFFLINE
+            // ====================================================
+
+            responderDante(
+                `${nombre} está desconectado. ` +
+                `La IP registrada es ${ip} y no respondió al ping.`
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                "Error haciendo ping con Dante:",
+                error
+            );
+
+
+            responderDante(
+                "Ocurrió un error al consultar la conexión del cliente."
+            );
+        }
+    }
+
+    // ========================================================
+    // DANTE - CLASIFICAR MEMORIA AUTOMÁTICAMENTE
+    // ========================================================
+
+    function clasificarMemoriaDante(
+        contenido: string
+    ) {
+
+        const texto =
+            normalizarTextoDante(
+                contenido
+            );
+
+
+        let tipoMemoria =
+            "GENERAL";
+
+
+        let categoria =
+            "OBSERVACION";
+
+
+        let importancia =
+            5;
+
+
+        let entidadTipo:
+            string | null =
+            null;
+
+
+        // ====================================================
+        // WIRELESS
+        // ====================================================
+
+        if (
+            texto.includes("wireless") ||
+            texto.includes("antena") ||
+            texto.includes("sectorial") ||
+            texto.includes("access point") ||
+            texto.includes("ap ") ||
+            texto.includes("radio enlace") ||
+            texto.includes("radioenlace")
+        ) {
+
+            tipoMemoria =
+                "WIRELESS";
+
+            entidadTipo =
+                "EQUIPO_WIRELESS";
+        }
+
+
+        // ====================================================
+        // MIKROTIK
+        // ====================================================
+
+        else if (
+            texto.includes("mikrotik") ||
+            texto.includes("router") ||
+            texto.includes("pppoe") ||
+            texto.includes("queue") ||
+            texto.includes("simple queue") ||
+            texto.includes("firewall")
+        ) {
+
+            tipoMemoria =
+                "MIKROTIK";
+
+            entidadTipo =
+                "MIKROTIK";
+        }
+
+
+        // ====================================================
+        // CLIENTES
+        // ====================================================
+
+        else if (
+            texto.includes("cliente") ||
+            texto.includes("abonado") ||
+            texto.includes("usuario de internet") ||
+            texto.includes("servicio del cliente")
+        ) {
+
+            tipoMemoria =
+                "CLIENTE";
+
+            entidadTipo =
+                "CLIENTE";
+        }
+
+
+        // ====================================================
+        // TICKETS / SOPORTE
+        // ====================================================
+
+        else if (
+            texto.includes("ticket") ||
+            texto.includes("soporte") ||
+            texto.includes("reclamo") ||
+            texto.includes("incidencia")
+        ) {
+
+            tipoMemoria =
+                "SOPORTE";
+
+            entidadTipo =
+                "TICKET";
+        }
+
+
+        // ====================================================
+        // INFRAESTRUCTURA
+        // ====================================================
+
+        else if (
+            texto.includes("nodo") ||
+            texto.includes("torre") ||
+            texto.includes("nap") ||
+            texto.includes("fibra") ||
+            texto.includes("olt") ||
+            texto.includes("onu") ||
+            texto.includes("infraestructura")
+        ) {
+
+            tipoMemoria =
+                "INFRAESTRUCTURA";
+
+            entidadTipo =
+                "INFRAESTRUCTURA";
+        }
+
+
+        // ====================================================
+        // FACTURACIÓN
+        // ====================================================
+
+        else if (
+            texto.includes("factura") ||
+            texto.includes("facturacion") ||
+            texto.includes("sri") ||
+            texto.includes("nota de credito") ||
+            texto.includes("comprobante")
+        ) {
+
+            tipoMemoria =
+                "FACTURACION";
+
+            entidadTipo =
+                "FACTURA";
+        }
+
+
+        // ====================================================
+        // PAGOS / COBRANZA
+        // ====================================================
+
+        else if (
+            texto.includes("pago") ||
+            texto.includes("mensualidad") ||
+            texto.includes("deuda") ||
+            texto.includes("moroso") ||
+            texto.includes("cobro")
+        ) {
+
+            tipoMemoria =
+                "PAGOS";
+
+            entidadTipo =
+                "PAGO";
+        }
+
+
+        // ====================================================
+        // INVENTARIO
+        // ====================================================
+
+        else if (
+            texto.includes("inventario") ||
+            texto.includes("stock") ||
+            texto.includes("bodega") ||
+            texto.includes("producto") ||
+            texto.includes("material")
+        ) {
+
+            tipoMemoria =
+                "INVENTARIO";
+
+            entidadTipo =
+                "INVENTARIO";
+        }
+
+
+        // ====================================================
+        // ADMINISTRATIVO
+        // ====================================================
+
+        else if (
+            texto.includes("proveedor") ||
+            texto.includes("reunion") ||
+            texto.includes("administracion") ||
+            texto.includes("personal") ||
+            texto.includes("empleado") ||
+            texto.includes("tarea")
+        ) {
+
+            tipoMemoria =
+                "ADMINISTRATIVO";
+
+            entidadTipo =
+                "ADMINISTRATIVO";
+        }
+
+
+        // ====================================================
+        // CATEGORÍA: INCIDENTE
+        // ====================================================
+
+        if (
+            texto.includes("falla") ||
+            texto.includes("fallo") ||
+            texto.includes("error") ||
+            texto.includes("offline") ||
+            texto.includes("fuera de linea") ||
+            texto.includes("caido") ||
+            texto.includes("ping alto") ||
+            texto.includes("latencia alta") ||
+            texto.includes("sin conexion") ||
+            texto.includes("perdida de paquetes")
+        ) {
+
+            categoria =
+                "INCIDENTE";
+
+            importancia =
+                8;
+        }
+
+
+        // ====================================================
+        // CATEGORÍA: MANTENIMIENTO
+        // ====================================================
+
+        else if (
+            texto.includes("mantenimiento") ||
+            texto.includes("revisar") ||
+            texto.includes("revision tecnica")
+        ) {
+
+            categoria =
+                "MANTENIMIENTO";
+
+            importancia =
+                7;
+        }
+
+
+        // ====================================================
+        // CATEGORÍA: PENDIENTE
+        // ====================================================
+
+        else if (
+            texto.includes("pendiente") ||
+            texto.includes("debemos") ||
+            texto.includes("hay que") ||
+            texto.includes("recordar hacer") ||
+            texto.includes("por hacer")
+        ) {
+
+            categoria =
+                "PENDIENTE";
+
+            importancia =
+                6;
+        }
+
+
+        // ====================================================
+        // CATEGORÍA: CONFIGURACIÓN
+        // ====================================================
+
+        else if (
+            texto.includes("configuracion") ||
+            texto.includes("configurar") ||
+            texto.includes("parametro") ||
+            texto.includes("ajuste")
+        ) {
+
+            categoria =
+                "CONFIGURACION";
+
+            importancia =
+                6;
+        }
+
+
+        // ====================================================
+        // CATEGORÍA: INFORMACIÓN
+        // ====================================================
+
+        else {
+
+            categoria =
+                "INFORMACION";
+        }
+
+
+        // ====================================================
+        // IMPORTANCIA CRÍTICA
+        // ====================================================
+
+        if (
+            texto.includes("critico") ||
+            texto.includes("critica") ||
+            texto.includes("urgente") ||
+            texto.includes("grave")
+        ) {
+
+            importancia =
+                10;
+        }
+
+
+        return {
+            tipoMemoria,
+            categoria,
+            importancia,
+            entidadTipo,
+        };
+    }
+    // ========================================================
+    // DANTE - GUARDAR MEMORIA PERSISTENTE
+    // ========================================================
+
+    async function guardarMemoriaDante(
+        contenido: string
+    ) {
+
+        const textoMemoria =
+            contenido.trim();
+
+
+        if (!textoMemoria) {
+
+            responderDante(
+                "Indícame qué información deseas que recuerde."
+            );
+
+            return;
+        }
+
+        const clasificacion =
+            clasificarMemoriaDante(
+                textoMemoria
+            );
+
+        try {
+
+            const token =
+                getToken();
+
+
+            const res =
+                await fetch(
+                    `${API_BASE}/dante/memorias`,
+                    {
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json",
+
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+                        body:
+                            JSON.stringify({
+
+                                tipoMemoria:
+                                    clasificacion.tipoMemoria,
+
+                                categoria:
+                                    clasificacion.categoria,
+
+                                clave:
+                                    textoMemoria.slice(
+                                        0,
+                                        180
+                                    ),
+
+                                contenido:
+                                    textoMemoria,
+
+                                entidadTipo:
+                                    clasificacion.entidadTipo,
+
+                                importancia:
+                                    clasificacion.importancia,
+
+                                datosJson: {
+
+                                    clasificacionAutomatica:
+                                        true,
+
+                                    tipoDetectado:
+                                        clasificacion.tipoMemoria,
+
+                                    categoriaDetectada:
+                                        clasificacion.categoria,
+
+                                },
+                            }),
+                    }
+                );
+
+
+            const data =
+                await res.json();
+
+
+            if (
+                !res.ok ||
+                data.ok === false
+            ) {
+
+                throw new Error(
+                    data.message ||
+                    "No se pudo guardar la memoria"
+                );
+            }
+
+
+            console.log(
+                "DANTE MEMORIA GUARDADA:",
+                data
+            );
+
+
+            responderDante(
+                `De acuerdo. Guardaré esta información: ${textoMemoria}.`
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                "DANTE: Error guardando memoria:",
+                error
+            );
+
+
+            responderDante(
+                "No pude guardar esa información en mi memoria."
+            );
+        }
+    }
+
+    // ========================================================
+    // DANTE - OBTENER CONTEXTO HISTÓRICO DE SU MEMORIA
+    // ========================================================
+
+    async function obtenerContextoHistoricoDante(
+        terminoBusqueda: string
+    ) {
+
+        const termino =
+            terminoBusqueda.trim();
+
+
+        if (!termino) {
+            return [];
+        }
+
+
+        try {
+
+            const token =
+                getToken();
+
+
+            const res =
+                await fetch(
+                    `${API_BASE}/dante/memorias/buscar?q=${encodeURIComponent(
+                        termino
+                    )}`,
+                    {
+                        method: "GET",
+
+                        headers: {
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+
+                        cache:
+                            "no-store",
+                    }
+                );
+
+
+            const data =
+                await res.json();
+
+
+            if (
+                !res.ok ||
+                data.ok === false
+            ) {
+
+                return [];
+            }
+
+
+            const memorias =
+                Array.isArray(
+                    data.memorias
+                )
+                    ? data.memorias
+                    : [];
+
+
+            return memorias;
+
+
+        } catch (error) {
+
+            console.error(
+                "DANTE: Error obteniendo contexto histórico:",
+                error
+            );
+
+
+            return [];
+        }
+    }
+
+    // ========================================================
+    // DANTE - FORMATEAR ANTECEDENTES HISTÓRICOS
+    // ========================================================
+
+    function construirAntecedentesHistoricosDante(
+        memorias: any[]
+    ) {
+
+        if (
+            !Array.isArray(memorias) ||
+            memorias.length === 0
+        ) {
+            return "";
+        }
+
+
+        const principales =
+            memorias.slice(0, 3);
+
+
+        const antecedentes =
+            principales
+                .map(
+                    (memoria: any) => {
+
+                        const contenido =
+                            memoria.contenido ||
+                            "";
+
+
+                        const cuando =
+                            descripcionHistoricaFechaDante(
+                                memoria.fechaCreacion ||
+                                memoria.fecha_creacion ||
+                                null
+                            );
+
+
+                        return (
+                            `${cuando}, ${contenido}`
+                        );
+                    }
+                )
+                .filter(Boolean);
+
+
+        if (
+            antecedentes.length === 0
+        ) {
+            return "";
+        }
+
+
+        return (
+            " Como antecedente histórico tengo registrado que " +
+            antecedentes.join(". ") +
+            "."
+        );
+    }
+
+    // ========================================================
+    // DANTE - BUSCAR EN SU MEMORIA
+    // ========================================================
+
+    async function consultarMemoriaDante(
+        terminoBusqueda: string
+    ) {
+
+        const termino =
+            terminoBusqueda.trim();
+
+
+        if (!termino) {
+
+            responderDante(
+                "Indícame qué deseas consultar en mi memoria."
+            );
+
+            return;
+        }
+
+
+        try {
+
+            const token =
+                getToken();
+
+
+            responderDante(
+                `Consultando lo que recuerdo sobre ${terminoBusqueda}.`
+            );
+
+
+            const res =
+                await fetch(
+                    `${API_BASE}/dante/memorias/buscar?q=${encodeURIComponent(
+                        termino
+                    )}`,
+                    {
+                        method: "GET",
+
+                        headers: {
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+
+                        cache:
+                            "no-store",
+                    }
+                );
+
+
+            const data =
+                await res.json();
+
+
+            if (
+                !res.ok ||
+                data.ok === false
+            ) {
+
+                throw new Error(
+                    data.message ||
+                    "No se pudo consultar la memoria"
+                );
+            }
+
+
+            const memorias =
+                Array.isArray(
+                    data.memorias
+                )
+                    ? data.memorias
+                    : [];
+
+
+            console.log(
+                "DANTE MEMORIAS ENCONTRADAS:",
+                memorias
+            );
+
+
+            if (
+                memorias.length === 0
+            ) {
+
+                responderDante(
+                    `No tengo información guardada sobre ${terminoBusqueda}.`
+                );
+
+                return;
+            }
+
+
+            // ====================================================
+            // EVITAMOS QUE DANTE LEA 50 MEMORIAS DE GOLPE
+            // ====================================================
+
+            const principales =
+                memorias.slice(
+                    0,
+                    5
+                );
+
+
+            const lectura =
+                principales
+                    .map(
+                        (
+                            memoria: any,
+                            index: number
+                        ) => {
+
+                            return (
+                                `Recuerdo ${index + 1}. ` +
+                                `${memoria.contenido}.`
+                            );
+                        }
+                    )
+                    .join(" ");
+
+
+            let respuesta =
+                `Encontré ${memorias.length} ` +
+                (
+                    memorias.length === 1
+                        ? "registro relacionado. "
+                        : "registros relacionados. "
+                ) +
+                lectura;
+
+
+            if (
+                memorias.length > 5
+            ) {
+
+                respuesta +=
+                    ` Hay ${memorias.length - 5} registros adicionales relacionados.`;
+            }
+
+
+            responderDante(
+                respuesta
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                "DANTE: Error consultando memoria:",
+                error
+            );
+
+
+            responderDante(
+                "No pude consultar mi memoria en este momento."
+            );
+        }
+    }
+
+    async function leerNodoWirelessDante(
+        node: any
+    ) {
+
+        if (
+            !monitoreoRedDanteRef.current
+        ) {
+            return;
+        }
+
+
+        // ====================================================
+        // SISTEMA
+        // ====================================================
+
+        if (
+            node.tipo === "SISTEMA"
+        ) {
+
+            responderDante(
+                "Este es el nodo principal del sistema de infraestructura Wireless."
+            );
+
+            return;
+        }
+
+
+        // ====================================================
+        // NODO AGENT
+        // ====================================================
+
+        if (
+            node.tipo === "NODO"
+        ) {
+
+            responderDante(
+                `Este es el nodo ${node.id}. Forma parte de la infraestructura Wireless monitoreada.`
+            );
+
+            return;
+        }
+
+
+        // ====================================================
+        // DATA COMPLETA DEL EQUIPO
+        // ====================================================
+
+        const data =
+            node.dataCompleta;
+
+
+        if (
+            !data
+        ) {
+
+            responderDante(
+                "No tengo información completa de este equipo."
+            );
+
+            return;
+        }
+
+
+        const equipo =
+            data.equipo || {};
+
+
+        const resultado =
+            data.resultado || {};
+
+
+        const nombre =
+            equipo.nombre ||
+            node.id ||
+            "equipo Wireless";
+
+        const memoriasHistoricas =
+            await obtenerContextoHistoricoDante(
+                nombre
+            );
+
+        const tipoEquipo =
+            equipo.tipoEquipo ||
+            node.tipo ||
+            "equipo";
+
+
+        const ip =
+            equipo.ipGestion ||
+            node.ip ||
+            "sin IP registrada";
+
+
+        const nodoAgent =
+            equipo.nodoAgent ||
+            "sin nodo asignado";
+
+
+        const estado =
+            data.nuevoEstado ||
+            resultado.estado ||
+            node.estado ||
+            "sin estado";
+
+
+        const online =
+            resultado.online;
+
+
+        const sshOk =
+            resultado.sshOk;
+
+
+        const ping =
+            resultado.pingPromedioMs;
+
+
+        const recibidos =
+            resultado.recibidos;
+
+
+        const perdidos =
+            resultado.perdidos;
+
+
+        const modo =
+            resultado.modo;
+
+
+        const mensaje =
+            data.mensaje ||
+            node.mensaje ||
+            null;
+
+
+        // ====================================================
+        // ARMAR RESPUESTA
+        // ====================================================
+
+        let respuesta =
+            `Equipo ${nombre}. `;
+
+
+        respuesta +=
+            `Tipo ${tipoEquipo}. `;
+
+
+        respuesta +=
+            `IP ${ip}. `;
+
+
+        respuesta +=
+            `Nodo de comunicación ${nodoAgent}. `;
+
+
+        // ====================================================
+        // ESTADO
+        // ====================================================
+
+        if (
+            estado === "ONLINE" ||
+            online === true
+        ) {
+
+            respuesta +=
+                "El equipo se encuentra en línea. ";
+
+        } else if (
+            estado === "OFFLINE" ||
+            online === false
+        ) {
+
+            respuesta +=
+                "Atención. El equipo se encuentra fuera de línea. ";
+
+        } else if (
+            estado === "PING_ALTO"
+        ) {
+
+            respuesta +=
+                "Atención. El equipo presenta ping alto. ";
+
+        } else if (
+            estado === "SSH_FALLA"
+        ) {
+
+            respuesta +=
+                "Atención. El equipo presenta una falla SSH. ";
+
+        } else {
+
+            respuesta +=
+                `Estado ${estado}. `;
+        }
+
+
+        // ====================================================
+        // PING
+        // ====================================================
+
+        if (
+            ping !== null &&
+            ping !== undefined
+        ) {
+
+            respuesta +=
+                `El ping promedio es de ${Number(ping).toFixed(2)} milisegundos. `;
+        }
+
+
+        // ====================================================
+        // SSH
+        // ====================================================
+
+        if (
+            sshOk === true
+        ) {
+
+            respuesta +=
+                "La conexión SSH está disponible. ";
+
+        } else if (
+            sshOk === false
+        ) {
+
+            respuesta +=
+                "La conexión SSH presenta una falla. ";
+        }
+
+
+        // ====================================================
+        // PAQUETES
+        // ====================================================
+
+        if (
+            recibidos !== undefined ||
+            perdidos !== undefined
+        ) {
+
+            const recibidosNumero =
+                Number(recibidos || 0);
+
+
+            const perdidosNumero =
+                Number(perdidos || 0);
+
+
+            const totalPaquetes =
+                recibidosNumero +
+                perdidosNumero;
+
+
+            respuesta +=
+                `Se recibieron ${recibidosNumero} de ${totalPaquetes} paquetes. `;
+
+
+            if (
+                perdidosNumero > 0
+            ) {
+
+                respuesta +=
+                    `Se perdieron ${perdidosNumero} paquetes. `;
+            }
+        }
+
+
+        // ====================================================
+        // MODO DE CONEXIÓN
+        // ====================================================
+
+        if (
+            modo
+        ) {
+
+            respuesta +=
+                `El monitoreo se realizó mediante ${modo}. `;
+        }
+
+
+        // ====================================================
+        // MENSAJE
+        // ====================================================
+
+        if (
+            mensaje &&
+            mensaje !== "-"
+        ) {
+
+            respuesta +=
+                `Información adicional: ${mensaje}.`;
+        }
+
+
+        console.log(
+            "DANTE DATA COMPLETA WIRELESS:",
+            data
+        );
+
+        const contextoHistorico =
+            construirAntecedentesHistoricosDante(
+                memoriasHistoricas
+            );
+
+
+        respuesta +=
+            contextoHistorico;
+
+        responderDante(
+            respuesta
+        );
+    }
+
+    // ========================================================
+    // DANTE - GUARDAR EVENTO DE AGENDA
+    // ========================================================
+
+    async function guardarEventoAgendaDante(
+        textoOriginal: string,
+        fechaRecordatorio: Date
+    ) {
+
+        try {
+
+            const token =
+                getToken();
+
+
+            if (!textoOriginal?.trim()) {
+
+                responderDante(
+                    "No tengo información suficiente para crear el evento."
+                );
+
+                return;
+            }
+
+
+            if (
+                !fechaRecordatorio ||
+                Number.isNaN(
+                    fechaRecordatorio.getTime()
+                )
+            ) {
+
+                responderDante(
+                    "No pude identificar correctamente la fecha del evento."
+                );
+
+                return;
+            }
+
+
+            if (
+                fechaRecordatorio.getTime() <=
+                Date.now()
+            ) {
+
+                responderDante(
+                    "La fecha y hora indicadas ya pasaron."
+                );
+
+                return;
+            }
+
+
+            // =================================================
+            // LIMPIAR EL TEXTO DEL COMANDO
+            // =================================================
+
+            let contenido =
+                textoOriginal
+                    .replace(
+                        /^(agenda|agendame|recu[eé]rdame|anota\s+para)\s*/i,
+                        ""
+                    )
+                    .trim();
+
+
+            if (!contenido) {
+
+                contenido =
+                    "Evento agendado";
+            }
+
+
+            const fechaTexto =
+                fechaRecordatorio.toLocaleDateString(
+                    "es-EC"
+                );
+
+
+            const horaTexto =
+                fechaRecordatorio.toLocaleTimeString(
+                    "es-EC",
+                    {
+                        hour:
+                            "2-digit",
+
+                        minute:
+                            "2-digit",
+
+                        hour12:
+                            true,
+                    }
+                );
+
+
+            // =================================================
+            // GUARDAR EN MEMORIA / AGENDA
+            // =================================================
+
+            const res =
+                await fetch(
+                    `${API_BASE}/dante/memorias`,
+                    {
+                        method:
+                            "POST",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json",
+
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+
+                        body:
+                            JSON.stringify({
+
+                                tipoMemoria:
+                                    "AGENDA",
+
+                                categoria:
+                                    "RECORDATORIO",
+
+                                clave:
+                                    contenido.slice(
+                                        0,
+                                        180
+                                    ),
+
+                                contenido,
+
+                                entidadTipo:
+                                    "AGENDA",
+
+                                importancia:
+                                    6,
+
+                                recordarEn:
+                                    fechaRecordatorio.toISOString(),
+
+                                datosJson: {
+
+                                    estado:
+                                        "PENDIENTE",
+
+                                    origen:
+                                        "DANTE_AGENDA",
+
+                                    fecha:
+                                        fechaRecordatorio
+                                            .toISOString()
+                                            .slice(
+                                                0,
+                                                10
+                                            ),
+
+                                    hora:
+                                        fechaRecordatorio
+                                            .toTimeString()
+                                            .slice(
+                                                0,
+                                                5
+                                            ),
+
+                                    fechaRecordatorio:
+                                        fechaRecordatorio.toISOString(),
+
+                                    textoOriginal,
+
+                                },
+
+                            }),
+                    }
+                );
+
+
+            const data =
+                await res.json();
+
+
+            if (
+                !res.ok ||
+                data.ok === false
+            ) {
+
+                throw new Error(
+                    data.mensaje ||
+                    data.message ||
+                    "No se pudo guardar el evento."
+                );
+            }
+
+
+            // =================================================
+            // GUARDAR TAMBIÉN EN HISTORIAL
+            // =================================================
+
+            try {
+
+                await fetch(
+                    `${API_BASE}/dante/historial`,
+                    {
+                        method:
+                            "POST",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json",
+
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+
+                        body:
+                            JSON.stringify({
+
+                                tipo:
+                                    "AGENDA",
+
+                                textoUsuario:
+                                    textoOriginal,
+
+                                respuestaDante:
+                                    `Evento agendado para ${fechaTexto} a las ${horaTexto}.`,
+
+                                accion:
+                                    "CREAR_EVENTO_AGENDA",
+
+                                resultado:
+                                    "OK",
+
+                                datosJson: {
+
+                                    contenido,
+
+                                    fechaRecordatorio:
+                                        fechaRecordatorio.toISOString(),
+
+                                },
+
+                            }),
+                    }
+                );
+
+            } catch (errorHistorial) {
+
+                console.error(
+                    "DANTE: No se pudo registrar el historial de agenda:",
+                    errorHistorial
+                );
+
+            }
+
+
+            // =================================================
+            // RESPUESTA DANTE
+            // =================================================
+
+            responderDante(
+                `De acuerdo. He agendado ${contenido} para el ${fechaTexto} a las ${horaTexto}. Te lo recordaré cuando llegue el momento.`
+            );
+
+
+            console.log(
+                "DANTE EVENTO AGENDADO:",
+                {
+                    contenido,
+                    fechaRecordatorio:
+                        fechaRecordatorio.toISOString(),
+                }
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                "DANTE: Error guardando evento de agenda:",
+                error
+            );
+
+
+            responderDante(
+                "No pude guardar el evento en mi agenda."
+            );
+        }
+    }
+
     // ========================================================
     // SINCRONIZAR REF ESTADO
     // ========================================================
@@ -527,15 +3609,219 @@ export default function BotNotificaciones({
 
     }, [microfonoActivo]);
 
+    useEffect(() => {
+
+        void revisarRecordatoriosDante();
+
+        const intervalo =
+            setInterval(
+                () => {
+                    void revisarRecordatoriosDante();
+                },
+                60 * 1000
+            );
+
+        return () => {
+            clearInterval(intervalo);
+        };
+
+    }, []);
+
+    // ========================================================
+    // DANTE - MONITOREO AUTOMÁTICO DE ALERTAS CRÍTICAS
+    // ========================================================
+
+    useEffect(() => {
+
+        // ====================================================
+        // DANTE ESCUCHA CLICS DE LA RED NEURONAL WIRELESS
+        // ====================================================
+
+        function escucharNodoWirelessDante(
+            event: Event
+        ) {
+
+            // Si el modo monitoreo de Dante
+            // no está activo, no hacemos nada.
+
+            if (
+                !monitoreoRedDanteRef.current
+            ) {
+
+                return;
+            }
+
+
+            const customEvent =
+                event as CustomEvent<any>;
+
+
+            const node =
+                customEvent.detail;
+
+
+            if (
+                !node
+            ) {
+
+                return;
+            }
+
+
+            console.log(
+                "DANTE NODO WIRELESS SELECCIONADO:",
+                node
+            );
+
+
+            leerNodoWirelessDante(
+                node
+            );
+        }
+
+
+        window.addEventListener(
+            "dante:wireless-nodo-seleccionado",
+            escucharNodoWirelessDante
+        );
+
+
+        return () => {
+
+            window.removeEventListener(
+                "dante:wireless-nodo-seleccionado",
+                escucharNodoWirelessDante
+            );
+        };
+
+    }, []);
 
     // ========================================================
     // HABLAR
     // ========================================================
 
-    // ========================================================
-    // HABLAR
-    // ========================================================
+    function obtenerVozMasculinaDante() {
 
+        if (
+            typeof window === "undefined" ||
+            !("speechSynthesis" in window)
+        ) {
+            return null;
+        }
+
+
+        const voces =
+            window.speechSynthesis.getVoices();
+
+
+        if (
+            voces.length === 0
+        ) {
+            return null;
+        }
+
+
+        // ====================================================
+        // VOCES MASCULINAS CONOCIDAS
+        // ====================================================
+
+        const nombresMasculinos = [
+            "pablo",
+            "jorge",
+            "diego",
+            "carlos",
+            "miguel",
+            "juan",
+            "raul",
+            "enrique",
+            "andres",
+            "alvaro",
+            "male"
+        ];
+
+
+        // ====================================================
+        // PRIMERO: VOZ ESPAÑOLA + NOMBRE MASCULINO
+        // ====================================================
+
+        const masculinaEspanol =
+            voces.find(
+                voz => {
+
+                    const nombre =
+                        voz.name.toLowerCase();
+
+                    const idioma =
+                        voz.lang.toLowerCase();
+
+
+                    const esEspanol =
+                        idioma.startsWith("es");
+
+
+                    const pareceMasculina =
+                        nombresMasculinos.some(
+                            nombreMasculino =>
+                                nombre.includes(
+                                    nombreMasculino
+                                )
+                        );
+
+
+                    return (
+                        esEspanol &&
+                        pareceMasculina
+                    );
+                }
+            );
+
+
+        if (
+            masculinaEspanol
+        ) {
+            return masculinaEspanol;
+        }
+
+
+        // ====================================================
+        // SEGUNDO: CUALQUIER VOZ EN ESPAÑOL ECUADOR
+        // ====================================================
+
+        const vozEcuador =
+            voces.find(
+                voz =>
+                    voz.lang
+                        .toLowerCase()
+                        .includes("es-ec")
+            );
+
+
+        if (
+            vozEcuador
+        ) {
+            return vozEcuador;
+        }
+
+
+        // ====================================================
+        // TERCERO: CUALQUIER VOZ ESPAÑOLA
+        // ====================================================
+
+        const vozEspanol =
+            voces.find(
+                voz =>
+                    voz.lang
+                        .toLowerCase()
+                        .startsWith("es")
+            );
+
+
+        return (
+            vozEspanol ||
+            voces[0] ||
+            null
+        );
+    }
     function hablar(
         texto: string
     ) {
@@ -556,13 +3842,17 @@ export default function BotNotificaciones({
 
         try {
 
-            // Bloquear ANTES de mandar la voz.
-            // No esperamos a onstart.
-            danteHablandoRef.current =
-                true;
-
+            // ====================================================
+            // CANCELAR VOZ ANTERIOR
+            // ====================================================
 
             window.speechSynthesis.cancel();
+
+
+            // Liberamos primero cualquier bloqueo anterior
+
+            danteHablandoRef.current =
+                false;
 
 
             const mensaje =
@@ -571,18 +3861,54 @@ export default function BotNotificaciones({
                 );
 
 
+            // ====================================================
+            // VOZ MASCULINA DANTE
+            // ====================================================
+
+            const vozDante =
+                obtenerVozMasculinaDante();
+
+
+            if (
+                vozDante
+            ) {
+
+                mensaje.voice =
+                    vozDante;
+
+
+                console.log(
+                    "🔊 VOZ DANTE:",
+                    vozDante.name,
+                    vozDante.lang
+                );
+            }
+
+
             mensaje.lang =
+                vozDante?.lang ||
                 "es-EC";
 
+
+            // Un poco más pausada y firme
+
             mensaje.rate =
-                0.92;
+                0.90;
+
+
+            // Más grave para darle carácter masculino
 
             mensaje.pitch =
-                0.72;
+                0.62;
+
 
             mensaje.volume =
                 1;
 
+
+            // ====================================================
+            // INICIA VOZ
+            // ====================================================
 
             mensaje.onstart =
                 () => {
@@ -596,6 +3922,10 @@ export default function BotNotificaciones({
                 };
 
 
+            // ====================================================
+            // TERMINA VOZ
+            // ====================================================
+
             mensaje.onend =
                 () => {
 
@@ -603,10 +3933,6 @@ export default function BotNotificaciones({
                         "🔊 DANTE TERMINÓ DE HABLAR"
                     );
 
-
-                    // Dejamos un pequeño margen para que
-                    // SpeechRecognition no capture el final
-                    // de la propia voz de Dante.
 
                     setTimeout(
                         () => {
@@ -616,17 +3942,26 @@ export default function BotNotificaciones({
 
 
                             console.log(
-                                "🎤 DANTE VUELVE A ESCUCHAR"
+                                "🎤 DANTE LIBERADO PARA ESCUCHAR"
                             );
 
                         },
-                        700
+                        500
                     );
                 };
 
 
+            // ====================================================
+            // ERROR DE VOZ
+            // ====================================================
+
             mensaje.onerror =
                 () => {
+
+                    console.log(
+                        "🔊 Error/cancelación de voz Dante"
+                    );
+
 
                     danteHablandoRef.current =
                         false;
@@ -635,6 +3970,38 @@ export default function BotNotificaciones({
 
             window.speechSynthesis.speak(
                 mensaje
+            );
+
+
+            // ====================================================
+            // SEGURO ANTI-BLOQUEO
+            // ====================================================
+
+            const tiempoSeguro =
+                Math.max(
+                    4000,
+                    texto.length * 90
+                );
+
+
+            setTimeout(
+                () => {
+
+                    if (
+                        danteHablandoRef.current
+                    ) {
+
+                        console.warn(
+                            "⚠️ DANTE: desbloqueo automático de voz"
+                        );
+
+
+                        danteHablandoRef.current =
+                            false;
+                    }
+
+                },
+                tiempoSeguro
             );
 
 
@@ -650,7 +4017,6 @@ export default function BotNotificaciones({
             );
         }
     }
-
 
     // ========================================================
     // RESPONDER DANTE
@@ -681,7 +4047,7 @@ export default function BotNotificaciones({
     // PROCESAR COMANDO
     // ========================================================
 
-    function procesarComandoDante(
+    async function procesarComandoDante(
         comando: string
     ) {
 
@@ -707,6 +4073,178 @@ export default function BotNotificaciones({
                 limpio
             );
 
+        // ========================================================
+        // DANTE - GUARDAR INFORMACIÓN EN MEMORIA
+        // ========================================================
+
+        if (
+            texto.startsWith(
+                "recuerda que "
+            ) ||
+            texto.startsWith(
+                "recuerda "
+            ) ||
+            texto.startsWith(
+                "guarda que "
+            ) ||
+            texto.startsWith(
+                "guarda esta informacion "
+            ) ||
+            texto.startsWith(
+                "guarda la informacion "
+            ) ||
+            texto.startsWith(
+                "anota que "
+            )
+        ) {
+
+            let contenidoMemoria =
+                limpio;
+
+
+            const prefijosMemoria = [
+                "recuerda que ",
+                "recuerda ",
+                "guarda que ",
+                "guarda esta informacion ",
+                "guarda la informacion ",
+                "anota que ",
+            ];
+
+
+            const textoNormalizado =
+                normalizarTextoDante(
+                    limpio
+                );
+
+
+            for (
+                const prefijo
+                of prefijosMemoria
+            ) {
+
+                if (
+                    textoNormalizado.startsWith(
+                        prefijo
+                    )
+                ) {
+
+                    /*
+                     * Cortamos por cantidad de caracteres
+                     * del prefijo.
+                     *
+                     * limpio conserva mejor el texto original.
+                     */
+
+                    contenidoMemoria =
+                        limpio
+                            .slice(
+                                prefijo.length
+                            )
+                            .trim();
+
+                    break;
+                }
+            }
+
+
+            if (
+                !contenidoMemoria
+            ) {
+
+                responderDante(
+                    "Indícame qué deseas que recuerde."
+                );
+
+                return;
+            }
+
+
+            await guardarMemoriaDante(
+                contenidoMemoria
+            );
+
+
+            return;
+        }
+
+        // ========================================================
+        // DANTE - CONSULTAR INFORMACIÓN DE SU MEMORIA
+        // ========================================================
+
+        if (
+            texto.startsWith(
+                "que recuerdas de "
+            ) ||
+            texto.startsWith(
+                "que sabes de "
+            ) ||
+            texto.startsWith(
+                "busca en tu memoria "
+            ) ||
+            texto.startsWith(
+                "consulta tu memoria sobre "
+            ) ||
+            texto.startsWith(
+                "recuerdas algo de "
+            )
+        ) {
+
+            let terminoBusqueda =
+                texto;
+
+
+            const prefijosConsulta = [
+                "que recuerdas de ",
+                "que sabes de ",
+                "busca en tu memoria ",
+                "consulta tu memoria sobre ",
+                "recuerdas algo de ",
+            ];
+
+
+            for (
+                const prefijo
+                of prefijosConsulta
+            ) {
+
+                if (
+                    terminoBusqueda.startsWith(
+                        prefijo
+                    )
+                ) {
+
+                    terminoBusqueda =
+                        terminoBusqueda
+                            .slice(
+                                prefijo.length
+                            )
+                            .trim();
+
+                    break;
+                }
+            }
+
+
+            if (
+                !terminoBusqueda
+            ) {
+
+                responderDante(
+                    "Indícame sobre qué deseas que consulte mi memoria."
+                );
+
+                return;
+            }
+
+
+            await consultarMemoriaDante(
+                terminoBusqueda
+            );
+
+
+            return;
+        }
 
         // ========================================================
         // TOTAL GENERAL DE NOTIFICACIONES
@@ -2853,6 +6391,500 @@ export default function BotNotificaciones({
         }
 
         // ========================================================
+        // DANTE - BUSCAR CLIENTE REAL
+        // ========================================================
+
+        if (
+            texto.startsWith("busca al cliente ") ||
+            texto.startsWith("buscar al cliente ") ||
+            texto.startsWith("busca cliente ") ||
+            texto.startsWith("buscar cliente ") ||
+
+            texto.startsWith("busca a ") ||
+            texto.startsWith("buscar a ") ||
+            texto.startsWith("buscame a ") ||
+
+            texto.startsWith("encuentra al cliente ") ||
+            texto.startsWith("encuentra cliente ") ||
+            texto.startsWith("encuentra a ") ||
+
+            texto.startsWith("localiza al cliente ") ||
+            texto.startsWith("localiza cliente ") ||
+
+            texto.startsWith("consulta al cliente ") ||
+            texto.startsWith("consulta cliente ")
+        ) {
+
+            let terminoBusqueda =
+                texto;
+
+
+            const prefijos = [
+                "busca al cliente ",
+                "buscar al cliente ",
+                "busca cliente ",
+                "buscar cliente ",
+
+                "busca a ",
+                "buscar a ",
+
+                "encuentra al cliente ",
+                "encuentra cliente ",
+                "encuentra a ",
+
+                "localiza al cliente ",
+                "localiza cliente ",
+
+                "consulta al cliente ",
+                "consulta cliente ",
+            ];
+
+
+            for (
+                const prefijo of prefijos
+            ) {
+
+                if (
+                    terminoBusqueda.startsWith(
+                        prefijo
+                    )
+                ) {
+
+                    terminoBusqueda =
+                        terminoBusqueda
+                            .slice(
+                                prefijo.length
+                            )
+                            .trim();
+
+                    break;
+                }
+            }
+
+
+            if (
+                !terminoBusqueda
+            ) {
+
+                responderDante(
+                    "Indícame el nombre, cédula, teléfono o IP del cliente."
+                );
+
+                return;
+            }
+
+            void buscarClienteDante(
+                terminoBusqueda
+            );
+
+
+            return;
+        }
+
+
+
+        // ========================================================
+        // DANTE - INFORMACIÓN DEL CLIENTE ACTUAL
+        // ========================================================
+
+        // ========================================================
+        // DANTE - INFORMACIÓN DEL CLIENTE ACTUAL
+        // ========================================================
+
+        if (
+
+            texto === "informacion del cliente" ||
+            texto === "informacion de ese cliente" ||
+            texto === "informacion de este cliente" ||
+
+            texto === "dame la informacion del cliente" ||
+            texto === "dame informacion del cliente" ||
+            texto === "dame la informacion de ese cliente" ||
+            texto === "dame informacion de ese cliente" ||
+
+            texto === "datos del cliente" ||
+            texto === "datos de ese cliente" ||
+            texto === "datos de este cliente" ||
+
+            texto === "dame los datos del cliente" ||
+            texto === "dame los datos de ese cliente" ||
+
+            texto === "consulta el cliente" ||
+            texto === "consulta ese cliente" ||
+
+            texto === "revisa el cliente" ||
+            texto === "revisa ese cliente" ||
+
+            texto === "como esta el cliente" ||
+            texto === "como esta ese cliente" ||
+            texto === "como esta el" ||
+
+            texto === "estado del cliente" ||
+            texto === "estado de ese cliente" ||
+
+            texto === "dame su informacion" ||
+            texto === "dame sus datos" ||
+
+            texto === "informacion de el" ||
+            texto === "informacion de ella" ||
+
+            texto === "que sabes de el" ||
+            texto === "que sabes de ella" ||
+
+            texto.includes("dime la informacion de ese cliente") ||
+            texto.includes("dime los datos de ese cliente") ||
+            texto.includes("quiero ver la informacion de ese cliente") ||
+            texto.includes("quiero saber como esta ese cliente")
+
+        ) {
+
+            const cliente =
+                obtenerClienteActualDante();
+
+
+            if (!cliente) {
+
+                responderDante(
+                    "No tengo un cliente seleccionado. Indícame primero qué cliente deseas consultar."
+                );
+
+                return;
+            }
+
+
+            actualizarContextoDante({
+
+                tema:
+                    "CLIENTE",
+
+                entidadId:
+                    cliente.clienteId,
+
+                entidadNombre:
+                    `${cliente.nombres || ""} ${cliente.apellidos || ""}`
+                        .trim(),
+
+                ultimaIntencion:
+                    "CONSULTAR_PERFIL_CLIENTE",
+
+            });
+
+
+            void consultarPerfilClienteDante();
+
+            return;
+        }
+
+        // ========================================================
+        // DANTE - PING / ESTADO DE CONEXIÓN DEL CLIENTE ACTUAL
+        // ========================================================
+
+        // ========================================================
+        // DANTE - PING / ESTADO DE CONEXIÓN DEL CLIENTE ACTUAL
+        // ========================================================
+
+        if (
+
+            texto === "hazle ping" ||
+            texto === "haz ping" ||
+            texto === "hacer ping" ||
+
+            texto === "hazle ping al cliente" ||
+            texto === "haz ping al cliente" ||
+
+            texto === "hazle ping a el" ||
+            texto === "hazle ping a ella" ||
+
+            texto === "revisa la conexion" ||
+            texto === "revisa su conexion" ||
+            texto === "revisar conexion" ||
+
+            texto === "consulta la conexion" ||
+            texto === "consulta su conexion" ||
+
+            texto === "como esta la conexion" ||
+            texto === "como esta conectado" ||
+
+            texto === "esta conectado" ||
+            texto === "esta conectado el cliente" ||
+            texto === "esta conectado el" ||
+
+            texto === "esta online" ||
+            texto === "esta offline" ||
+
+            texto === "tiene internet" ||
+            texto === "ese cliente tiene internet" ||
+            texto === "el tiene internet" ||
+            texto === "ella tiene internet" ||
+
+            texto === "revisa el internet del cliente" ||
+            texto === "revisa su internet" ||
+
+            texto === "como esta su internet" ||
+            texto === "como esta su conexion" ||
+
+            texto.includes("hazle un ping") ||
+            texto.includes("hazle un pin") ||
+            texto.includes("haz un pin") ||
+            texto.includes("haz un ping al cliente") ||
+            texto.includes("quiero saber si esta conectado") ||
+            texto.includes("quiero saber si el cliente esta conectado") ||
+            texto.includes("quiero revisar la conexion del cliente")
+
+        ) {
+
+            const cliente =
+                obtenerClienteActualDante();
+
+
+            if (!cliente) {
+
+                responderDante(
+                    "No tengo un cliente seleccionado. Indícame primero qué cliente deseas consultar."
+                );
+
+                return;
+            }
+
+
+            actualizarContextoDante({
+
+                tema:
+                    "CLIENTE",
+
+                entidadId:
+                    cliente.clienteId,
+
+                entidadNombre:
+                    `${cliente.nombres || ""} ${cliente.apellidos || ""}`
+                        .trim(),
+
+                ultimaIntencion:
+                    "PING_CLIENTE",
+
+            });
+
+
+            void hacerPingClienteDante();
+
+            return;
+        }
+
+        // ========================================================
+        // DANTE - COMPROMISO DE PAGO DE CLIENTE
+        // ========================================================
+
+        if (
+            texto.includes("paga en") ||
+            texto.includes("pagara en") ||
+            texto.includes("va a pagar en") ||
+            texto.includes("se compromete a pagar en")
+        ) {
+
+            const cliente =
+                servicioClienteDanteRef.current;
+
+
+            if (!cliente) {
+
+                responderDante(
+                    "Primero necesito saber de qué cliente estamos hablando."
+                );
+
+                return;
+            }
+
+
+            const coincidenciaDias =
+                texto.match(
+                    /(\d+)\s+dias?/
+                );
+
+
+            if (!coincidenciaDias) {
+
+                responderDante(
+                    "Entendí que existe un compromiso de pago, pero necesito saber en cuántos días."
+                );
+
+                return;
+            }
+
+
+            const dias =
+                Number(
+                    coincidenciaDias[1]
+                );
+
+
+            await guardarCompromisoPagoDante(
+                cliente,
+                dias
+            );
+
+            return;
+        }
+
+        // ====================================================
+        // INICIAR MONITOREO DE RED WIRELESS
+        // ====================================================
+
+        const iniciarMonitoreoRed =
+            comando.includes("iniciar monitoreo") ||
+            comando.includes("inicia monitoreo") ||
+            comando.includes("iniciar monitoreo de red") ||
+            comando.includes("inicia monitoreo de red") ||
+            comando.includes("realizar monitoreo") ||
+            comando.includes("realiza monitoreo") ||
+            comando.includes("monitorear nuestra red") ||
+            comando.includes("monitorea nuestra red") ||
+            comando.includes("revisar nuestra red") ||
+            comando.includes("revisa nuestra red") ||
+            comando.includes("escanear nuestra red") ||
+            comando.includes("escanea nuestra red") ||
+            comando.includes("analizar nuestra red") ||
+            comando.includes("analiza nuestra red") ||
+            comando.includes("monitorear red wireless") ||
+            comando.includes("revisar red wireless");
+
+
+        if (
+            iniciarMonitoreoRed
+        ) {
+
+            if (
+                monitoreoRedDanteRef.current
+            ) {
+
+                responderDante(
+                    "El monitoreo de red ya se encuentra activo."
+                );
+
+                return;
+            }
+
+
+            monitoreoRedDanteRef.current =
+                true;
+
+
+            responderDante(
+                "De acuerdo. Modo de monitoreo de red activado. Selecciona un equipo de la red neuronal y te indicaré su estado."
+            );
+
+
+            console.log(
+                "DANTE: MODO MONITOREO DE RED ACTIVADO"
+            );
+
+
+            return;
+        }
+
+        // ====================================================
+        // CERRAR MONITOREO DE RED WIRELESS
+        // ====================================================
+
+        const cerrarMonitoreoRed =
+            comando.includes("cerrar monitoreo") ||
+            comando.includes("cierra monitoreo") ||
+            comando.includes("cerrar monitoreo de red") ||
+            comando.includes("cierra el monitoreo") ||
+            comando.includes("finalizar monitoreo") ||
+            comando.includes("finaliza monitoreo") ||
+            comando.includes("terminar monitoreo") ||
+            comando.includes("termina el monitoreo") ||
+            comando.includes("detener monitoreo") ||
+            comando.includes("deten el monitoreo") ||
+            comando.includes("salir del monitoreo") ||
+            comando.includes("sal del monitoreo de red");
+
+
+        if (
+            cerrarMonitoreoRed
+        ) {
+
+            if (
+                !monitoreoRedDanteRef.current
+            ) {
+
+                responderDante(
+                    "El monitoreo de red no se encuentra activo."
+                );
+
+                return;
+            }
+
+
+            monitoreoRedDanteRef.current =
+                false;
+
+
+            console.log(
+                "DANTE: MODO MONITOREO DE RED CERRADO"
+            );
+
+
+            responderDante(
+                "De acuerdo. Monitoreo de red finalizado. Regresando al modo normal."
+            );
+
+
+            return;
+        }
+
+
+        // ========================================================
+        // DANTE - CREAR EVENTO DE AGENDA
+        // ========================================================
+
+        if (
+            texto.startsWith("agenda ") ||
+            texto.startsWith("agendame ") ||
+            texto.startsWith("recuerdame ") ||
+            texto.startsWith("anota para ")
+        ) {
+
+            const fechaRecordatorio =
+                interpretarFechaAgendaDante(
+                    limpio
+                );
+
+
+            if (
+                !fechaRecordatorio
+            ) {
+
+                responderDante(
+                    "Entendí que deseas crear un recordatorio, pero no pude identificar la fecha."
+                );
+
+                return;
+            }
+
+
+            if (
+                fechaRecordatorio.getTime() <=
+                Date.now()
+            ) {
+
+                responderDante(
+                    "La fecha y hora indicadas ya pasaron."
+                );
+
+                return;
+            }
+
+
+            await guardarEventoAgendaDante(
+                limpio,
+                fechaRecordatorio
+            );
+
+            return;
+        }
+
+        // ========================================================
         // INFORMACIÓN / COMANDO NO DISPONIBLE
         // ========================================================
 
@@ -2868,6 +6900,281 @@ export default function BotNotificaciones({
         return;
     }
 
+    // ========================================================
+    // DANTE - INTERPRETAR FECHA Y HORA DE AGENDA
+    // ========================================================
+
+    function interpretarFechaAgendaDante(
+        textoOriginal: string
+    ): Date | null {
+
+        const texto =
+            normalizarTextoDante(
+                textoOriginal
+            );
+
+
+        const ahora =
+            new Date();
+
+
+        let fecha =
+            new Date(
+                ahora.getFullYear(),
+                ahora.getMonth(),
+                ahora.getDate(),
+                9,
+                0,
+                0,
+                0
+            );
+
+
+        // ====================================================
+        // MAÑANA
+        // ====================================================
+
+        if (
+            texto.includes("manana")
+        ) {
+
+            fecha.setDate(
+                fecha.getDate() + 1
+            );
+        }
+
+
+        // ====================================================
+        // EN X DÍAS
+        // ====================================================
+
+        const coincidenciaDias =
+            texto.match(
+                /en\s+(\d+)\s+dias?/
+            );
+
+
+        if (
+            coincidenciaDias
+        ) {
+
+            fecha =
+                new Date(
+                    ahora.getFullYear(),
+                    ahora.getMonth(),
+                    ahora.getDate(),
+                    9,
+                    0,
+                    0,
+                    0
+                );
+
+
+            fecha.setDate(
+                fecha.getDate() +
+                Number(
+                    coincidenciaDias[1]
+                )
+            );
+        }
+
+
+        // ====================================================
+        // DÍA + MES
+        // Ejemplo:
+        // "dia 11 de septiembre"
+        // ====================================================
+
+        const meses: Record<string, number> = {
+
+            enero: 0,
+            febrero: 1,
+            marzo: 2,
+            abril: 3,
+            mayo: 4,
+            junio: 5,
+            julio: 6,
+            agosto: 7,
+            septiembre: 8,
+            octubre: 9,
+            noviembre: 10,
+            diciembre: 11,
+
+        };
+
+
+        const coincidenciaFecha =
+            texto.match(
+                /(?:dia\s+)?(\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)/
+            );
+
+
+        if (
+            coincidenciaFecha
+        ) {
+
+            const dia =
+                Number(
+                    coincidenciaFecha[1]
+                );
+
+
+            const mes =
+                meses[
+                coincidenciaFecha[2]
+                ];
+
+
+            let anio =
+                ahora.getFullYear();
+
+
+            fecha =
+                new Date(
+                    anio,
+                    mes,
+                    dia,
+                    9,
+                    0,
+                    0,
+                    0
+                );
+
+
+            // Si esa fecha ya pasó este año,
+            // asumimos el próximo año.
+
+            if (
+                fecha.getTime() <
+                ahora.getTime()
+            ) {
+
+                fecha =
+                    new Date(
+                        anio + 1,
+                        mes,
+                        dia,
+                        9,
+                        0,
+                        0,
+                        0
+                    );
+            }
+        }
+
+
+        // ====================================================
+        // HORA
+        //
+        // "a las 10 am"
+        // "a las 3 pm"
+        // "a las 10:30 am"
+        // "a las 15:30"
+        // ====================================================
+
+        const coincidenciaHora =
+            texto.match(
+                /a\s+las?\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/
+            );
+
+
+        if (
+            coincidenciaHora
+        ) {
+
+            let hora =
+                Number(
+                    coincidenciaHora[1]
+                );
+
+
+            const minutos =
+                coincidenciaHora[2]
+                    ? Number(
+                        coincidenciaHora[2]
+                    )
+                    : 0;
+
+
+            const periodo =
+                coincidenciaHora[3];
+
+
+            // ================================================
+            // CONVERTIR AM / PM
+            // ================================================
+
+            if (
+                periodo === "pm" &&
+                hora < 12
+            ) {
+
+                hora += 12;
+            }
+
+
+            if (
+                periodo === "am" &&
+                hora === 12
+            ) {
+
+                hora = 0;
+            }
+
+
+            // ================================================
+            // VALIDAR
+            // ================================================
+
+            if (
+                hora >= 0 &&
+                hora <= 23 &&
+                minutos >= 0 &&
+                minutos <= 59
+            ) {
+
+                fecha.setHours(
+                    hora,
+                    minutos,
+                    0,
+                    0
+                );
+            }
+        }
+
+
+        return fecha;
+    }
+    // ========================================================
+    // DANTE - VERIFICAR CONTEXTO CONVERSACIONAL RECIENTE
+    // ========================================================
+
+    function contextoDanteEstaActivo(
+        segundos = 45
+    ) {
+
+        const contexto =
+            contextoDanteRef.current;
+
+
+        if (
+            contexto.tema === "GENERAL"
+        ) {
+
+            return false;
+        }
+
+
+        const diferencia =
+            Date.now() -
+            contexto.actualizadoEn;
+
+
+        return (
+            diferencia <=
+            segundos * 1000
+        );
+    }
     // ========================================================
     // RESPUESTA AMIGABLE DE ACTIVACIÓN
     // ========================================================
@@ -2985,6 +7292,19 @@ export default function BotNotificaciones({
             return;
         }
 
+        // ====================================================
+        // DANTE - EVITAR AUTOESCUCHA
+        // ====================================================
+
+        if (danteHablandoRef.current) {
+
+            console.log(
+                "DANTE: reconocimiento ignorado mientras habla"
+            );
+
+            return;
+        }
+
         const normalizado =
             normalizarTextoDante(texto);
 
@@ -2995,17 +7315,120 @@ export default function BotNotificaciones({
 
 
         // ====================================================
-        // TODA INTERACCIÓN DEBE CONTENER "DANTE"
+        // DANTE - DETECTAR SI ES COMANDO NUEVO O CONTINUACIÓN
         // ====================================================
+
+        const contexto =
+            contextoDanteRef.current;
+
+        const ahora =
+            Date.now();
+
+        const tiempoDesdeUltimoContexto =
+            ahora -
+            (
+                contexto.actualizadoEn ||
+                0
+            );
+
+        // ====================================================
+        // DANTE - CONTINUACIÓN CONTROLADA
+        // ====================================================
+
+        // Frases seguras que pueden continuar una conversación
+        // SIN volver a decir "Dante".
+        const esContinuacionCliente =
+
+            contexto.tema === "CLIENTE" &&
+
+            (
+                normalizado === "hazle ping" ||
+                normalizado === "haz ping" ||
+                normalizado === "haz pin" ||
+                normalizado === "hazle un ping" ||
+                normalizado === "hazle un pin" ||
+
+                normalizado === "revisa su conexion" ||
+                normalizado === "revisa la conexion" ||
+                normalizado === "consulta su conexion" ||
+                normalizado === "como esta su conexion" ||
+                normalizado === "como esta su internet" ||
+                normalizado === "tiene internet" ||
+                normalizado === "esta conectado" ||
+
+                normalizado === "dame su informacion" ||
+                normalizado === "dame sus datos" ||
+                normalizado === "como esta el" ||
+                normalizado === "como esta ella" ||
+                normalizado === "como esta ese cliente" ||
+                normalizado === "informacion de el" ||
+                normalizado === "informacion de ella" ||
+                normalizado === "informacion de ese cliente" ||
+
+                normalizado === "que sabes de el" ||
+                normalizado === "que sabes de ella"
+            );
+
+
+        // ====================================================
+        // PUEDE HABLAR SIN DECIR DANTE SI:
+        // 1. DANTE ESTÁ ESPERANDO UNA RESPUESTA
+        // 2. ES UNA CONTINUACIÓN SEGURA DEL CLIENTE ACTUAL
+        // ====================================================
+
+        const puedeContinuarSinDante =
+
+            contexto.esperandoRespuesta === true ||
+            esContinuacionCliente;
+
 
         const posicion =
             normalizado.indexOf("dante");
 
+
+        // ====================================================
+        // NO DIJO "DANTE"
+        // ====================================================
+
         if (posicion === -1) {
+
+            if (!puedeContinuarSinDante) {
+
+                console.log(
+                    "DANTE: frase ignorada porque no es una continuación válida:",
+                    normalizado
+                );
+
+                return;
+            }
+
+
+            // ====================================================
+            // PROTECCIÓN CONTRA AUTOESCUCHA
+            // ====================================================
+
+            if (danteHablandoRef.current) {
+
+                console.log(
+                    "DANTE: ignorando audio porque está hablando"
+                );
+
+                return;
+            }
+
+
+            console.log(
+                "DANTE: continuación contextual detectada:",
+                texto
+            );
+
+
+            void procesarComandoDante(
+                texto
+            );
+
             return;
         }
-
-
         const despuesDeDante =
             normalizado
                 .substring(
@@ -3061,8 +7484,6 @@ export default function BotNotificaciones({
         // ========================================================
 
         if (
-            normalizado === "presentate" ||
-            normalizado === "presentarte" ||
             normalizado.includes("quien eres") ||
             normalizado.includes("preséntate") ||
             normalizado.includes("dime quien eres")
@@ -3075,7 +7496,22 @@ export default function BotNotificaciones({
                 "buscar clientes por dirección IP, comprobar latencia y señal, " +
                 "consultar interfaces de MikroTik y ejecutar acciones técnicas autorizadas. " +
                 "Mi objetivo es facilitar tu trabajo diario y ayudarte a detectar y resolver problemas de red de una forma más rápida. " +
+                "Estoy en pleno desarrollo, mi crador me alimentara paso a paso para no cometer errores y ayudarte." +
+                "Y Tengo Protocolos de Seguridad muy Altos" +
                 "Dime qué necesitas y comenzamos."
+            );
+
+            return;
+        }
+        if (
+            normalizado === "presentate" ||
+            normalizado === "presentarte" ||
+            normalizado.includes("presentate") ||
+            normalizado.includes("puedes presentarte")
+        ) {
+
+            responderDante(
+                "Hola, soy Dante V1, el asistente inteligente de NETCOMP RF. Fui creado por el Ing. Jose Zambrano para ayudarte a interactuar de forma más rápida y sencilla con el sistema. Actualmente estoy en modo de desarrollo, aprendiendo nuevas funciones y ampliando mis capacidades. Puedo interpretar tus instrucciones y ayudarte con las herramientas que estén habilitadas para tu usuario. Soy Dante. Dime qué necesitas y comenzamos."
             );
 
             return;
@@ -3375,6 +7811,12 @@ export default function BotNotificaciones({
     async function iniciarMicrofono() {
 
         setErrorMicrofono("");
+        // ====================================================
+        // ASEGURAR QUE DANTE NO QUEDE BLOQUEADO
+        // ====================================================
+
+        danteHablandoRef.current =
+            false;
 
         if (typeof window === "undefined") {
             return;
@@ -3549,15 +7991,27 @@ export default function BotNotificaciones({
                     "🎤 DANTE ESTÁ ESCUCHANDO"
                 );
 
+
+                // Asegurar que ninguna voz anterior
+                // deje bloqueado el reconocimiento.
+
+                danteHablandoRef.current =
+                    false;
+
+
                 microfonoActivoRef.current =
                     true;
 
+
                 setMicrofonoActivo(true);
+
                 setEscuchando(true);
+
 
                 setEstadoDante(
                     "ESPERANDO_DANTE"
                 );
+
 
                 estadoDanteRef.current =
                     "ESPERANDO_DANTE";
