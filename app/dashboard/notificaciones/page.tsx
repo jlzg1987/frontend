@@ -297,6 +297,27 @@ type ContextoConversacionDante = {
     actualizadoEn: number;
 };
 
+type ResultadoFechaAgendaDante = {
+
+    fecha: Date | null;
+
+    encontroFecha: boolean;
+
+    encontroHora: boolean;
+};
+
+
+type AgendaPendienteDante = {
+
+    textoOriginal: string;
+
+    fecha: Date | null;
+
+    esperando:
+    | "FECHA"
+    | "HORA"
+    | null;
+};
 
 // ============================================================
 // COMPONENTE
@@ -543,6 +564,13 @@ export default function BotNotificaciones({
     const streamAudioRef =
         useRef<MediaStream | null>(null);
 
+    const agendaPendienteDanteRef =
+        useRef<AgendaPendienteDante | null>(
+            null
+        );
+    const pausaReconocimientoPorVozDanteRef =
+        useRef(false);
+
     // Dante no debe interpretar su propia voz
     const danteHablandoRef =
         useRef(false);
@@ -610,6 +638,54 @@ export default function BotNotificaciones({
         );
     }
 
+    // ========================================================
+    // DANTE - CAMBIAR TEMA DE CONVERSACIÓN
+    // ========================================================
+
+    function cambiarTemaDante(
+        tema: ContextoConversacionDante["tema"],
+        opciones?: {
+            conservarCliente?: boolean;
+            ultimaIntencion?: string | null;
+        }
+    ) {
+
+        const cliente =
+            servicioClienteDanteRef.current;
+
+
+        const conservarCliente =
+            opciones?.conservarCliente === true &&
+            !!cliente;
+
+
+        actualizarContextoDante({
+
+            tema,
+
+            entidadId:
+                conservarCliente
+                    ? cliente?.clienteId || null
+                    : null,
+
+            entidadNombre:
+                conservarCliente
+                    ? `${cliente?.nombres || ""} ${cliente?.apellidos || ""}`
+                        .trim()
+                    : null,
+
+            ultimaIntencion:
+                opciones?.ultimaIntencion ||
+                null,
+
+            esperandoRespuesta:
+                false,
+
+            datoPendiente:
+                null,
+
+        });
+    }
 
     // ========================================================
     // DANTE - LIMPIAR CONTEXTO CONVERSACIONAL
@@ -1338,18 +1414,11 @@ export default function BotNotificaciones({
 
     function obtenerClienteActualDante() {
 
-        const contexto =
-            contextoDanteRef.current;
-
         const cliente =
             servicioClienteDanteRef.current;
 
 
-        if (
-            contexto.tema !== "CLIENTE" ||
-            !cliente
-        ) {
-
+        if (!cliente) {
             return null;
         }
 
@@ -2036,6 +2105,80 @@ export default function BotNotificaciones({
             responderDante(
                 "Ocurrió un error al consultar la información del cliente."
             );
+        }
+    }
+
+    // ========================================================
+    // DANTE - OBTENER PERFIL ACTUAL O CARGARLO
+    // ========================================================
+
+    async function obtenerPerfilActualDante() {
+
+        // Si ya está cargado, lo reutilizamos
+        if (perfilClienteDanteRef.current) {
+
+            return perfilClienteDanteRef.current;
+        }
+
+
+        const servicio =
+            servicioClienteDanteRef.current;
+
+
+        if (!servicio?.servicioId) {
+
+            return null;
+        }
+
+
+        try {
+
+            const token =
+                getToken();
+
+
+            const res =
+                await fetch(
+                    `${API_BASE}/clientes/perfiles/administrativo/${servicio.servicioId}`,
+                    {
+                        headers: {
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+                    }
+                );
+
+
+            const data =
+                await res.json();
+
+
+            if (
+                !res.ok ||
+                data.ok === false ||
+                !data.datos
+            ) {
+
+                return null;
+            }
+
+
+            perfilClienteDanteRef.current =
+                data.datos;
+
+
+            return data.datos;
+
+
+        } catch (error) {
+
+            console.error(
+                "DANTE: Error obteniendo perfil actual:",
+                error
+            );
+
+
+            return null;
         }
     }
 
@@ -3590,6 +3733,115 @@ export default function BotNotificaciones({
         }
     }
 
+    function interpretarHoraRespuestaDante(
+        textoOriginal: string
+    ): {
+        hora: number;
+        minutos: number;
+    } | null {
+
+        const texto =
+            normalizarTextoDante(
+                textoOriginal
+            );
+
+
+        let coincidencia =
+            texto.match(
+                /(?:a\s+las?|a\s+la)?\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/
+            );
+
+
+        if (
+            !coincidencia
+        ) {
+
+            return null;
+        }
+
+
+        let hora =
+            Number(
+                coincidencia[1]
+            );
+
+
+        const minutos =
+            coincidencia[2]
+                ? Number(
+                    coincidencia[2]
+                )
+                : 0;
+
+
+        const periodo =
+            coincidencia[3];
+
+
+        // ====================================================
+        // FORMAS NATURALES
+        // ====================================================
+
+        const esTarde =
+            texto.includes(
+                "de la tarde"
+            );
+
+
+        const esNoche =
+            texto.includes(
+                "de la noche"
+            );
+
+
+        const esManana =
+            texto.includes(
+                "de la manana"
+            );
+
+
+        if (
+            (
+                periodo === "pm" ||
+                esTarde ||
+                esNoche
+            ) &&
+            hora < 12
+        ) {
+
+            hora += 12;
+        }
+
+
+        if (
+            (
+                periodo === "am" ||
+                esManana
+            ) &&
+            hora === 12
+        ) {
+
+            hora = 0;
+        }
+
+
+        if (
+            hora < 0 ||
+            hora > 23 ||
+            minutos < 0 ||
+            minutos > 59
+        ) {
+
+            return null;
+        }
+
+
+        return {
+            hora,
+            minutos,
+        };
+    }
+
     // ========================================================
     // SINCRONIZAR REF ESTADO
     // ========================================================
@@ -3843,16 +4095,37 @@ export default function BotNotificaciones({
         try {
 
             // ====================================================
+            // DANTE - BLOQUEAR AUTOESCUCHA ANTES DE HABLAR
+            // ====================================================
+
+            pausaReconocimientoPorVozDanteRef.current =
+                true;
+
+            danteHablandoRef.current =
+                true;
+
+
+            // ====================================================
+            // DETENER RECONOCIMIENTO MIENTRAS DANTE HABLA
+            // ====================================================
+
+            try {
+
+                reconocimientoRef.current?.abort();
+
+            } catch (error) {
+
+                console.log(
+                    "DANTE: reconocimiento ya estaba detenido"
+                );
+            }
+
+
+            // ====================================================
             // CANCELAR VOZ ANTERIOR
             // ====================================================
 
             window.speechSynthesis.cancel();
-
-
-            // Liberamos primero cualquier bloqueo anterior
-
-            danteHablandoRef.current =
-                false;
 
 
             const mensaje =
@@ -3862,7 +4135,7 @@ export default function BotNotificaciones({
 
 
             // ====================================================
-            // VOZ MASCULINA DANTE
+            // VOZ DANTE
             // ====================================================
 
             const vozDante =
@@ -3890,13 +4163,9 @@ export default function BotNotificaciones({
                 "es-EC";
 
 
-            // Un poco más pausada y firme
-
             mensaje.rate =
                 0.90;
 
-
-            // Más grave para darle carácter masculino
 
             mensaje.pitch =
                 0.62;
@@ -3907,23 +4176,28 @@ export default function BotNotificaciones({
 
 
             // ====================================================
-            // INICIA VOZ
+            // INICIO DE VOZ
             // ====================================================
 
             mensaje.onstart =
                 () => {
 
-                    console.log(
-                        "🔊 DANTE ESTÁ HABLANDO"
-                    );
-
                     danteHablandoRef.current =
                         true;
+
+
+                    pausaReconocimientoPorVozDanteRef.current =
+                        true;
+
+
+                    console.log(
+                        "🔊 DANTE ESTÁ HABLANDO - MICRÓFONO PAUSADO"
+                    );
                 };
 
 
             // ====================================================
-            // TERMINA VOZ
+            // TERMINÓ DE HABLAR
             // ====================================================
 
             mensaje.onend =
@@ -3934,6 +4208,8 @@ export default function BotNotificaciones({
                     );
 
 
+                    // Dejamos pequeño margen para que
+                    // no capture el final de su propia voz.
                     setTimeout(
                         () => {
 
@@ -3941,18 +4217,58 @@ export default function BotNotificaciones({
                                 false;
 
 
+                            pausaReconocimientoPorVozDanteRef.current =
+                                false;
+
+
                             console.log(
                                 "🎤 DANTE LIBERADO PARA ESCUCHAR"
                             );
 
+
+                            // ====================================================
+                            // REACTIVAR RECONOCIMIENTO
+                            // ====================================================
+
+                            if (
+                                microfonoActivoRef.current &&
+                                reconocimientoRef.current
+                            ) {
+
+                                try {
+
+                                    reconocimientoRef.current.start();
+
+
+                                    console.log(
+                                        "🎤 Reconocimiento reactivado después de hablar"
+                                    );
+
+                                } catch (error: any) {
+
+                                    // Si Chrome dice que ya inició,
+                                    // simplemente ignoramos.
+                                    if (
+                                        error?.name !==
+                                        "InvalidStateError"
+                                    ) {
+
+                                        console.error(
+                                            "Error reactivando reconocimiento:",
+                                            error
+                                        );
+                                    }
+                                }
+                            }
+
                         },
-                        500
+                        800
                     );
                 };
 
 
             // ====================================================
-            // ERROR DE VOZ
+            // ERROR / CANCELACIÓN DE VOZ
             // ====================================================
 
             mensaje.onerror =
@@ -3965,6 +4281,32 @@ export default function BotNotificaciones({
 
                     danteHablandoRef.current =
                         false;
+
+
+                    pausaReconocimientoPorVozDanteRef.current =
+                        false;
+
+
+                    setTimeout(
+                        () => {
+
+                            if (
+                                microfonoActivoRef.current &&
+                                reconocimientoRef.current
+                            ) {
+
+                                try {
+
+                                    reconocimientoRef.current.start();
+
+                                } catch {
+                                    // ignoramos si ya está iniciado
+                                }
+                            }
+
+                        },
+                        800
+                    );
                 };
 
 
@@ -3979,8 +4321,8 @@ export default function BotNotificaciones({
 
             const tiempoSeguro =
                 Math.max(
-                    4000,
-                    texto.length * 90
+                    5000,
+                    texto.length * 100
                 );
 
 
@@ -3988,7 +4330,8 @@ export default function BotNotificaciones({
                 () => {
 
                     if (
-                        danteHablandoRef.current
+                        danteHablandoRef.current &&
+                        !window.speechSynthesis.speaking
                     ) {
 
                         console.warn(
@@ -3997,6 +4340,10 @@ export default function BotNotificaciones({
 
 
                         danteHablandoRef.current =
+                            false;
+
+
+                        pausaReconocimientoPorVozDanteRef.current =
                             false;
                     }
 
@@ -4008,6 +4355,10 @@ export default function BotNotificaciones({
         } catch (error) {
 
             danteHablandoRef.current =
+                false;
+
+
+            pausaReconocimientoPorVozDanteRef.current =
                 false;
 
 
@@ -4072,6 +4423,241 @@ export default function BotNotificaciones({
             normalizarTextoDante(
                 limpio
             );
+
+
+        // ========================================================
+        // DANTE - RESPUESTA PENDIENTE DE AGENDA
+        // ========================================================
+
+        if (
+            contextoDanteRef.current.tema ===
+            "AGENDA" &&
+            contextoDanteRef.current.esperandoRespuesta ===
+            true &&
+            agendaPendienteDanteRef.current
+        ) {
+
+            const pendiente =
+                agendaPendienteDanteRef.current;
+
+
+            // ====================================================
+            // ESPERANDO FECHA
+            // ====================================================
+
+            if (
+                pendiente.esperando ===
+                "FECHA"
+            ) {
+
+                const resultado =
+                    interpretarFechaAgendaDante(
+                        limpio
+                    );
+
+
+                if (
+                    !resultado.encontroFecha ||
+                    !resultado.fecha
+                ) {
+
+                    responderDante(
+                        "No pude identificar el día. Puedes decirme, por ejemplo, mañana o el 15 de septiembre."
+                    );
+
+                    return;
+                }
+
+
+                pendiente.fecha =
+                    resultado.fecha;
+
+
+                // Si en la misma respuesta dijo también la hora
+                if (
+                    resultado.encontroHora
+                ) {
+
+                    if (
+                        resultado.fecha.getTime() <=
+                        Date.now()
+                    ) {
+
+                        responderDante(
+                            "La fecha y hora indicadas ya pasaron."
+                        );
+
+                        return;
+                    }
+
+
+                    actualizarContextoDante({
+
+                        esperandoRespuesta:
+                            false,
+
+                        datoPendiente:
+                            null,
+
+                    });
+
+
+                    await guardarEventoAgendaDante(
+
+                        pendiente.textoOriginal,
+
+                        resultado.fecha
+
+                    );
+
+
+                    agendaPendienteDanteRef.current =
+                        null;
+
+
+                    return;
+                }
+
+
+                // Ya tenemos fecha.
+                // Ahora falta hora.
+                pendiente.esperando =
+                    "HORA";
+
+
+                actualizarContextoDante({
+
+                    esperandoRespuesta:
+                        true,
+
+                    datoPendiente:
+                        "HORA",
+
+                });
+
+
+                responderDante(
+                    "Perfecto. ¿A qué hora deseas que te lo recuerde?"
+                );
+
+
+                return;
+            }
+
+
+            // ====================================================
+            // ESPERANDO HORA
+            // ====================================================
+
+            if (
+                pendiente.esperando ===
+                "HORA"
+            ) {
+
+                if (
+                    !pendiente.fecha
+                ) {
+
+                    responderDante(
+                        "Perdí la fecha del recordatorio. Indícame nuevamente el día."
+                    );
+
+
+                    pendiente.esperando =
+                        "FECHA";
+
+
+                    actualizarContextoDante({
+
+                        esperandoRespuesta:
+                            true,
+
+                        datoPendiente:
+                            "FECHA",
+
+                    });
+
+
+                    return;
+                }
+
+
+                const resultadoHora =
+                    interpretarHoraRespuestaDante(
+                        limpio
+                    );
+
+
+                if (
+                    !resultadoHora
+                ) {
+
+                    responderDante(
+                        "No pude identificar la hora. Puedes decirme, por ejemplo, a las 10 de la mañana o a las 3 de la tarde."
+                    );
+
+                    return;
+                }
+
+
+                const fechaFinal =
+                    new Date(
+                        pendiente.fecha
+                    );
+
+
+                fechaFinal.setHours(
+                    resultadoHora.hora,
+                    resultadoHora.minutos,
+                    0,
+                    0
+                );
+
+
+                if (
+                    fechaFinal.getTime() <=
+                    Date.now()
+                ) {
+
+                    responderDante(
+                        "Esa fecha y hora ya pasaron. Indícame otra hora."
+                    );
+
+                    return;
+                }
+
+
+                actualizarContextoDante({
+
+                    esperandoRespuesta:
+                        false,
+
+                    datoPendiente:
+                        null,
+
+                });
+
+
+                await guardarEventoAgendaDante(
+
+                    pendiente.textoOriginal,
+
+                    fechaFinal
+
+                );
+
+
+                agendaPendienteDanteRef.current =
+                    null;
+
+
+                return;
+            }
+        }
+
+
+
+
 
         // ========================================================
         // DANTE - GUARDAR INFORMACIÓN EN MEMORIA
@@ -4187,6 +4773,12 @@ export default function BotNotificaciones({
             ) ||
             texto.startsWith(
                 "recuerdas algo de "
+            ) ||
+            texto.startsWith(
+                "busca en tu memoria "
+            ) ||
+            texto.startsWith(
+                "consulta tu memoria "
             )
         ) {
 
@@ -6481,12 +7073,6 @@ export default function BotNotificaciones({
             return;
         }
 
-
-
-        // ========================================================
-        // DANTE - INFORMACIÓN DEL CLIENTE ACTUAL
-        // ========================================================
-
         // ========================================================
         // DANTE - INFORMACIÓN DEL CLIENTE ACTUAL
         // ========================================================
@@ -6574,10 +7160,6 @@ export default function BotNotificaciones({
 
             return;
         }
-
-        // ========================================================
-        // DANTE - PING / ESTADO DE CONEXIÓN DEL CLIENTE ACTUAL
-        // ========================================================
 
         // ========================================================
         // DANTE - PING / ESTADO DE CONEXIÓN DEL CLIENTE ACTUAL
@@ -6671,6 +7253,109 @@ export default function BotNotificaciones({
         }
 
         // ========================================================
+        // DANTE - MENSUALIDADES PENDIENTES DEL CLIENTE ACTUAL
+        // ========================================================
+
+        if (
+
+            texto === "cuanto debe" ||
+            texto === "cuanto debe el" ||
+            texto === "cuanto debe ella" ||
+            texto === "cuanto debe ese cliente" ||
+
+            texto === "que debe" ||
+            texto === "tiene deuda" ||
+            texto === "tiene deudas" ||
+
+            texto === "tiene mensualidades pendientes" ||
+            texto === "cuantas mensualidades debe" ||
+            texto === "cuantas mensualidades tiene pendientes" ||
+            texto === "cuantos pagos tiene pendientes" ||
+
+            texto === "tiene pagos pendientes" ||
+            texto === "pagos pendientes" ||
+            texto === "mensualidades pendientes"
+
+        ) {
+
+            const cliente =
+                obtenerClienteActualDante();
+
+
+            if (!cliente) {
+
+                responderDante(
+                    "No tengo un cliente seleccionado."
+                );
+
+                return;
+            }
+
+
+            const perfil =
+                await obtenerPerfilActualDante();
+
+
+            if (!perfil) {
+
+                responderDante(
+                    "No pude consultar la información de pagos de este cliente."
+                );
+
+                return;
+            }
+
+
+            const pendientes =
+                Number(
+                    perfil.facturacion?.totalPendientes ||
+                    0
+                );
+
+
+            const nombre =
+                `${cliente.nombres || ""} ${cliente.apellidos || ""}`
+                    .trim();
+
+
+            cambiarTemaDante(
+                "PAGOS",
+                {
+                    conservarCliente: true,
+                    ultimaIntencion:
+                        "CONSULTAR_DEUDA_CLIENTE",
+                }
+            );
+
+
+            if (pendientes === 0) {
+
+                responderDante(
+                    `${nombre} no tiene mensualidades pendientes.`
+                );
+
+                return;
+            }
+
+
+            if (pendientes === 1) {
+
+                responderDante(
+                    `${nombre} tiene una mensualidad pendiente.`
+                );
+
+                return;
+            }
+
+
+            responderDante(
+                `${nombre} tiene ${pendientes} mensualidades pendientes.`
+            );
+
+            return;
+        }
+
+        // ========================================================
         // DANTE - COMPROMISO DE PAGO DE CLIENTE
         // ========================================================
 
@@ -6716,10 +7401,320 @@ export default function BotNotificaciones({
                     coincidenciaDias[1]
                 );
 
+            cambiarTemaDante(
+                "PAGOS",
+                {
+                    conservarCliente: true,
+                    ultimaIntencion:
+                        "GUARDAR_COMPROMISO_PAGO",
+                }
+            );
 
             await guardarCompromisoPagoDante(
                 cliente,
                 dias
+            );
+
+            return;
+        }
+
+
+        // ========================================================
+        // DANTE - TICKETS DEL CLIENTE ACTUAL
+        // ========================================================
+
+        if (
+
+            texto === "cuantos tickets tiene" ||
+            texto === "cuantos tickets tiene el" ||
+            texto === "cuantos tickets tiene ella" ||
+            texto === "cuantos tickets tiene ese cliente" ||
+
+            texto === "tiene tickets" ||
+            texto === "tiene tickets abiertos" ||
+            texto === "tickets abiertos" ||
+
+            texto === "tiene problemas reportados" ||
+            texto === "tiene soporte pendiente"
+
+        ) {
+
+            const cliente =
+                obtenerClienteActualDante();
+
+
+            if (!cliente) {
+
+                responderDante(
+                    "No tengo un cliente seleccionado."
+                );
+
+                return;
+            }
+
+
+            const perfil =
+                await obtenerPerfilActualDante();
+
+
+            if (!perfil) {
+
+                responderDante(
+                    "No pude consultar los tickets de este cliente."
+                );
+
+                return;
+            }
+
+
+            const tickets =
+                Number(
+                    perfil.tickets?.resumen?.abiertos ||
+                    0
+                );
+
+
+            const nombre =
+                `${cliente.nombres || ""} ${cliente.apellidos || ""}`
+                    .trim();
+
+
+            actualizarContextoDante({
+
+                tema:
+                    "CLIENTE",
+
+                entidadId:
+                    cliente.clienteId,
+
+                entidadNombre:
+                    nombre,
+
+                ultimaIntencion:
+                    "CONSULTAR_TICKETS_CLIENTE",
+
+            });
+
+
+            if (tickets === 0) {
+
+                responderDante(
+                    `${nombre} no tiene tickets abiertos.`
+                );
+
+                return;
+            }
+
+
+            if (tickets === 1) {
+
+                responderDante(
+                    `${nombre} tiene un ticket abierto.`
+                );
+
+                return;
+            }
+
+
+            responderDante(
+                `${nombre} tiene ${tickets} tickets abiertos.`
+            );
+
+            return;
+        }
+
+
+        // ========================================================
+        // DANTE - PLAN DEL CLIENTE ACTUAL
+        // ========================================================
+
+        if (
+
+            texto === "cual es su plan" ||
+            texto === "que plan tiene" ||
+            texto === "que plan tiene el" ||
+            texto === "que plan tiene ella" ||
+            texto === "plan del cliente" ||
+            texto === "dime su plan"
+
+        ) {
+
+            const cliente =
+                obtenerClienteActualDante();
+
+
+            if (!cliente) {
+
+                responderDante(
+                    "No tengo un cliente seleccionado."
+                );
+
+                return;
+            }
+
+
+            const perfil =
+                await obtenerPerfilActualDante();
+
+
+            if (!perfil) {
+
+                responderDante(
+                    "No pude consultar el plan de este cliente."
+                );
+
+                return;
+            }
+
+
+            const plan =
+                perfil.plan?.nombrePlan ||
+                "sin plan asignado";
+
+
+            const bajada =
+                perfil.plan?.velocidadBajada;
+
+
+            const subida =
+                perfil.plan?.velocidadSubida;
+
+
+            let respuesta =
+                `${cliente.nombres} ${cliente.apellidos} tiene el plan ${plan}.`;
+
+
+            if (
+                bajada ||
+                subida
+            ) {
+
+                respuesta +=
+                    ` Velocidad ${bajada || "-"} de bajada y ${subida || "-"} de subida.`;
+            }
+
+
+            actualizarContextoDante({
+                tema: "CLIENTE",
+                ultimaIntencion: "CONSULTAR_PLAN_CLIENTE",
+            });
+
+
+            responderDante(
+                respuesta
+            );
+
+            return;
+        }
+
+        // ========================================================
+        // DANTE - IP DEL CLIENTE ACTUAL
+        // ========================================================
+
+        if (
+
+            texto === "cual es su ip" ||
+            texto === "dime su ip" ||
+            texto === "que ip tiene" ||
+            texto === "ip del cliente" ||
+            texto === "cual es la ip del cliente"
+
+        ) {
+
+            const cliente =
+                obtenerClienteActualDante();
+
+
+            if (!cliente) {
+
+                responderDante(
+                    "No tengo un cliente seleccionado."
+                );
+
+                return;
+            }
+
+
+            const perfil =
+                await obtenerPerfilActualDante();
+
+
+            const ip =
+                perfil?.servicio?.ipCliente ||
+                cliente.ipCliente ||
+                null;
+
+
+            if (!ip) {
+
+                responderDante(
+                    `${cliente.nombres} ${cliente.apellidos} no tiene una IP registrada.`
+                );
+
+                return;
+            }
+
+
+            actualizarContextoDante({
+                tema: "CLIENTE",
+                ultimaIntencion: "CONSULTAR_IP_CLIENTE",
+            });
+
+
+            responderDante(
+                `La IP de ${cliente.nombres} ${cliente.apellidos} es ${ip}.`
+            );
+
+            return;
+        }
+
+        // ========================================================
+        // DANTE - ESTADO DEL SERVICIO DEL CLIENTE ACTUAL
+        // ========================================================
+
+        if (
+
+            texto === "esta activo" ||
+            texto === "esta activo el servicio" ||
+            texto === "su servicio esta activo" ||
+            texto === "estado del servicio" ||
+            texto === "como esta su servicio" ||
+            texto === "que estado tiene el servicio"
+
+        ) {
+
+            const cliente =
+                obtenerClienteActualDante();
+
+
+            if (!cliente) {
+
+                responderDante(
+                    "No tengo un cliente seleccionado."
+                );
+
+                return;
+            }
+
+
+            const perfil =
+                await obtenerPerfilActualDante();
+
+
+            const estado =
+                perfil?.servicio?.estadoServicio ||
+                cliente.estadoServicio ||
+                "sin estado";
+
+
+            actualizarContextoDante({
+                tema: "CLIENTE",
+                ultimaIntencion: "CONSULTAR_ESTADO_SERVICIO",
+            });
+
+
+            responderDante(
+                `El servicio de ${cliente.nombres} ${cliente.apellidos} está ${estado}.`
             );
 
             return;
@@ -6763,9 +7758,18 @@ export default function BotNotificaciones({
                 return;
             }
 
-
             monitoreoRedDanteRef.current =
                 true;
+
+
+            cambiarTemaDante(
+                "WIRELESS",
+                {
+                    conservarCliente: false,
+                    ultimaIntencion:
+                        "INICIAR_MONITOREO_WIRELESS",
+                }
+            );
 
 
             responderDante(
@@ -6819,6 +7823,14 @@ export default function BotNotificaciones({
             monitoreoRedDanteRef.current =
                 false;
 
+            cambiarTemaDante(
+                "GENERAL",
+                {
+                    conservarCliente: false,
+                    ultimaIntencion:
+                        "CERRAR_MONITOREO_WIRELESS",
+                }
+            );
 
             console.log(
                 "DANTE: MODO MONITOREO DE RED CERRADO"
@@ -6832,31 +7844,148 @@ export default function BotNotificaciones({
 
             return;
         }
-
-
         // ========================================================
-        // DANTE - CREAR EVENTO DE AGENDA
+        // DANTE - CREAR EVENTO DE AGENDA / RECORDATORIO
         // ========================================================
 
-        if (
+        const esComandoAgenda =
+
             texto.startsWith("agenda ") ||
             texto.startsWith("agendame ") ||
-            texto.startsWith("recuerdame ") ||
-            texto.startsWith("anota para ")
-        ) {
+            texto.startsWith("agendar ") ||
 
-            const fechaRecordatorio =
+            texto.includes("quiero agendar") ||
+            texto.includes("quiero que agendes") ||
+            texto.includes("puedes agendar") ||
+            texto.includes("necesito agendar") ||
+
+            texto.startsWith("programa ") ||
+            texto.startsWith("programame ") ||
+            texto.includes("quiero programar") ||
+
+            texto.startsWith("recuerdame ") ||
+            texto.includes("quiero que me recuerdes") ||
+            texto.includes("necesito que me recuerdes") ||
+
+            texto.startsWith("recordatorio ") ||
+            texto.startsWith("crea un recordatorio") ||
+            texto.startsWith("pon un recordatorio") ||
+            texto.startsWith("ponme un recordatorio") ||
+
+            texto.startsWith("anota para ") ||
+            texto.startsWith("anota ");
+
+
+        if (esComandoAgenda) {
+
+            const resultado =
                 interpretarFechaAgendaDante(
                     limpio
                 );
 
 
+            // ====================================================
+            // NO INDICÓ FECHA
+            // ====================================================
+
             if (
-                !fechaRecordatorio
+                !resultado.encontroFecha
+            ) {
+
+                agendaPendienteDanteRef.current = {
+
+                    textoOriginal:
+                        limpio,
+
+                    fecha:
+                        null,
+
+                    esperando:
+                        "FECHA",
+
+                };
+
+
+                actualizarContextoDante({
+
+                    tema:
+                        "AGENDA",
+
+                    ultimaIntencion:
+                        "CREAR_EVENTO_AGENDA",
+
+                    esperandoRespuesta:
+                        true,
+
+                    datoPendiente:
+                        "FECHA",
+
+                });
+
+
+                responderDante(
+                    "¿Para qué día deseas que lo agende?"
+                );
+
+
+                return;
+            }
+
+
+            // ====================================================
+            // INDICÓ FECHA PERO NO HORA
+            // ====================================================
+
+            if (
+                !resultado.encontroHora
+            ) {
+
+                agendaPendienteDanteRef.current = {
+
+                    textoOriginal:
+                        limpio,
+
+                    fecha:
+                        resultado.fecha,
+
+                    esperando:
+                        "HORA",
+
+                };
+
+
+                actualizarContextoDante({
+
+                    tema:
+                        "AGENDA",
+
+                    ultimaIntencion:
+                        "CREAR_EVENTO_AGENDA",
+
+                    esperandoRespuesta:
+                        true,
+
+                    datoPendiente:
+                        "HORA",
+
+                });
+
+
+                responderDante(
+                    "¿A qué hora deseas que te lo recuerde?"
+                );
+
+
+                return;
+            }
+
+
+            if (
+                !resultado.fecha
             ) {
 
                 responderDante(
-                    "Entendí que deseas crear un recordatorio, pero no pude identificar la fecha."
+                    "No pude identificar correctamente la fecha."
                 );
 
                 return;
@@ -6864,7 +7993,7 @@ export default function BotNotificaciones({
 
 
             if (
-                fechaRecordatorio.getTime() <=
+                resultado.fecha.getTime() <=
                 Date.now()
             ) {
 
@@ -6876,10 +8005,27 @@ export default function BotNotificaciones({
             }
 
 
+            cambiarTemaDante(
+                "AGENDA",
+                {
+                    conservarCliente:
+                        false,
+
+                    ultimaIntencion:
+                        "CREAR_EVENTO_AGENDA",
+                }
+            );
+
+
             await guardarEventoAgendaDante(
                 limpio,
-                fechaRecordatorio
+                resultado.fecha
             );
+
+
+            agendaPendienteDanteRef.current =
+                null;
+
 
             return;
         }
@@ -6906,7 +8052,7 @@ export default function BotNotificaciones({
 
     function interpretarFechaAgendaDante(
         textoOriginal: string
-    ): Date | null {
+    ): ResultadoFechaAgendaDante {
 
         const texto =
             normalizarTextoDante(
@@ -6918,16 +8064,45 @@ export default function BotNotificaciones({
             new Date();
 
 
-        let fecha =
-            new Date(
-                ahora.getFullYear(),
-                ahora.getMonth(),
-                ahora.getDate(),
-                9,
-                0,
-                0,
-                0
-            );
+        let encontroFecha =
+            false;
+
+
+        let encontroHora =
+            false;
+
+
+        let anio =
+            ahora.getFullYear();
+
+
+        let mes =
+            ahora.getMonth();
+
+
+        let dia =
+            ahora.getDate();
+
+
+        let hora =
+            0;
+
+
+        let minutos =
+            0;
+
+
+        // ====================================================
+        // HOY
+        // ====================================================
+
+        if (
+            texto.includes("hoy")
+        ) {
+
+            encontroFecha =
+                true;
+        }
 
 
         // ====================================================
@@ -6938,9 +8113,27 @@ export default function BotNotificaciones({
             texto.includes("manana")
         ) {
 
-            fecha.setDate(
-                fecha.getDate() + 1
+            const manana =
+                new Date(ahora);
+
+
+            manana.setDate(
+                manana.getDate() + 1
             );
+
+
+            anio =
+                manana.getFullYear();
+
+            mes =
+                manana.getMonth();
+
+            dia =
+                manana.getDate();
+
+
+            encontroFecha =
+                true;
         }
 
 
@@ -6958,34 +8151,39 @@ export default function BotNotificaciones({
             coincidenciaDias
         ) {
 
-            fecha =
-                new Date(
-                    ahora.getFullYear(),
-                    ahora.getMonth(),
-                    ahora.getDate(),
-                    9,
-                    0,
-                    0,
-                    0
-                );
+            const futura =
+                new Date(ahora);
 
 
-            fecha.setDate(
-                fecha.getDate() +
+            futura.setDate(
+                futura.getDate() +
                 Number(
                     coincidenciaDias[1]
                 )
             );
+
+
+            anio =
+                futura.getFullYear();
+
+            mes =
+                futura.getMonth();
+
+            dia =
+                futura.getDate();
+
+
+            encontroFecha =
+                true;
         }
 
 
         // ====================================================
-        // DÍA + MES
-        // Ejemplo:
-        // "dia 11 de septiembre"
+        // MESES
         // ====================================================
 
-        const meses: Record<string, number> = {
+        const meses:
+            Record<string, number> = {
 
             enero: 0,
             febrero: 1,
@@ -7003,9 +8201,13 @@ export default function BotNotificaciones({
         };
 
 
+        // ====================================================
+        // DÍA + MES
+        // ====================================================
+
         const coincidenciaFecha =
             texto.match(
-                /(?:dia\s+)?(\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)/
+                /(?:dia\s+|el\s+)?(\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)/
             );
 
 
@@ -7013,68 +8215,53 @@ export default function BotNotificaciones({
             coincidenciaFecha
         ) {
 
-            const dia =
+            dia =
                 Number(
                     coincidenciaFecha[1]
                 );
 
 
-            const mes =
+            mes =
                 meses[
                 coincidenciaFecha[2]
                 ];
 
 
-            let anio =
-                ahora.getFullYear();
+            encontroFecha =
+                true;
 
 
-            fecha =
+            let fechaTemporal =
                 new Date(
                     anio,
                     mes,
-                    dia,
-                    9,
-                    0,
-                    0,
-                    0
+                    dia
                 );
 
 
-            // Si esa fecha ya pasó este año,
-            // asumimos el próximo año.
-
+            // Si ya pasó este año,
+            // usamos el próximo.
             if (
-                fecha.getTime() <
-                ahora.getTime()
+                fechaTemporal.getTime() <
+                new Date(
+                    ahora.getFullYear(),
+                    ahora.getMonth(),
+                    ahora.getDate()
+                ).getTime()
             ) {
 
-                fecha =
-                    new Date(
-                        anio + 1,
-                        mes,
-                        dia,
-                        9,
-                        0,
-                        0,
-                        0
-                    );
+                anio++;
             }
         }
 
 
         // ====================================================
         // HORA
-        //
-        // "a las 10 am"
-        // "a las 3 pm"
-        // "a las 10:30 am"
-        // "a las 15:30"
         // ====================================================
 
         const coincidenciaHora =
             texto.match(
-                /a\s+las?\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/
+                /(?:a\s+las?|a\s+la)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/
             );
 
 
@@ -7082,13 +8269,13 @@ export default function BotNotificaciones({
             coincidenciaHora
         ) {
 
-            let hora =
+            hora =
                 Number(
                     coincidenciaHora[1]
                 );
 
 
-            const minutos =
+            minutos =
                 coincidenciaHora[2]
                     ? Number(
                         coincidenciaHora[2]
@@ -7099,10 +8286,6 @@ export default function BotNotificaciones({
             const periodo =
                 coincidenciaHora[3];
 
-
-            // ================================================
-            // CONVERTIR AM / PM
-            // ================================================
 
             if (
                 periodo === "pm" &&
@@ -7122,28 +8305,59 @@ export default function BotNotificaciones({
             }
 
 
-            // ================================================
-            // VALIDAR
-            // ================================================
-
-            if (
-                hora >= 0 &&
-                hora <= 23 &&
-                minutos >= 0 &&
-                minutos <= 59
-            ) {
-
-                fecha.setHours(
-                    hora,
-                    minutos,
-                    0,
-                    0
-                );
-            }
+            encontroHora =
+                true;
         }
 
 
-        return fecha;
+        // ====================================================
+        // SIN FECHA
+        // ====================================================
+
+        if (
+            !encontroFecha
+        ) {
+
+            return {
+
+                fecha:
+                    null,
+
+                encontroFecha:
+                    false,
+
+                encontroHora,
+
+            };
+        }
+
+
+        // ====================================================
+        // FECHA EXISTE PERO NO HORA
+        // Conservamos día/mes pero aún NO es definitiva
+        // ====================================================
+
+        const fecha =
+            new Date(
+                anio,
+                mes,
+                dia,
+                hora,
+                minutos,
+                0,
+                0
+            );
+
+
+        return {
+
+            fecha,
+
+            encontroFecha,
+
+            encontroHora,
+
+        };
     }
     // ========================================================
     // DANTE - VERIFICAR CONTEXTO CONVERSACIONAL RECIENTE
@@ -7337,14 +8551,17 @@ export default function BotNotificaciones({
 
         // Frases seguras que pueden continuar una conversación
         // SIN volver a decir "Dante".
+        const hayClienteActual =
+            !!servicioClienteDanteRef.current;
+
+
         const esContinuacionCliente =
 
-            contexto.tema === "CLIENTE" &&
+            hayClienteActual &&
 
             (
                 normalizado === "hazle ping" ||
                 normalizado === "haz ping" ||
-                normalizado === "haz pin" ||
                 normalizado === "hazle un ping" ||
                 normalizado === "hazle un pin" ||
 
@@ -7361,14 +8578,29 @@ export default function BotNotificaciones({
                 normalizado === "como esta el" ||
                 normalizado === "como esta ella" ||
                 normalizado === "como esta ese cliente" ||
-                normalizado === "informacion de el" ||
-                normalizado === "informacion de ella" ||
-                normalizado === "informacion de ese cliente" ||
 
-                normalizado === "que sabes de el" ||
-                normalizado === "que sabes de ella"
+                normalizado === "cuanto debe" ||
+                normalizado === "tiene deuda" ||
+                normalizado === "tiene mensualidades pendientes" ||
+                normalizado === "cuantas mensualidades debe" ||
+                normalizado === "tiene pagos pendientes" ||
+
+                normalizado === "cuantos tickets tiene" ||
+                normalizado === "tiene tickets abiertos" ||
+
+                normalizado === "cual es su plan" ||
+                normalizado === "que plan tiene" ||
+                normalizado === "dime su plan" ||
+
+                normalizado === "cual es su ip" ||
+                normalizado === "dime su ip" ||
+                normalizado === "que ip tiene" ||
+
+                normalizado === "esta activo" ||
+                normalizado === "esta activo el servicio" ||
+                normalizado === "como esta su servicio" ||
+                normalizado === "estado del servicio"
             );
-
 
         // ====================================================
         // PUEDE HABLAR SIN DECIR DANTE SI:
@@ -8225,12 +9457,14 @@ export default function BotNotificaciones({
                 );
 
 
-                // Si nosotros todavía queremos
-                // mantener el micrófono abierto,
-                // arrancarlo otra vez.
+                // ====================================================
+                // SOLO REINICIAR SI DANTE NO ESTÁ HABLANDO
+                // ====================================================
 
                 if (
-                    microfonoActivoRef.current
+                    microfonoActivoRef.current &&
+                    !pausaReconocimientoPorVozDanteRef.current &&
+                    !danteHablandoRef.current
                 ) {
 
                     console.log(
@@ -8242,28 +9476,50 @@ export default function BotNotificaciones({
                         () => {
 
                             try {
-                                microfonoActivoRef.current =
-                                    true;
+
+                                // Volvemos a verificar después del delay
+                                if (
+                                    pausaReconocimientoPorVozDanteRef.current ||
+                                    danteHablandoRef.current
+                                ) {
+
+                                    console.log(
+                                        "🔇 Dante está hablando. No se reinicia reconocimiento."
+                                    );
+
+                                    return;
+                                }
+
 
                                 setEstadoDante(
                                     "ESPERANDO_DANTE"
                                 );
 
+
                                 estadoDanteRef.current =
                                     "ESPERANDO_DANTE";
+
 
                                 setRespuestaDante(
                                     'Micrófono activo. Esperando "Dante"...'
                                 );
 
+
                                 recognition.start();
 
-                            } catch (error) {
 
-                                console.error(
-                                    "Error reiniciando reconocimiento:",
-                                    error
-                                );
+                            } catch (error: any) {
+
+                                if (
+                                    error?.name !==
+                                    "InvalidStateError"
+                                ) {
+
+                                    console.error(
+                                        "Error reiniciando reconocimiento:",
+                                        error
+                                    );
+                                }
                             }
 
                         },
@@ -8271,7 +9527,6 @@ export default function BotNotificaciones({
                     );
                 }
             };
-
 
         reconocimientoRef.current =
             recognition;
