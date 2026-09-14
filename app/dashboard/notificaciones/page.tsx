@@ -82,6 +82,30 @@ interface SpeechRecognitionConstructor {
 }
 
 
+// ========================================================
+// DANTE FASE 1H - MOTOR CENTRAL DE INTENCIONES
+// ========================================================
+// Esta capa NO reemplaza los comandos anteriores.
+// Solo reconoce expresiones más naturales y, cuando identifica
+// una intención con seguridad, reutiliza las funciones que Dante
+// ya tenía implementadas.
+
+type IntencionCentralDante =
+    | "PING_CLIENTE"
+    | "BUSCAR_CLIENTE"
+    | "PERFIL_CLIENTE"
+    | "BUSCAR_INTERNET"
+    | "DIAGNOSTICO_RED"
+    | "MIKROTIK"
+    | "NINGUNA";
+
+type InterpretacionCentralDante = {
+    intencion: IntencionCentralDante;
+    entidad: string | null;
+    usaContextoActual: boolean;
+    confianza: number;
+};
+
 // ============================================================
 // EXTENDER WINDOW
 // ============================================================
@@ -237,7 +261,7 @@ function normalizarTextoDante(
     texto: string
 ) {
 
-    return texto
+    let normalizado = texto
         .toLowerCase()
         .normalize("NFD")
         .replace(
@@ -253,6 +277,32 @@ function normalizarTextoDante(
             " "
         )
         .trim();
+
+    // ========================================================
+    // NORMALIZACIÓN FONÉTICA / TRANSCRIPCIÓN DE MIKROTIK
+    // ========================================================
+    // SpeechRecognition puede escribir la marca de diferentes
+    // formas aunque la persona esté diciendo "MikroTik".
+    // Internamente Dante trabaja siempre con una sola palabra.
+    //
+    // Ejemplos aceptados:
+    // microtic, microtik, micro tic, micro tik, micro tics,
+    // mikro tic, mikro tik, mikrotic, mikroti, microti, etc.
+    normalizado = normalizado
+        .replace(
+            /\b(?:mikro|micro)\s*(?:tik|tic|tiks|tics|ti|tis)\b/g,
+            "mikrotik"
+        )
+        .replace(
+            /\bmikrotics?\b/g,
+            "mikrotik"
+        )
+        .replace(
+            /\bmikrotiks?\b/g,
+            "mikrotik"
+        );
+
+    return normalizado;
 }
 
 // ============================================================
@@ -271,6 +321,14 @@ type ServicioClienteDante = {
     pppSecret?: string;
     estadoServicio?: string;
     nombrePlan?: string;
+};
+
+
+type UsuarioActualDante = {
+    nombres?: string | null;
+    apellidos?: string | null;
+    rol?: string | null;
+    email?: string | null;
 };
 
 
@@ -349,6 +407,86 @@ type RouterMikrotikDante = {
 
     redes_internas?: string | null;
 };
+
+type CorteClienteDante = {
+    id: number;
+    routerId: number;
+    routerNombre: string;
+    parroquia?: string | null;
+    sector?: string | null;
+    ipCliente: string;
+    comentarioMikrotik?: string | null;
+    estado: "ACTIVO" | "CORTADO" | string;
+    disabled?: string | null;
+};
+
+type FlujoServicioMikrotikDante = {
+    accion: "CORTAR" | "ACTIVAR";
+    etapa: "BUSCAR" | "SELECCIONAR" | "CONFIRMAR";
+    candidatos: CorteClienteDante[];
+    seleccionado: CorteClienteDante | null;
+};
+
+type FlujoMorosoDante = {
+    etapa: "IP" | "NOMBRE" | "ROUTER";
+    ipCliente: string;
+    comentario: string;
+};
+
+type TipoProblemaInternetDante =
+    | "SIN_INTERNET"
+    | "LENTITUD"
+    | "INTERMITENCIA"
+    | "GENERAL";
+
+type FlujoDiagnosticoInternetDante = {
+    etapa:
+    | "BUSCAR_CLIENTE"
+    | "SELECCIONAR_CLIENTE"
+    | "CONFIRMAR_COMPROBACIONES"
+    | "CONFIRMAR_CPE"
+    | "COMANDOS_CPE"
+    | "CONFIRMAR_REINICIO_CPE"
+    | "ESPERAR_USUARIO_CPE"
+    | "ESPERAR_CLAVE_CPE";
+    candidatos: ServicioClienteDante[];
+    seleccionado: ServicioClienteDante | null;
+    router: RouterMikrotikDante | null;
+};
+
+type EquipoWirelessDante = {
+    routerId?: number | string | null;
+    equipoId?: string | null;
+    nombre?: string | null;
+    marca?: string | null;
+    modelo?: string | null;
+    tipoEquipo?: string | null;
+    ipGestion?: string | null;
+    mac?: string | null;
+    routerNombre?: string | null;
+    routerSector?: string | null;
+};
+
+type ContextoCpeDante = {
+    equipo: EquipoWirelessDante;
+    cliente: any;
+    metricas: any;
+    ipCliente: string;
+};
+
+type AccionPendienteCpeDante =
+    | "REINICIAR"
+    | "ESCANEAR"
+    | null;
+
+type TicketMantenimientoPendienteDante = {
+    servicio: ServicioClienteDante;
+    titulo: string;
+    descripcion: string;
+    categoria: "INTERNET" | "EQUIPO";
+    prioridad: "BAJA" | "MEDIA" | "ALTA" | "CRITICA";
+};
+
 
 // ============================================================
 // COMPONENTE
@@ -553,7 +691,7 @@ export default function BotNotificaciones({
         respuestaDante,
         setRespuestaDante,
     ] = useState(
-        "Micrófono apagado."
+        "Iniciando micrófono..."
     );
 
 
@@ -562,6 +700,16 @@ export default function BotNotificaciones({
         setErrorMicrofono,
     ] = useState("");
 
+    const [
+        mostrarEntradaTextoDante,
+        setMostrarEntradaTextoDante,
+    ] = useState(false);
+
+
+    const [
+        entradaTextoDante,
+        setEntradaTextoDante,
+    ] = useState("");
 
     const reconocimientoRef =
         useRef<SpeechRecognitionLike | null>(
@@ -600,6 +748,15 @@ export default function BotNotificaciones({
             null
         );
     const pausaReconocimientoPorVozDanteRef =
+        useRef(false);
+
+    // ========================================================
+    // DANTE - PAUSA REAL DEL MICRÓFONO DURANTE ANÁLISIS TÉCNICO
+    // ========================================================
+    const pausaMicrofonoAnalisisDanteRef =
+        useRef(false);
+
+    const reactivarMicrofonoTrasAnalisisDanteRef =
         useRef(false);
 
     // Dante no debe interpretar su propia voz
@@ -649,18 +806,219 @@ export default function BotNotificaciones({
         });
 
     // ========================================================
-    // DANTE - MONITOREO AUTOMÁTICO DE ALERTAS CRÍTICAS
+    // DANTE - USUARIO ACTUAL Y DIÁLOGO PERSONALIZADO
     // ========================================================
 
-    const alertasCriticasConocidasRef =
+    const usuarioActualDanteRef =
+        useRef<UsuarioActualDante | null>(null);
+
+    const usuarioDanteCargadoRef =
+        useRef(false);
+
+    const ultimoTextoUsuarioDanteRef =
+        useRef("");
+
+    const ultimaRespuestaDanteRef =
+        useRef("");
+
+    // ========================================================
+    // DANTE - MODO PRESENTACIÓN CONVERSACIONAL
+    // ========================================================
+    // Se activa con expresiones como "Dante, preséntate".
+    // Mientras está activo, Dante conversa sobre sus capacidades
+    // sin ejecutar acciones operativas reales por accidente.
+    const modoPresentacionDanteRef =
+        useRef(false);
+
+    function obtenerNombreUsuarioDante(): string {
+
+        let usuario =
+            usuarioActualDanteRef.current;
+
+        // Intentamos recuperar inmediatamente el usuario local
+        // para que el saludo no dependa de que termine una consulta HTTP.
+        if (!usuario && typeof window !== "undefined") {
+            try {
+                const guardado =
+                    localStorage.getItem("isp_usuario");
+
+                if (guardado) {
+                    usuario = JSON.parse(guardado);
+                    usuarioActualDanteRef.current = usuario;
+                }
+            } catch {
+                // Si el almacenamiento no es válido, continuamos sin nombre.
+            }
+        }
+
+        const nombres =
+            String(usuario?.nombres || "").trim();
+
+        if (!nombres) {
+            return "";
+        }
+
+        // Dante utiliza el primer nombre para que el diálogo sea natural.
+        return nombres.split(/\s+/)[0];
+    }
+
+    async function cargarUsuarioActualDante() {
+
+        if (usuarioDanteCargadoRef.current) {
+            return usuarioActualDanteRef.current;
+        }
+
+        usuarioDanteCargadoRef.current = true;
+
+        // Primero usamos la sesión local.
+        if (typeof window !== "undefined") {
+            try {
+                const guardado =
+                    localStorage.getItem("isp_usuario");
+
+                if (guardado) {
+                    const usuario =
+                        JSON.parse(guardado);
+
+                    if (usuario?.nombres) {
+                        usuarioActualDanteRef.current = {
+                            nombres: usuario.nombres,
+                            apellidos: usuario.apellidos,
+                            rol: usuario.rol,
+                            email: usuario.email,
+                        };
+                    }
+                }
+            } catch (error) {
+                console.warn(
+                    "DANTE: no se pudo leer isp_usuario:",
+                    error
+                );
+            }
+        }
+
+        // El perfil del backend queda como respaldo/fuente actualizada.
+        if (!usuarioActualDanteRef.current?.nombres) {
+            try {
+                const token = getToken();
+
+                if (token) {
+                    const res = await fetch(
+                        `${API_BASE}/perfil`,
+                        {
+                            headers: {
+                                Authorization: `Bearer ${token}`,
+                            },
+                            cache: "no-store",
+                        }
+                    );
+
+                    const data = await res.json();
+
+                    if (res.ok && data?.ok && data?.usuario) {
+                        usuarioActualDanteRef.current = {
+                            nombres: data.usuario.nombres,
+                            apellidos: data.usuario.apellidos,
+                            rol: data.usuario.rol,
+                            email: data.usuario.email,
+                        };
+                    }
+                }
+            } catch (error) {
+                console.warn(
+                    "DANTE: no se pudo cargar el perfil actual:",
+                    error
+                );
+            }
+        }
+
+        console.log(
+            "DANTE: usuario actual:",
+            usuarioActualDanteRef.current
+        );
+
+        return usuarioActualDanteRef.current;
+    }
+
+    function personalizarSaludoDante(texto: string): string {
+
+        const nombre = obtenerNombreUsuarioDante();
+
+        if (!nombre) {
+            return texto;
+        }
+
+        if (texto.startsWith("Hola, aquí estoy.")) {
+            return texto.replace(
+                "Hola, aquí estoy.",
+                `Hola, ${nombre}. Aquí estoy.`
+            );
+        }
+
+        if (texto.startsWith("Sí, aquí estoy.")) {
+            return texto.replace(
+                "Sí, aquí estoy.",
+                `Sí, ${nombre}, aquí estoy.`
+            );
+        }
+
+        if (texto.startsWith("Sí, te escucho.")) {
+            return texto.replace(
+                "Sí, te escucho.",
+                `Sí, ${nombre}, te escucho.`
+            );
+        }
+
+        if (texto.startsWith("Claro, dime qué necesitas.")) {
+            return texto.replace(
+                "Claro, dime qué necesitas.",
+                `Claro, ${nombre}. Dime qué necesitas.`
+            );
+        }
+
+        if (texto.startsWith("Listo, dime por dónde empezamos.")) {
+            return texto.replace(
+                "Listo, dime por dónde empezamos.",
+                `Listo, ${nombre}. Dime por dónde empezamos.`
+            );
+        }
+
+        return texto;
+    }
+
+    // ========================================================
+    // DANTE - MONITOREO AUTOMÁTICO DE NOTIFICACIONES
+    // ========================================================
+
+    const notificacionesConocidasDanteRef =
         useRef<Set<string>>(new Set());
 
-    const primeraRevisionAlertasRef =
+    const primeraRevisionNotificacionesDanteRef =
         useRef(true);
 
-    const DANTE_ALERTAS_STORAGE_KEY =
-        "dante_alertas_criticas_conocidas";
+    const DANTE_NOTIFICACIONES_STORAGE_KEY =
+        "dante_notificaciones_conocidas";
 
+
+    async function enviarTextoDante() {
+
+        const texto =
+            entradaTextoDante.trim();
+
+        if (!texto) {
+            return;
+        }
+
+
+        setEntradaTextoDante(
+            ""
+        );
+
+
+        await procesarComandoDante(
+            texto
+        );
+    }
 
     // ========================================================
     // DANTE - CANCELAR TODO Y VOLVER AL INICIO
@@ -734,6 +1092,39 @@ export default function BotNotificaciones({
 
         routerMikrotikDanteRef.current =
             null;
+
+        flujoServicioMikrotikDanteRef.current =
+            null;
+
+        flujoMorosoDanteRef.current =
+            null;
+
+        flujoDiagnosticoInternetDanteRef.current =
+            null;
+
+        tipoProblemaDiagnosticoDanteRef.current =
+            "GENERAL";
+
+        cpeDiagnosticoDanteRef.current =
+            null;
+
+        accionPendienteCpeDanteRef.current =
+            null;
+
+        diagnosticoHumanoCpeDanteRef.current =
+            "";
+
+        ticketMantenimientoPendienteDanteRef.current =
+            null;
+
+        pausaMicrofonoAnalisisDanteRef.current =
+            false;
+
+        reactivarMicrofonoTrasAnalisisDanteRef.current =
+            false;
+
+        modoPresentacionDanteRef.current =
+            false;
 
 
         // ====================================================
@@ -1097,6 +1488,389 @@ export default function BotNotificaciones({
     }
 
     // ========================================================
+    // DANTE - MODO PRESENTACIÓN CONVERSACIONAL
+    // ========================================================
+
+    function esInicioPresentacionDante(
+        textoOriginal: string
+    ): boolean {
+
+        const texto =
+            normalizarTextoDante(textoOriginal)
+                .replace(/\bdante\b/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
+
+        return (
+            texto === "presentate" ||
+            texto === "presenta te" ||
+            texto === "haz tu presentacion" ||
+            texto === "haz una presentacion" ||
+            texto === "quiero que te presentes" ||
+            texto === "puedes presentarte" ||
+            texto === "puede presentarse" ||
+            texto === "inicia tu presentacion" ||
+            texto === "comienza tu presentacion" ||
+            texto === "modo presentacion"
+        );
+    }
+
+    function esSalidaPresentacionDante(
+        textoOriginal: string
+    ): boolean {
+
+        const texto =
+            normalizarTextoDante(textoOriginal)
+                .replace(/\bdante\b/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
+
+        return (
+            texto === "termina la presentacion" ||
+            texto === "terminar presentacion" ||
+            texto === "fin de la presentacion" ||
+            texto === "finaliza la presentacion" ||
+            texto === "salir de presentacion" ||
+            texto === "sal de presentacion" ||
+            texto === "cerrar presentacion" ||
+            texto === "gracias eso es todo" ||
+            texto === "gracias dante eso es todo"
+        );
+    }
+
+    function iniciarPresentacionDante(): void {
+
+        modoPresentacionDanteRef.current =
+            true;
+
+        const nombre =
+            obtenerNombreUsuarioDante();
+
+        actualizarContextoDante({
+            tema: "GENERAL",
+            ultimaIntencion: "MODO_PRESENTACION",
+            esperandoRespuesta: true,
+            datoPendiente: "PREGUNTA_PRESENTACION",
+        });
+
+        const saludo =
+            nombre
+                ? `Hola, ${nombre}. `
+                : "Hola. ";
+
+        responderDante(
+            saludo +
+            "Soy Dante, el asistente inteligente de Netcomp RF. " +
+            "Estoy integrado directamente con la plataforma para ayudarte en tareas administrativas y técnicas de un proveedor de internet. " +
+            "Puedo conversar contigo, consultar clientes, revisar conexiones, trabajar con la infraestructura MikroTik, ayudarte con alertas, recordatorios y otras operaciones disponibles en el sistema. " +
+            "Pero prefiero demostrártelo conversando. ¿Qué te gustaría conocer: mis funciones técnicas, la gestión de clientes o cómo puedo ayudarte en el trabajo diario?"
+        );
+    }
+
+    function finalizarPresentacionDante(): void {
+
+        modoPresentacionDanteRef.current =
+            false;
+
+        actualizarContextoDante({
+            tema: "GENERAL",
+            ultimaIntencion: "FIN_PRESENTACION",
+            esperandoRespuesta: false,
+            datoPendiente: null,
+        });
+
+        responderDante(
+            "Gracias por conocerme. Soy Dante, el asistente inteligente de Netcomp RF. " +
+            "Mi objetivo es convertir tareas técnicas y administrativas en conversaciones simples. " +
+            "La presentación ha terminado y vuelvo al modo normal."
+        );
+    }
+
+    function procesarModoPresentacionDante(
+        textoOriginal: string
+    ): boolean {
+
+        const texto =
+            normalizarTextoDante(textoOriginal);
+
+        if (
+            esInicioPresentacionDante(textoOriginal)
+        ) {
+            iniciarPresentacionDante();
+            return true;
+        }
+
+        if (
+            !modoPresentacionDanteRef.current
+        ) {
+            return false;
+        }
+
+        if (
+            esSalidaPresentacionDante(textoOriginal)
+        ) {
+            finalizarPresentacionDante();
+            return true;
+        }
+
+        // --------------------------------------------------------
+        // PREGUNTAS SOBRE IDENTIDAD
+        // --------------------------------------------------------
+        if (
+            texto.includes("quien eres") ||
+            texto.includes("que eres") ||
+            texto.includes("hablame de ti")
+        ) {
+            responderDante(
+                "Soy Dante, el asistente inteligente integrado a Netcomp RF. " +
+                "No estoy separado del sistema: utilizo las herramientas y la información que Netcomp RF ya tiene disponibles para ayudarte mediante una conversación natural. " +
+                "Puedes hablarme o escribirme. ¿Quieres que te explique alguna función en particular?"
+            );
+            return true;
+        }
+
+        if (
+            texto.includes("quien te creo") ||
+            texto.includes("quien es tu creador") ||
+            texto.includes("quien te desarrollo")
+        ) {
+            responderDante(
+                "Fui creado por Jose como parte de Netcomp RF, con la idea de hacer más sencilla la operación de un proveedor de internet mediante conversaciones naturales. " +
+                "¿Quieres que te explique cómo interactúo con el sistema?"
+            );
+            return true;
+        }
+
+        // --------------------------------------------------------
+        // INTELIGENCIA / VOZ
+        // --------------------------------------------------------
+        if (
+            texto.includes("eres una inteligencia artificial") ||
+            texto.includes("eres una ia") ||
+            texto.includes("eres inteligente")
+        ) {
+            responderDante(
+                "Soy un asistente inteligente diseñado para interpretar lo que el usuario necesita y conectarlo con las funciones de Netcomp RF. " +
+                "Mi trabajo no es solamente responder preguntas: también puedo guiar procesos y utilizar herramientas del sistema cuando corresponde."
+            );
+            return true;
+        }
+
+        if (
+            texto.includes("trabajas con voz") ||
+            texto.includes("puedes escuchar") ||
+            texto.includes("puedo hablarte") ||
+            texto.includes("funcionas por voz") ||
+            texto.includes("usas microfono")
+        ) {
+            responderDante(
+                "Sí. Puedes hablarme mediante el micrófono o escribirme. " +
+                "La voz se transcribe a texto y después interpreto ese texto, de modo que las mismas funciones trabajan tanto por voz como por escritura. " +
+                "Eso permite que el operador use el sistema de una forma mucho más natural."
+            );
+            return true;
+        }
+
+        // --------------------------------------------------------
+        // CAPACIDADES GENERALES
+        // --------------------------------------------------------
+        if (
+            texto.includes("que puedes hacer") ||
+            texto.includes("que sabes hacer") ||
+            texto.includes("cuales son tus funciones") ||
+            texto.includes("que funciones tienes") ||
+            texto.includes("capacidades")
+        ) {
+            responderDante(
+                "Puedo ayudarte con varias áreas de Netcomp RF. " +
+                "Por ejemplo, puedo localizar clientes, consultar su servicio, revisar conectividad, trabajar con routers MikroTik, apoyar procesos de corte y reactivación, manejar alertas, recordar información y consultar datos del sistema. " +
+                "También puedo mantener el contexto de una conversación para no obligarte a repetir toda la información. " +
+                "¿Quieres que te muestre un ejemplo con clientes o con la red?"
+            );
+            return true;
+        }
+
+        // --------------------------------------------------------
+        // CLIENTES
+        // --------------------------------------------------------
+        if (
+            texto.includes("cliente") ||
+            texto.includes("clientes") ||
+            texto.includes("gestion de clientes") ||
+            texto.includes("buscar clientes")
+        ) {
+            if (
+                texto.includes("cortar") ||
+                texto.includes("suspender") ||
+                texto.includes("activar") ||
+                texto.includes("reactivar") ||
+                texto.includes("reconectar")
+            ) {
+                responderDante(
+                    "Sí. En operación normal puedo ayudarte a localizar al cliente por nombre o IP y acompañar el proceso de corte o reactivación. " +
+                    "Antes de ejecutar una acción importante confirmo contigo el cliente y la operación. " +
+                    "Como estamos en modo presentación, te lo explico sin ejecutar ningún cambio real."
+                );
+                return true;
+            }
+
+            responderDante(
+                "Con los clientes puedo ayudarte a buscarlos por diferentes datos, consultar información de su servicio y mantener el contexto para continuar con otras preguntas sobre la misma persona. " +
+                "Por ejemplo, después de localizar a un cliente puedes pedirme revisar su conexión sin volver a decirme todos sus datos. " +
+                "¿Quieres que te explique cómo sería una consulta de conectividad?"
+            );
+            return true;
+        }
+
+        // --------------------------------------------------------
+        // MIKROTIK / RED
+        // --------------------------------------------------------
+        if (
+            texto.includes("mikrotik") ||
+            texto.includes("router") ||
+            texto.includes("red") ||
+            texto.includes("infraestructura")
+        ) {
+            responderDante(
+                "Puedo trabajar con la infraestructura que Netcomp RF tiene registrada. " +
+                "Puedo identificar routers MikroTik por su nombre y por datos relacionados con su ubicación, consultar información técnica y utilizar las operaciones que el sistema tenga habilitadas. " +
+                "La ventaja es que el operador no necesita memorizar comandos técnicos: puede pedirme la tarea de forma natural."
+            );
+            return true;
+        }
+
+        // --------------------------------------------------------
+        // CORTE / REACTIVACIÓN EN DEMOSTRACIÓN
+        // --------------------------------------------------------
+        if (
+            /\b(cortar|corte|suspender|desconectar)\b/.test(texto)
+        ) {
+            responderDante(
+                "Sí, puedo ayudar con el corte de un servicio. " +
+                "En el modo normal te preguntaría qué cliente deseas cortar, lo buscaría por nombre o IP, te mostraría el registro encontrado y pediría tu confirmación antes de ejecutar el corte. " +
+                "Ahora estoy en modo presentación, así que no realizaré ninguna acción real."
+            );
+            return true;
+        }
+
+        if (
+            /\b(activar|reactivar|reconectar|reconexion)\b/.test(texto)
+        ) {
+            responderDante(
+                "También puedo ayudar con una reactivación. " +
+                "Primero identifico al cliente, verifico su estado y solicito confirmación antes de activar el servicio. " +
+                "Durante esta presentación solamente te explico el flujo y no modifico ningún servicio."
+            );
+            return true;
+        }
+
+        // --------------------------------------------------------
+        // SEGURIDAD / CONFIRMACIÓN
+        // --------------------------------------------------------
+        if (
+            texto.includes("seguro") ||
+            texto.includes("seguridad") ||
+            texto.includes("te equivocas") ||
+            texto.includes("me equivoco") ||
+            texto.includes("cliente equivocado") ||
+            texto.includes("confirmacion")
+        ) {
+            responderDante(
+                "Para las operaciones importantes no actúo a ciegas. " +
+                "Primero identifico el registro, te indico lo que encontré y solicito confirmación antes de ejecutar acciones como un corte o una reactivación. " +
+                "Además trabajo dentro del acceso que ya controla Netcomp RF."
+            );
+            return true;
+        }
+
+        // --------------------------------------------------------
+        // BENEFICIO PARA ISP / OFERTA COMERCIAL
+        // --------------------------------------------------------
+        if (
+            texto.includes("para que sirves") ||
+            texto.includes("para que eres util") ||
+            texto.includes("beneficio") ||
+            texto.includes("ventaja") ||
+            texto.includes("por que seria util") ||
+            texto.includes("por que tenerte") ||
+            texto.includes("por que usar dante") ||
+            texto.includes("isp")
+        ) {
+            responderDante(
+                "Mi principal beneficio es reducir pasos. " +
+                "Muchas tareas que normalmente requieren abrir módulos, buscar clientes, identificar direcciones IP o localizar routers pueden comenzar simplemente hablándome. " +
+                "Yo interpreto la intención, pido los datos que falten y utilizo las funciones disponibles en Netcomp RF. " +
+                "Eso hace que la operación diaria sea más rápida y más fácil de aprender."
+            );
+            return true;
+        }
+
+        // --------------------------------------------------------
+        // EJEMPLOS
+        // --------------------------------------------------------
+        if (
+            texto.includes("dame un ejemplo") ||
+            texto.includes("ponme un ejemplo") ||
+            texto.includes("muestra un ejemplo") ||
+            texto.includes("haz una demostracion") ||
+            texto.includes("demuestralo")
+        ) {
+            responderDante(
+                "Por ejemplo, un operador puede decirme: Dante, quiero cortar un servicio. " +
+                "Yo preguntaría a quién vamos a cortar. Puede responderme con el nombre, una IP completa o parte de ella. " +
+                "Después localizaría el registro, indicaría el cliente encontrado y preguntaría si desea confirmar el corte. " +
+                "Solo después de la confirmación ejecutaría la operación. " +
+                "En esta presentación no haré el corte real."
+            );
+            return true;
+        }
+
+        // --------------------------------------------------------
+        // MEMORIA / CONTEXTO
+        // --------------------------------------------------------
+        if (
+            texto.includes("recuerdas") ||
+            texto.includes("memoria") ||
+            texto.includes("recordar") ||
+            texto.includes("contexto")
+        ) {
+            responderDante(
+                "Sí. Netcomp RF me permite trabajar con contexto y con información que se haya guardado para Dante. " +
+                "Eso me ayuda a continuar conversaciones y recuperar antecedentes útiles sin comenzar desde cero en cada consulta."
+            );
+            return true;
+        }
+
+        // --------------------------------------------------------
+        // RESPUESTAS SOCIALES DENTRO DE LA PRESENTACIÓN
+        // --------------------------------------------------------
+        if (
+            texto === "gracias" ||
+            texto.includes("muchas gracias") ||
+            texto.includes("interesante") ||
+            texto.includes("muy bien") ||
+            texto.includes("excelente")
+        ) {
+            responderDante(
+                "Con gusto. Y todavía podemos seguir conversando. " +
+                "Puedes preguntarme sobre clientes, MikroTik, voz, seguridad o sobre cómo puedo ayudar en la operación diaria de un ISP. " +
+                "Cuando quieras terminar, dime: termina la presentación."
+            );
+            return true;
+        }
+
+        // --------------------------------------------------------
+        // RESPUESTA ABIERTA DE CONTINUIDAD
+        // --------------------------------------------------------
+        responderDante(
+            "Durante esta presentación puedo explicarte cómo trabajo dentro de Netcomp RF. " +
+            "Puedes preguntarme, por ejemplo, qué puedo hacer con los clientes, cómo trabajo con MikroTik, cómo utilizo la voz, qué medidas tomo antes de una operación o qué beneficio aporto a un ISP."
+        );
+
+        return true;
+    }
+
+    // ========================================================
     // DANTE - OBTENER RESPUESTAS COTIDIANAS
     // ========================================================
     function obtenerRespuestaCotidianaDante(texto: string): string | null {
@@ -1237,6 +2011,15 @@ export default function BotNotificaciones({
         servicioClienteDanteRef.current =
             null;
 
+        clientesPendientesSeleccionDanteRef.current =
+            [];
+
+        flujoServicioMikrotikDanteRef.current =
+            null;
+
+        flujoMorosoDanteRef.current =
+            null;
+
 
         perfilClienteDanteRef.current =
             null;
@@ -1248,10 +2031,10 @@ export default function BotNotificaciones({
     }
 
     // ========================================================
-    // DANTE - CARGAR ALERTAS CONOCIDAS DEL NAVEGADOR
+    // DANTE - CARGAR NOTIFICACIONES CONOCIDAS DEL NAVEGADOR
     // ========================================================
 
-    function cargarAlertasConocidasDante() {
+    function cargarNotificacionesConocidasDante() {
 
         if (typeof window === "undefined") {
             return;
@@ -1261,7 +2044,7 @@ export default function BotNotificaciones({
 
             const guardadas =
                 localStorage.getItem(
-                    DANTE_ALERTAS_STORAGE_KEY
+                    DANTE_NOTIFICACIONES_STORAGE_KEY
                 );
 
             if (!guardadas) {
@@ -1275,7 +2058,7 @@ export default function BotNotificaciones({
                 return;
             }
 
-            alertasCriticasConocidasRef.current =
+            notificacionesConocidasDanteRef.current =
                 new Set(
                     ids.filter(
                         (id) =>
@@ -1285,18 +2068,19 @@ export default function BotNotificaciones({
                 );
 
             console.log(
-                "DANTE: Alertas conocidas recuperadas:",
-                alertasCriticasConocidasRef.current.size
+                "DANTE: Notificaciones conocidas recuperadas:",
+                notificacionesConocidasDanteRef.current.size
             );
 
         } catch (error) {
 
             console.error(
-                "DANTE: Error recuperando alertas conocidas:",
+                "DANTE: Error recuperando notificaciones conocidas:",
                 error
             );
         }
     }
+
 
     // ========================================================
     // DANTE - MENSAJES DE PROCESAMIENTO
@@ -1449,10 +2233,10 @@ export default function BotNotificaciones({
         }
     }
     // ========================================================
-    // DANTE - GUARDAR ALERTAS CONOCIDAS
+    // DANTE - GUARDAR NOTIFICACIONES CONOCIDAS
     // ========================================================
 
-    function guardarAlertasConocidasDante() {
+    function guardarNotificacionesConocidasDante() {
 
         if (typeof window === "undefined") {
             return;
@@ -1462,18 +2246,18 @@ export default function BotNotificaciones({
 
             const ids =
                 Array.from(
-                    alertasCriticasConocidasRef.current
+                    notificacionesConocidasDanteRef.current
                 );
 
             localStorage.setItem(
-                DANTE_ALERTAS_STORAGE_KEY,
+                DANTE_NOTIFICACIONES_STORAGE_KEY,
                 JSON.stringify(ids)
             );
 
         } catch (error) {
 
             console.error(
-                "DANTE: Error guardando alertas conocidas:",
+                "DANTE: Error guardando notificaciones conocidas:",
                 error
             );
         }
@@ -1481,229 +2265,206 @@ export default function BotNotificaciones({
 
 
     // ========================================================
-    // DANTE - REVISAR ALERTAS CRÍTICAS NUEVAS
+    // DANTE - AVISAR NOTIFICACIONES NUEVAS
     // ========================================================
 
-    async function revisarAlertasCriticasDante() {
+    function avisarNotificacionesNuevasDante(
+        lista: Notificacion[]
+    ) {
 
-        try {
+        if (!Array.isArray(lista)) {
+            return;
+        }
 
-            const token =
-                getToken();
+        // ====================================================
+        // PRIMERA REVISIÓN
+        // Si Dante nunca ha visto el sistema, registra las
+        // existentes para no leer de golpe notificaciones viejas.
+        // ====================================================
 
+        if (
+            primeraRevisionNotificacionesDanteRef.current
+        ) {
 
-            const res =
-                await fetch(
-                    `${API_BASE}/notificaciones-sistema/alertas/criticas`,
-                    {
-                        headers: {
-                            Authorization:
-                                `Bearer ${token}`,
-                        },
+            if (
+                notificacionesConocidasDanteRef.current.size === 0
+            ) {
+
+                lista.forEach(
+                    (notificacion) => {
+
+                        if (
+                            notificacion.notificacionId
+                        ) {
+
+                            notificacionesConocidasDanteRef.current.add(
+                                notificacion.notificacionId
+                            );
+                        }
                     }
                 );
 
+                guardarNotificacionesConocidasDante();
 
-            if (!res.ok) {
+                primeraRevisionNotificacionesDanteRef.current =
+                    false;
 
-                console.error(
-                    "DANTE: Error consultando alertas críticas:",
-                    res.status
+                console.log(
+                    "DANTE: Primera carga. Notificaciones existentes registradas:",
+                    lista.length
                 );
 
                 return;
             }
 
-
-            const data =
-                await res.json();
-
-
-            const lista =
-                Array.isArray(data.datos)
-                    ? data.datos
-                    : Array.isArray(data.alertas)
-                        ? data.alertas
-                        : Array.isArray(data)
-                            ? data
-                            : [];
+            primeraRevisionNotificacionesDanteRef.current =
+                false;
+        }
 
 
-            // ====================================================
-            // PRIMERA REVISIÓN
-            // SOLO GUARDAMOS LAS ALERTAS EXISTENTES
-            // NO LAS ANUNCIAMOS
-            // ====================================================
+        // ====================================================
+        // DETECTAR NOTIFICACIONES NUEVAS
+        // ====================================================
 
-            if (
-                primeraRevisionAlertasRef.current
-            ) {
+        const nuevas =
+            lista.filter(
+                (notificacion) => {
 
-                // ====================================================
-                // SI NO EXISTE HISTORIAL EN LOCALSTORAGE
-                // ESTA ES LA PRIMERA VEZ REAL QUE DANTE LAS VE
-                // ====================================================
+                    const id =
+                        String(
+                            notificacion.notificacionId ||
+                            ""
+                        ).trim();
 
-                if (
-                    alertasCriticasConocidasRef.current.size === 0
-                ) {
+                    if (!id) {
+                        return false;
+                    }
 
-                    lista.forEach(
-                        (alerta: any) => {
-
-                            if (alerta.alertaId) {
-
-                                alertasCriticasConocidasRef.current.add(
-                                    alerta.alertaId
-                                );
-                            }
-                        }
+                    return (
+                        !notificacionesConocidasDanteRef.current.has(
+                            id
+                        )
                     );
-
-
-                    guardarAlertasConocidasDante();
-
-
-                    console.log(
-                        "DANTE: Primera carga. Alertas existentes registradas:",
-                        lista.length
-                    );
-
-
-                    primeraRevisionAlertasRef.current =
-                        false;
-
-                    return;
                 }
+            );
 
 
-                // ====================================================
-                // YA EXISTÍA HISTORIAL
-                // ENTONCES SÍ DEBEMOS COMPARAR
-                // ====================================================
+        if (
+            nuevas.length === 0
+        ) {
+            return;
+        }
 
-                primeraRevisionAlertasRef.current =
-                    false;
+
+        // ====================================================
+        // MARCARLAS COMO CONOCIDAS ANTES DE HABLAR
+        // PARA EVITAR REPETICIONES
+        // ====================================================
+
+        nuevas.forEach(
+            (notificacion) => {
+
+                notificacionesConocidasDanteRef.current.add(
+                    notificacion.notificacionId
+                );
             }
+        );
+
+        guardarNotificacionesConocidasDante();
 
 
-            // ====================================================
-            // DETECTAR ÚNICAMENTE ALERTAS NUEVAS
-            // ====================================================
+        // ====================================================
+        // PRIORIZAR: CRÍTICAS -> ADVERTENCIAS -> INFO
+        // ====================================================
 
-            const alertasNuevas =
-                lista.filter(
-                    (alerta: any) => {
+        const prioridadNivel: Record<string, number> = {
+            CRITICA: 3,
+            ADVERTENCIA: 2,
+            INFO: 1,
+        };
+
+        const ordenadas =
+            [...nuevas].sort(
+                (a, b) =>
+                    (prioridadNivel[b.nivel] || 0) -
+                    (prioridadNivel[a.nivel] || 0)
+            );
+
+
+        // ====================================================
+        // GENERAR MENSAJE DE DANTE
+        // ====================================================
+
+        const mensajes =
+            ordenadas
+                .slice(0, 3)
+                .map(
+                    (notificacion) => {
+
+                        const titulo =
+                            String(
+                                notificacion.titulo ||
+                                "Notificación"
+                            ).trim();
+
+                        const mensaje =
+                            String(
+                                notificacion.mensaje ||
+                                ""
+                            ).trim();
+
+                        let encabezado =
+                            "Nueva notificación.";
 
                         if (
-                            !alerta.alertaId
+                            notificacion.nivel === "CRITICA"
                         ) {
-
-                            return false;
+                            encabezado =
+                                "Atención. Nueva notificación crítica.";
+                        } else if (
+                            notificacion.nivel === "ADVERTENCIA"
+                        ) {
+                            encabezado =
+                                "Aviso. Nueva advertencia.";
+                        } else if (
+                            notificacion.nivel === "INFO"
+                        ) {
+                            encabezado =
+                                "Nueva notificación informativa.";
                         }
 
-
                         return (
-                            !alertasCriticasConocidasRef.current.has(
-                                alerta.alertaId
+                            `${encabezado} ${titulo}.` +
+                            (
+                                mensaje
+                                    ? ` ${mensaje}.`
+                                    : ""
                             )
                         );
                     }
                 );
 
 
-            // ====================================================
-            // NO HAY NADA NUEVO
-            // DANTE NO HABLA
-            // ====================================================
+        if (
+            ordenadas.length > 3
+        ) {
 
-            if (
-                alertasNuevas.length === 0
-            ) {
-
-                console.log(
-                    "DANTE: No hay alertas críticas nuevas."
-                );
-
-                return;
-            }
-
-
-            // ====================================================
-            // GUARDAR NUEVAS ALERTAS COMO CONOCIDAS
-            // ====================================================
-
-            alertasNuevas.forEach(
-                (alerta: any) => {
-
-                    alertasCriticasConocidasRef.current.add(
-                        alerta.alertaId
-                    );
-                }
-            );
-            // GUARDAMOS TAMBIÉN EN EL NAVEGADOR
-            guardarAlertasConocidasDante();
-
-            console.log(
-                "DANTE: NUEVAS ALERTAS CRÍTICAS:",
-                alertasNuevas
-            );
-
-
-            // ====================================================
-            // UNA ALERTA NUEVA
-            // ====================================================
-
-            if (
-                alertasNuevas.length === 1
-            ) {
-
-                const alerta =
-                    alertasNuevas[0];
-
-
-                const equipo =
-                    alerta.nombreEquipo ||
-                    "un equipo Wireless";
-
-
-                const mensaje =
-                    alerta.mensaje ||
-                    "se generó una alerta crítica";
-
-
-                const ip =
-                    alerta.ipGestion
-                        ? ` IP ${alerta.ipGestion}.`
-                        : "";
-
-
-                responderDante(
-                    `Atención. Tengo una nueva alerta crítica. ` +
-                    `${equipo}. ${mensaje}.${ip}`
-                );
-
-
-                return;
-            }
-
-
-            // ====================================================
-            // VARIAS ALERTAS NUEVAS
-            // ====================================================
-
-            responderDante(
-                `Atención. Se han generado ${alertasNuevas.length} nuevas alertas críticas Wireless.`
-            );
-
-        } catch (error) {
-
-            console.error(
-                "DANTE: Error revisando alertas críticas:",
-                error
+            mensajes.push(
+                `Además tienes ${ordenadas.length - 3} notificaciones nuevas adicionales.`
             );
         }
+
+
+        console.log(
+            "DANTE: NUEVAS NOTIFICACIONES:",
+            ordenadas
+        );
+
+        responderDante(
+            mensajes.join(" ")
+        );
     }
+
     // ========================================================
     // DANTE - GUARDA COMPROMISO DE PAGOS
     // ========================================================
@@ -2088,7 +2849,6 @@ export default function BotNotificaciones({
         return matriz[b.length][a.length];
     }
 
-
     // ============================================================
     // COMPARAR PALABRAS DE FORMA FLEXIBLE
     // ============================================================
@@ -2202,6 +2962,5196 @@ export default function BotNotificaciones({
 
     const perfilClienteDanteRef =
         useRef<any | null>(null);
+
+    // ========================================================
+    // DANTE - CLIENTES EN ESPERA DE SELECCIÓN
+    // Permite responder con "2", "el segundo" o el nombre completo
+    // cuando una búsqueda devuelve varias personas.
+    // ========================================================
+
+    const clientesPendientesSeleccionDanteRef =
+        useRef<ServicioClienteDante[]>([]);
+
+    // ========================================================
+    // DANTE - CORTE / RECONEXIÓN Y LISTA DE MOROSOS
+    // ========================================================
+
+    const flujoServicioMikrotikDanteRef =
+        useRef<FlujoServicioMikrotikDante | null>(null);
+
+    const flujoMorosoDanteRef =
+        useRef<FlujoMorosoDante | null>(null);
+
+    const flujoDiagnosticoInternetDanteRef =
+        useRef<FlujoDiagnosticoInternetDante | null>(null);
+
+    const tipoProblemaDiagnosticoDanteRef =
+        useRef<TipoProblemaInternetDante>("GENERAL");
+
+    // ========================================================
+    // DANTE V3 - CONTEXTO DIRECTO DEL CPE DEL CLIENTE
+    // ========================================================
+    const cpeDiagnosticoDanteRef =
+        useRef<ContextoCpeDante | null>(null);
+
+    const credencialesCpeDanteRef =
+        useRef({
+            usuario: "ubnt",
+            clave: "jlzg",
+            puerto: 22,
+        });
+
+    const accionPendienteCpeDanteRef =
+        useRef<AccionPendienteCpeDante>(null);
+
+    // ========================================================
+    // DANTE V3 - DIAGNÓSTICO HUMANO / EXPERIENCIA DE CAMPO CPE
+    // ========================================================
+    const diagnosticoHumanoCpeDanteRef =
+        useRef<string>("");
+
+    // ========================================================
+    // DANTE - TICKET DE MANTENIMIENTO / VISITA TÉCNICA
+    // ========================================================
+    const ticketMantenimientoPendienteDanteRef =
+        useRef<TicketMantenimientoPendienteDante | null>(
+            null
+        );
+
+
+    // ========================================================
+    // DANTE - RESUMEN GENERAL DE CLIENTES Y CONTRATOS
+    // ========================================================
+
+    type ResumenClientesContratosDante = {
+        totalClientes: number;
+        contratos: number;
+        activos: number;
+        suspendidos: number;
+        retirados: number;
+        pendientes: number;
+        actualizadoEn: number;
+    };
+
+    const resumenClientesContratosDanteRef =
+        useRef<ResumenClientesContratosDante | null>(null);
+
+    const resumenClientesContratosCargandoDanteRef =
+        useRef(false);
+
+    async function cargarResumenClientesContratosDante() {
+        if (resumenClientesContratosCargandoDanteRef.current) {
+            return resumenClientesContratosDanteRef.current;
+        }
+
+        resumenClientesContratosCargandoDanteRef.current = true;
+        try {
+            const token = getToken();
+            if (!token) return resumenClientesContratosDanteRef.current;
+
+            const headers = {
+                Accept: "application/json",
+                Authorization: `Bearer ${token}`,
+            };
+
+            const [resClientes, resContratos] = await Promise.all([
+                fetch(`${API_BASE}/clientes`, { headers, cache: "no-store" }),
+                fetch(`${API_BASE}/cliente-servicio`, { headers, cache: "no-store" }),
+            ]);
+
+            const dataClientes = await resClientes.json().catch(() => ({}));
+            const dataContratos = await resContratos.json().catch(() => ({}));
+
+            const listaClientes =
+                Array.isArray(dataClientes?.clientes) ? dataClientes.clientes :
+                    Array.isArray(dataClientes?.data) ? dataClientes.data : [];
+
+            const listaContratos =
+                Array.isArray(dataContratos?.servicios) ? dataContratos.servicios :
+                    Array.isArray(dataContratos?.clienteServicios) ? dataContratos.clienteServicios :
+                        Array.isArray(dataContratos?.data) ? dataContratos.data :
+                            Array.isArray(dataContratos) ? dataContratos : [];
+
+            const contarEstado = (estado: string) =>
+                listaContratos.filter((item: any) =>
+                    String(item?.estadoServicio || "").trim().toUpperCase() === estado
+                ).length;
+
+            const resumen: ResumenClientesContratosDante = {
+                totalClientes: listaClientes.length,
+                contratos: listaContratos.length,
+                activos: contarEstado("ACTIVO"),
+                suspendidos: contarEstado("SUSPENDIDO"),
+                retirados: contarEstado("RETIRADO"),
+                pendientes: contarEstado("PENDIENTE"),
+                actualizadoEn: Date.now(),
+            };
+
+            resumenClientesContratosDanteRef.current = resumen;
+            return resumen;
+        } catch (error) {
+            console.error("DANTE: Error cargando resumen de clientes y contratos:", error);
+            return resumenClientesContratosDanteRef.current;
+        } finally {
+            resumenClientesContratosCargandoDanteRef.current = false;
+        }
+    }
+
+    function esConsultaResumenClientesDante(texto: string) {
+        return [
+            "cuantos clientes", "cantidad de clientes", "total de clientes",
+            "total clientes", "numero de clientes", "numero total de clientes",
+            "cuantos tenemos de clientes", "cuantos clientes tenemos"
+        ].some(x => texto.includes(x));
+    }
+
+    function obtenerConsultaEstadoContratoDante(texto: string):
+        "ACTIVO" | "SUSPENDIDO" | "RETIRADO" | "PENDIENTE" | "TOTAL" | null {
+        if ([
+            "cuantos contratos", "cuantos servicios", "total de contratos",
+            "total contratos", "total de servicios", "total servicios",
+            "resumen de contratos", "resumen de servicios"
+        ].some(x => texto.includes(x))) return "TOTAL";
+
+        if (["cuantos activos", "clientes activos", "contratos activos", "servicios activos", "cuantos clientes activos", "cuantos contratos activos"].some(x => texto.includes(x))) return "ACTIVO";
+        if (["cuantos suspendidos", "clientes suspendidos", "contratos suspendidos", "servicios suspendidos", "cuantos clientes suspendidos", "cuantos contratos suspendidos"].some(x => texto.includes(x))) return "SUSPENDIDO";
+        if (["cuantos retirados", "clientes retirados", "contratos retirados", "servicios retirados", "cuantos clientes retirados", "cuantos contratos retirados"].some(x => texto.includes(x))) return "RETIRADO";
+        if (["cuantos pendientes", "clientes pendientes", "contratos pendientes", "servicios pendientes", "cuantos clientes pendientes", "cuantos contratos pendientes"].some(x => texto.includes(x))) return "PENDIENTE";
+        return null;
+    }
+
+    async function procesarConsultaResumenClientesContratosDante(texto: string) {
+        const consultaClientes = esConsultaResumenClientesDante(texto);
+        const estado = obtenerConsultaEstadoContratoDante(texto);
+        if (!consultaClientes && !estado) return false;
+
+        const resumen = await cargarResumenClientesContratosDante();
+        if (!resumen) {
+            responderDante("No pude consultar en este momento el resumen de clientes y contratos.");
+            return true;
+        }
+
+        if (consultaClientes && !estado) {
+            responderDante(`Actualmente tenemos ${resumen.totalClientes} ${resumen.totalClientes === 1 ? "cliente" : "clientes"} registrados.`);
+            actualizarContextoDante({ tema: "CLIENTE", ultimaIntencion: "CONSULTAR_TOTAL_CLIENTES", esperandoRespuesta: false, datoPendiente: null });
+            return true;
+        }
+
+        if (estado === "TOTAL") {
+            responderDante(`Tenemos ${resumen.contratos} contratos de servicio: ${resumen.activos} activos, ${resumen.suspendidos} suspendidos, ${resumen.retirados} retirados y ${resumen.pendientes} pendientes.`);
+            actualizarContextoDante({ tema: "CLIENTE", ultimaIntencion: "CONSULTAR_RESUMEN_CONTRATOS", esperandoRespuesta: false, datoPendiente: null });
+            return true;
+        }
+
+        const cantidad =
+            estado === "ACTIVO" ? resumen.activos :
+                estado === "SUSPENDIDO" ? resumen.suspendidos :
+                    estado === "RETIRADO" ? resumen.retirados : resumen.pendientes;
+
+        const etiqueta =
+            estado === "ACTIVO" ? "activos" :
+                estado === "SUSPENDIDO" ? "suspendidos" :
+                    estado === "RETIRADO" ? "retirados" : "pendientes";
+
+        responderDante(`Tenemos ${cantidad} ${etiqueta}.`);
+        actualizarContextoDante({ tema: "CLIENTE", ultimaIntencion: `CONSULTAR_CONTRATOS_${estado}`, esperandoRespuesta: false, datoPendiente: null });
+        return true;
+    }
+
+    // ========================================================
+    // DANTE - CORTE / RECONEXIÓN DE SERVICIO MIKROTIK
+    // Reutiliza exactamente los endpoints de MikrotikCortesPage.
+    // ========================================================
+
+    function esSiDante(textoOriginal: string): boolean {
+        const texto = normalizarTextoDante(textoOriginal);
+        return /^(si|sí|claro|correcto|confirmo|confirmar|hazlo|dale|de acuerdo|ok|okay|procede|proceder)$/.test(texto);
+    }
+
+    function esNoDante(textoOriginal: string): boolean {
+        const texto = normalizarTextoDante(textoOriginal);
+        return /^(no|cancelar|cancela|cancelalo|no gracias|mejor no|dejalo|déjalo)$/.test(texto);
+    }
+
+    function extraerIpParcialDante(textoOriginal: string): string | null {
+        const texto = String(textoOriginal || "");
+        const coincidencias = texto.match(/\b(?:\d{1,3}\.){1,3}\d{1,3}\b/g);
+        if (!coincidencias?.length) return null;
+        return coincidencias[0];
+    }
+
+    function limpiarBusquedaCorteDante(textoOriginal: string): string {
+        let texto = normalizarTextoDante(textoOriginal)
+            .replace(/\bdante\b/g, " ")
+            .replace(/\b(servicio|internet|conexion|conexión|cliente|usuario|abonado)\b/g, " ")
+            .replace(/\b(activar|activa|active|reactivar|reactiva|reconectar|reconecta|reconexion|reconexión|habilitar|habilita|restablecer|restablece)\b/g, " ")
+            .replace(/\b(cortar|corta|corte|suspender|suspende|desconectar|desconecta|bloquear|bloquea)\b/g, " ")
+            .replace(/\b(busca|buscar|buscame|encuentra|localiza|a|al|el|la|de|del|por|favor|que|termina|terminado|ip|nombre)\b/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+        return texto;
+    }
+
+    async function obtenerCortesClientesDante(): Promise<CorteClienteDante[]> {
+        try {
+            const token = getToken();
+            const res = await fetch(`${API_BASE}/mikrotik-conf/cortes-clientes`, {
+                headers: { Authorization: `Bearer ${token}` },
+                cache: "no-store",
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data?.ok === false) return [];
+            const lista = Array.isArray(data?.datos)
+                ? data.datos
+                : Array.isArray(data?.cortes)
+                    ? data.cortes
+                    : Array.isArray(data)
+                        ? data
+                        : [];
+            return lista as CorteClienteDante[];
+        } catch (error) {
+            console.error("DANTE: error consultando cortes-clientes:", error);
+            return [];
+        }
+    }
+
+    function buscarCortesClientesDante(
+        terminoOriginal: string,
+        lista: CorteClienteDante[]
+    ): CorteClienteDante[] {
+        const termino = normalizarTextoDante(terminoOriginal);
+        const limpio = limpiarBusquedaCorteDante(terminoOriginal);
+        const ipParcial = extraerIpParcialDante(terminoOriginal);
+
+        return lista.filter((item) => {
+            const ip = String(item.ipCliente || "").toLowerCase();
+            if (ipParcial && (ip === ipParcial || ip.endsWith(ipParcial) || ip.includes(ipParcial))) {
+                return true;
+            }
+
+            const campos = [
+                item.comentarioMikrotik,
+                item.ipCliente,
+                item.routerNombre,
+                item.parroquia,
+                item.sector,
+            ]
+                .map((valor) => normalizarTextoDante(String(valor || "")))
+                .filter(Boolean);
+
+            if (limpio && campos.some((campo) => campo.includes(limpio) || limpio.includes(campo))) {
+                return true;
+            }
+
+            return campos.some((campo) => termino && campo.includes(termino));
+        });
+    }
+
+    function describirCorteClienteDante(item: CorteClienteDante): string {
+        const nombre = String(item.comentarioMikrotik || "cliente").trim();
+        return `${nombre}, IP ${item.ipCliente}`;
+    }
+
+    async function ejecutarAccionServicioMikrotikDante(
+        item: CorteClienteDante,
+        accion: "CORTAR" | "ACTIVAR"
+    ) {
+        const token = getToken();
+        const endpoint = accion === "CORTAR" ? "cortar" : "activar";
+        try {
+            responderDante(
+                accion === "CORTAR"
+                    ? `De acuerdo. Estoy cortando el servicio de ${describirCorteClienteDante(item)}.`
+                    : `De acuerdo. Estoy activando el servicio de ${describirCorteClienteDante(item)}.`
+            );
+
+            const res = await fetch(
+                `${API_BASE}/mikrotik-conf/cortes-clientes/${item.id}/${endpoint}`,
+                {
+                    method: "POST",
+                    headers: { Authorization: `Bearer ${token}` },
+                }
+            );
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok || data?.ok === false) {
+                responderDante(
+                    data?.mensaje || data?.message ||
+                    (accion === "CORTAR"
+                        ? "No pude cortar el servicio."
+                        : "No pude activar el servicio.")
+                );
+                return;
+            }
+
+            const nombre = String(item.comentarioMikrotik || item.ipCliente).trim();
+            responderDante(
+                accion === "CORTAR"
+                    ? `Te confirmo que el servicio de ${nombre} fue cortado correctamente. ¿En qué más te puedo ayudar?`
+                    : `Te confirmo que el servicio de ${nombre} fue activado correctamente. ¿En qué más te puedo ayudar?`
+            );
+        } catch (error) {
+            console.error("DANTE: error ejecutando corte/activación:", error);
+            responderDante(
+                accion === "CORTAR"
+                    ? "Ocurrió un error al intentar cortar el servicio."
+                    : "Ocurrió un error al intentar activar el servicio."
+            );
+        } finally {
+            flujoServicioMikrotikDanteRef.current = null;
+            actualizarContextoDante({
+                tema: "MIKROTIK",
+                ultimaIntencion: accion === "CORTAR" ? "CORTAR_SERVICIO" : "ACTIVAR_SERVICIO",
+                esperandoRespuesta: false,
+                datoPendiente: null,
+            });
+        }
+    }
+
+    function pedirConfirmacionEstadoServicioDante(
+        item: CorteClienteDante,
+        accion: "CORTAR" | "ACTIVAR"
+    ) {
+        const estado = String(item.estado || "").toUpperCase();
+        const nombre = describirCorteClienteDante(item);
+
+        if (accion === "CORTAR") {
+            if (estado === "CORTADO") {
+                flujoServicioMikrotikDanteRef.current = null;
+                responderDante(`${nombre} ya se encuentra cortado.`);
+                return;
+            }
+            flujoServicioMikrotikDanteRef.current = {
+                accion,
+                etapa: "CONFIRMAR",
+                candidatos: [],
+                seleccionado: item,
+            };
+            actualizarContextoDante({ tema: "MIKROTIK", ultimaIntencion: "CORTAR_SERVICIO", esperandoRespuesta: true, datoPendiente: "CONFIRMAR_CORTE" });
+            responderDante(`Encontré a ${nombre}. Actualmente está en estado activo. ¿Deseas cortar el servicio?`);
+            return;
+        }
+
+        if (estado === "ACTIVO") {
+            flujoServicioMikrotikDanteRef.current = null;
+            responderDante(`${nombre} ya se encuentra activo.`);
+            return;
+        }
+
+        flujoServicioMikrotikDanteRef.current = {
+            accion,
+            etapa: "CONFIRMAR",
+            candidatos: [],
+            seleccionado: item,
+        };
+        actualizarContextoDante({ tema: "MIKROTIK", ultimaIntencion: "ACTIVAR_SERVICIO", esperandoRespuesta: true, datoPendiente: "CONFIRMAR_ACTIVACION" });
+        responderDante(`Encontré a ${nombre}. Actualmente está cortado. ¿Deseas activar el servicio?`);
+    }
+
+    async function buscarParaAccionServicioDante(
+        termino: string,
+        accion: "CORTAR" | "ACTIVAR"
+    ): Promise<void> {
+        responderDante("Un momento, estoy buscando.");
+        const lista = await obtenerCortesClientesDante();
+        const coincidencias = buscarCortesClientesDante(termino, lista);
+
+        if (!coincidencias.length) {
+            flujoServicioMikrotikDanteRef.current = {
+                accion,
+                etapa: "BUSCAR",
+                candidatos: [],
+                seleccionado: null,
+            };
+            responderDante("No encontré coincidencias. Dime el nombre, la IP completa, los dos últimos bloques de la IP, el router o el sector.");
+            return;
+        }
+
+        if (coincidencias.length === 1) {
+            pedirConfirmacionEstadoServicioDante(coincidencias[0], accion);
+            return;
+        }
+
+        const candidatos = coincidencias.slice(0, 9);
+        flujoServicioMikrotikDanteRef.current = {
+            accion,
+            etapa: "SELECCIONAR",
+            candidatos,
+            seleccionado: null,
+        };
+        actualizarContextoDante({ tema: "MIKROTIK", ultimaIntencion: accion === "CORTAR" ? "CORTAR_SERVICIO" : "ACTIVAR_SERVICIO", esperandoRespuesta: true, datoPendiente: "SELECCIONAR_CLIENTE_CORTE" });
+        const opciones = candidatos
+            .map((item, index) => `${index + 1}. ${describirCorteClienteDante(item)}`)
+            .join(". ");
+        responderDante(
+            `Encontré ${coincidencias.length} coincidencias. ${opciones}. ` +
+            `¿Cuál deseas? Puedes decirme el número, el nombre o la IP. ` +
+            `Si el cliente no aparece en estas opciones, dime directamente su nombre o su IP y lo buscaré en todos los registros.`
+        );
+    }
+
+    function detectarAccionServicioMikrotikDante(textoOriginal: string): "CORTAR" | "ACTIVAR" | null {
+        const texto = normalizarTextoDante(textoOriginal);
+        const activar = /\b(activar|activa|active|reactivar|reactiva|reconectar|reconecta|reconexion|habilitar|habilita|restablecer|restablece)\b/.test(texto);
+        const cortar = /\b(cortar|corta|corte|suspender|suspende|desconectar|desconecta|bloquear|bloquea)\b/.test(texto);
+        const contextoServicio = /\b(servicio|internet|cliente|usuario|abonado|conexion|cortes?)\b/.test(texto);
+        if (activar && (contextoServicio || texto.split(" ").length <= 5)) return "ACTIVAR";
+        if (cortar && (contextoServicio || texto.split(" ").length <= 5)) return "CORTAR";
+        return null;
+    }
+
+    async function iniciarFlujoServicioMikrotikDante(
+        textoOriginal: string,
+        accion: "CORTAR" | "ACTIVAR"
+    ): Promise<boolean> {
+        let termino = limpiarBusquedaCorteDante(textoOriginal);
+        const ip = extraerIpParcialDante(textoOriginal);
+        if (ip) termino = ip;
+
+        flujoServicioMikrotikDanteRef.current = {
+            accion,
+            etapa: "BUSCAR",
+            candidatos: [],
+            seleccionado: null,
+        };
+        actualizarContextoDante({ tema: "MIKROTIK", ultimaIntencion: accion === "CORTAR" ? "CORTAR_SERVICIO" : "ACTIVAR_SERVICIO", esperandoRespuesta: true, datoPendiente: "CLIENTE_IP_CORTE" });
+
+        if (!termino || termino.length < 2) {
+            responderDante(
+                accion === "CORTAR"
+                    ? "¿A quién vamos a cortar? Dime el nombre, la IP completa, los dos últimos bloques de la IP, el router o el sector."
+                    : "¿A quién vamos a activar? Dime el nombre, la IP completa, los dos últimos bloques de la IP, el router o el sector."
+            );
+            return true;
+        }
+
+        await buscarParaAccionServicioDante(termino, accion);
+        return true;
+    }
+
+    async function procesarFlujoServicioMikrotikDante(textoOriginal: string): Promise<boolean> {
+        const flujo = flujoServicioMikrotikDanteRef.current;
+        if (!flujo) return false;
+
+        if (flujo.etapa === "CONFIRMAR") {
+            if (esSiDante(textoOriginal)) {
+                if (flujo.seleccionado) {
+                    await ejecutarAccionServicioMikrotikDante(flujo.seleccionado, flujo.accion);
+                }
+                return true;
+            }
+            if (esNoDante(textoOriginal)) {
+                flujoServicioMikrotikDanteRef.current = null;
+                actualizarContextoDante({ tema: "MIKROTIK", esperandoRespuesta: false, datoPendiente: null });
+                responderDante("De acuerdo. Operación cancelada. ¿En qué más te puedo ayudar?");
+                return true;
+            }
+            responderDante("Necesito tu confirmación. Dime sí para continuar o no para cancelar.");
+            return true;
+        }
+
+        if (flujo.etapa === "SELECCIONAR") {
+            const texto = normalizarTextoDante(textoOriginal);
+
+            // --------------------------------------------------------
+            // 1. SELECCIÓN POR NÚMERO ENTRE LAS OPCIONES MOSTRADAS
+            // --------------------------------------------------------
+            const numeroMatch =
+                texto.match(/(?:opcion\s+|numero\s+|el\s+)?(\d{1,2})/);
+
+            if (numeroMatch) {
+                const numero = Number(numeroMatch[1]);
+
+                if (
+                    numero >= 1 &&
+                    numero <= flujo.candidatos.length
+                ) {
+                    pedirConfirmacionEstadoServicioDante(
+                        flujo.candidatos[numero - 1],
+                        flujo.accion
+                    );
+                    return true;
+                }
+            }
+
+            // --------------------------------------------------------
+            // 2. PRIMERO INTENTAMOS IDENTIFICARLO ENTRE LOS CANDIDATOS
+            //    QUE DANTE ACABA DE MOSTRAR.
+            // --------------------------------------------------------
+            const coincidenciasCandidatos =
+                buscarCortesClientesDante(
+                    textoOriginal,
+                    flujo.candidatos
+                );
+
+            if (
+                coincidenciasCandidatos.length === 1
+            ) {
+                pedirConfirmacionEstadoServicioDante(
+                    coincidenciasCandidatos[0],
+                    flujo.accion
+                );
+                return true;
+            }
+
+            if (
+                coincidenciasCandidatos.length > 1
+            ) {
+                const opciones =
+                    coincidenciasCandidatos
+                        .slice(0, 9)
+                        .map(
+                            (item, index) =>
+                                `${index + 1}. ${describirCorteClienteDante(item)}`
+                        )
+                        .join(". ");
+
+                flujoServicioMikrotikDanteRef.current = {
+                    accion: flujo.accion,
+                    etapa: "SELECCIONAR",
+                    candidatos: coincidenciasCandidatos.slice(0, 9),
+                    seleccionado: null,
+                };
+
+                responderDante(
+                    `Todavía encontré varias coincidencias. ${opciones}. ` +
+                    `Dime el número, el nombre completo o la IP.`
+                );
+
+                return true;
+            }
+
+            // --------------------------------------------------------
+            // 3. NO ESTÁ ENTRE LAS OPCIONES VISIBLES:
+            //    VOLVEMOS A BUSCAR EN TODA LA LISTA DEL BACKEND.
+            //
+            //    Esto permite que el usuario diga directamente:
+            //    "Juan Pérez", "192.168.84.156" o "84.156",
+            //    aunque ese cliente no estuviera entre los primeros
+            //    candidatos mostrados por Dante.
+            // --------------------------------------------------------
+            if (
+                texto === "no esta en la lista" ||
+                texto === "no aparece" ||
+                texto === "no aparece en la lista" ||
+                texto === "ninguno" ||
+                texto === "ninguna"
+            ) {
+                flujoServicioMikrotikDanteRef.current = {
+                    accion: flujo.accion,
+                    etapa: "BUSCAR",
+                    candidatos: [],
+                    seleccionado: null,
+                };
+
+                actualizarContextoDante({
+                    tema: "MIKROTIK",
+                    ultimaIntencion:
+                        flujo.accion === "CORTAR"
+                            ? "CORTAR_SERVICIO"
+                            : "ACTIVAR_SERVICIO",
+                    esperandoRespuesta: true,
+                    datoPendiente: "CLIENTE_IP_CORTE",
+                });
+
+                responderDante(
+                    "De acuerdo. Dime directamente el nombre del cliente, la IP completa o los dos últimos bloques de la IP."
+                );
+
+                return true;
+            }
+
+            // El usuario ya pudo haber dicho aquí el nombre o la IP.
+            // Reutilizamos el mismo flujo existente, pero ahora contra
+            // TODOS los registros obtenidos desde cortes-clientes.
+            await buscarParaAccionServicioDante(
+                textoOriginal,
+                flujo.accion
+            );
+
+            return true;
+        }
+
+        await buscarParaAccionServicioDante(textoOriginal, flujo.accion);
+        return true;
+    }
+
+    // ========================================================
+    // DANTE - AGREGAR CLIENTE A LISTA DE MOROSOS
+    // ========================================================
+
+    function esInicioAgregarMorosoDante(textoOriginal: string): boolean {
+        const texto = normalizarTextoDante(textoOriginal);
+        return (
+            /\b(agrega|agregar|anade|añade|anadir|añadir|mete|meter|incluye|incluir|registra|registrar)\b/.test(texto) &&
+            /\b(moroso|morosos|lista de morosos)\b/.test(texto)
+        );
+    }
+
+    function extraerNombreMorosoDante(textoOriginal: string): string {
+        return normalizarTextoDante(textoOriginal)
+            .replace(/\bdante\b/g, " ")
+            .replace(/\b(el|la|cliente|nombre|se llama|es|del|de|usuario)\b/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+    }
+
+    async function agregarMorosoDesdeDante(
+        router: RouterMikrotikDante,
+        ipCliente: string,
+        comentario: string
+    ): Promise<void> {
+        try {
+            const token = getToken();
+            responderDante(`Ok. Agregando a ${comentario} en ${router.nombre}.`);
+            const res = await fetch(
+                `${API_BASE}/mikrotik-conf/routers/${router.id}/morosos/agregar`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({ ipCliente: ipCliente.trim(), comentario: comentario.trim() }),
+                }
+            );
+            const textoRespuesta = await res.text();
+            let data: any = {};
+            try { data = JSON.parse(textoRespuesta); } catch { data = {}; }
+
+            if (!res.ok || data?.ok === false) {
+                if (data?.requiereActivarSSH) {
+                    responderDante(`No pude agregar a ${comentario} porque el SSH de ${router.nombre} está desactivado.`);
+                } else {
+                    responderDante(data?.message || data?.mensaje || `No pude agregar a ${comentario} a la lista de morosos.`);
+                }
+                return;
+            }
+
+            responderDante(`Te confirmo que el cliente ${comentario} fue agregado correctamente. ¿En qué más te puedo ayudar?`);
+        } catch (error) {
+            console.error("DANTE: error agregando moroso:", error);
+            responderDante(`Ocurrió un error al agregar a ${comentario} a la lista de morosos.`);
+        } finally {
+            flujoMorosoDanteRef.current = null;
+            actualizarContextoDante({ tema: "MIKROTIK", ultimaIntencion: "AGREGAR_MOROSO", esperandoRespuesta: false, datoPendiente: null });
+        }
+    }
+
+    function iniciarFlujoMorosoDante(textoOriginal: string): boolean {
+        const ip = extraerIpParcialDante(textoOriginal);
+        flujoMorosoDanteRef.current = {
+            etapa: ip ? "NOMBRE" : "IP",
+            ipCliente: ip || "",
+            comentario: "",
+        };
+        actualizarContextoDante({ tema: "MIKROTIK", ultimaIntencion: "AGREGAR_MOROSO", esperandoRespuesta: true, datoPendiente: ip ? "NOMBRE_MOROSO" : "IP_MOROSO" });
+        responderDante(ip ? "Perfecto. Dame el nombre del cliente." : "Ok. Dame la IP que vamos a agregar.");
+        return true;
+    }
+
+    async function procesarFlujoMorosoDante(textoOriginal: string): Promise<boolean> {
+        const flujo = flujoMorosoDanteRef.current;
+        if (!flujo) return false;
+
+        if (esNoDante(textoOriginal) || normalizarTextoDante(textoOriginal) === "cancelar") {
+            flujoMorosoDanteRef.current = null;
+            actualizarContextoDante({ tema: "MIKROTIK", esperandoRespuesta: false, datoPendiente: null });
+            responderDante("De acuerdo. Cancelé el registro en la lista de morosos.");
+            return true;
+        }
+
+        if (flujo.etapa === "IP") {
+            const ip = extraerIpParcialDante(textoOriginal);
+            if (!ip || ip.split(".").length !== 4) {
+                responderDante("No pude identificar una IP completa. Dímela, por ejemplo 192.168.84.156.");
+                return true;
+            }
+            flujo.ipCliente = ip;
+            flujo.etapa = "NOMBRE";
+            actualizarContextoDante({ tema: "MIKROTIK", esperandoRespuesta: true, datoPendiente: "NOMBRE_MOROSO" });
+            responderDante("Perfecto. Dame el nombre del cliente.");
+            return true;
+        }
+
+        if (flujo.etapa === "NOMBRE") {
+            const nombre = extraerNombreMorosoDante(textoOriginal);
+            if (!nombre || nombre.length < 2) {
+                responderDante("No pude identificar el nombre. Dime el nombre del cliente.");
+                return true;
+            }
+            flujo.comentario = nombre;
+            flujo.etapa = "ROUTER";
+            actualizarContextoDante({ tema: "MIKROTIK", esperandoRespuesta: true, datoPendiente: "ROUTER_MOROSO" });
+            responderDante("¿A qué router MikroTik pertenece?");
+            return true;
+        }
+
+        const routers = await obtenerRoutersMikrotikDante();
+        const router = buscarRouterMencionadoDante(textoOriginal, routers);
+        if (!router) {
+            responderDante("No pude identificar ese router. Dime el nombre, sector o parroquia del MikroTik.");
+            return true;
+        }
+        seleccionarRouterMikrotikDante(router, "AGREGAR_MOROSO");
+        await agregarMorosoDesdeDante(router, flujo.ipCliente, flujo.comentario);
+        return true;
+    }
+
+    // ========================================================
+    // DANTE V3 - DIAGNÓSTICO AUTOMÁTICO DE INTERNET DEL CLIENTE
+    // Encadena herramientas existentes: cliente -> perfil -> cortes
+    // -> MikroTik -> ping. No ejecuta acciones de escritura.
+    // ========================================================
+
+    function detectarTipoProblemaInternetDante(
+        textoOriginal: string
+    ): TipoProblemaInternetDante | null {
+        const texto = normalizarTextoDante(textoOriginal);
+
+        const contextoInternet =
+            /\b(internet|servicio|conexion|red|navegacion|navegar)\b/.test(texto);
+
+        const pideRevision =
+            /\b(revisa|revisar|verifica|verificar|diagnostica|diagnosticar|comprueba|comprobar|mira|averigua|averiguar|chequea|chequear|por que|porque)\b/.test(texto);
+
+        const sinInternet =
+            /\b(no tiene internet|esta sin internet|sin internet|no le funciona internet|no funciona el internet|no funciona internet|sin conexion|no tiene conexion|esta desconectado|esta desconectada|no navega|no puede navegar|no tiene servicio|esta sin servicio|sin servicio|no le funciona el servicio|no funciona el servicio|no hay servicio)\b/.test(texto);
+
+        const lentitud =
+            /\b(esta lento|esta lenta|internet lento|internet lenta|servicio lento|servicio lenta|conexion lenta|conexion lento|navega lento|navega lenta|muy lento|muy lenta|lentitud|baja velocidad|poca velocidad)\b/.test(texto);
+
+        const intermitencia =
+            /\b(intermitente|intermitencia|se va y viene|va y viene|se cae|se corta|se desconecta|se conecta y desconecta|pierde conexion|pierde internet|cortes de internet|cortes en el servicio)\b/.test(texto);
+
+        const hayClienteEnContexto =
+            servicioClienteDanteRef.current !== null;
+
+        if (
+            sinInternet &&
+            (
+                pideRevision ||
+                contextoInternet ||
+                hayClienteEnContexto
+            )
+        ) {
+            return "SIN_INTERNET";
+        }
+
+        if (
+            lentitud &&
+            (
+                pideRevision ||
+                contextoInternet ||
+                hayClienteEnContexto
+            )
+        ) {
+            return "LENTITUD";
+        }
+
+        if (
+            intermitencia &&
+            (
+                pideRevision ||
+                contextoInternet ||
+                hayClienteEnContexto
+            )
+        ) {
+            return "INTERMITENCIA";
+        }
+
+        // Consulta general: "revisa la conexión de Juan Pérez"
+        if (
+            pideRevision &&
+            /\b(internet|servicio|conexion|conectividad)\b/.test(texto)
+        ) {
+            return "GENERAL";
+        }
+
+        return null;
+    }
+
+    function esInicioDiagnosticoInternetDante(
+        textoOriginal: string
+    ): boolean {
+        return detectarTipoProblemaInternetDante(textoOriginal) !== null;
+    }
+
+    function extraerClienteDiagnosticoInternetDante(
+        textoOriginal: string
+    ): string {
+        const texto = normalizarTextoDante(textoOriginal)
+            .replace(/\bdante\b/g, " ")
+            .replace(/\b(revisa|revisar|verifica|verificar|diagnostica|diagnosticar|comprueba|comprobar|mira|averigua|averiguar|chequea|chequear)\b/g, " ")
+            .replace(/\b(por que|porque|dice que|reporta que|indica que|me dice que|me indica que|ahi dice que|ahí dice que|hay dice que|el dice que|ella dice que|dice|reporta|indica|me comenta que|comenta que)\b/g, " ")
+            .replace(/\b(no tiene internet|esta sin internet|sin internet|no le funciona internet|no funciona el internet|no funciona internet|sin conexion|no tiene conexion|esta desconectado|esta desconectada|no navega|no puede navegar|no tiene servicio|esta sin servicio|sin servicio|no le funciona el servicio|no funciona el servicio|no hay servicio)\b/g, " ")
+            .replace(/\b(esta lento|esta lenta|internet lento|internet lenta|servicio lento|servicio lenta|conexion lenta|conexion lento|navega lento|navega lenta|muy lento|muy lenta|lentitud|baja velocidad|poca velocidad)\b/g, " ")
+            .replace(/\b(intermitente|intermitencia|se va y viene|va y viene|se cae|se corta|se desconecta|se conecta y desconecta|pierde conexion|pierde internet|cortes de internet|cortes en el servicio)\b/g, " ")
+            .replace(/\b(el internet|la conexion|la conectividad|el servicio|internet|conexion|conectividad|servicio)\b/g, " ")
+            .replace(/\b(el cliente|la cliente|cliente|usuario|abonado)\b/g, " ")
+            .replace(/^\s*(a|al|de|del)\s+/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        return texto;
+    }
+
+    async function obtenerServiciosParaDiagnosticoDante(): Promise<ServicioClienteDante[]> {
+        try {
+            const res = await fetch(
+                `${API_BASE}/cliente-servicio`,
+                { cache: "no-store" }
+            );
+
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok || data?.ok === false) {
+                return [];
+            }
+
+            return Array.isArray(data?.servicios)
+                ? data.servicios
+                : Array.isArray(data?.data)
+                    ? data.data
+                    : [];
+        } catch (error) {
+            console.error("DANTE V3: error consultando servicios:", error);
+            return [];
+        }
+    }
+
+    function buscarServiciosDiagnosticoDante(
+        terminoOriginal: string,
+        servicios: ServicioClienteDante[]
+    ): ServicioClienteDante[] {
+        const termino = normalizarTextoDante(terminoOriginal);
+
+        if (!termino) return [];
+
+        return servicios.filter((servicio) => {
+            const nombre = `${servicio.nombres || ""} ${servicio.apellidos || ""}`.trim();
+            const cedula = normalizarTextoDante(servicio.cedula || "");
+            const telefono = normalizarTextoDante(servicio.telefono || "");
+            const ip = normalizarTextoDante(servicio.ipCliente || "");
+            const pppoe = normalizarTextoDante(servicio.pppSecret || "");
+
+            return (
+                nombreCoincideDante(termino, nombre) ||
+                cedula.includes(termino) ||
+                telefono.includes(termino) ||
+                ip.includes(termino) ||
+                pppoe.includes(termino)
+            );
+        });
+    }
+
+    async function consultarEstadoRouterDiagnosticoDante(
+        router: RouterMikrotikDante
+    ): Promise<boolean | null> {
+        try {
+            const token = getToken();
+            const usaWireGuard =
+                Number(router.UsaWireGuard ?? router.usa_wireguard ?? 0) === 1 ||
+                Boolean(router.IpWireGuard || router.ip_wireguard);
+
+            const url = usaWireGuard
+                ? `${API_BASE}/mikrotik/routers/${router.id}/agent/estado`
+                : `${API_BASE}/mikrotik/routers/${router.id}/test`;
+
+            const res = await fetch(url, {
+                headers: { Authorization: `Bearer ${token}` },
+                cache: "no-store",
+            });
+
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok || data?.ok === false) {
+                return false;
+            }
+
+            return (
+                data?.conectado === true ||
+                data?.ok === true ||
+                data?.data?.ok === true ||
+                data?.router?.ok === true
+            );
+        } catch (error) {
+            console.error("DANTE V3: error consultando estado del router:", error);
+            return null;
+        }
+    }
+
+    async function consultarPingDiagnosticoDante(
+        servicio: ServicioClienteDante
+    ): Promise<any | null> {
+        try {
+            const token = getToken();
+            const res = await fetch(
+                `${API_BASE}/clientes/perfiles/administrativo/${servicio.servicioId}/ping`,
+                {
+                    headers: { Authorization: `Bearer ${token}` },
+                    cache: "no-store",
+                }
+            );
+
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok || data?.ok === false) {
+                return null;
+            }
+
+            return data?.data || null;
+        } catch (error) {
+            console.error("DANTE V3: error haciendo ping al cliente:", error);
+            return null;
+        }
+    }
+
+    async function ejecutarComprobacionesTecnicasDante(
+        router: RouterMikrotikDante | null
+    ): Promise<void> {
+        if (!router) {
+            const flujoActual =
+                flujoDiagnosticoInternetDanteRef.current;
+
+            flujoDiagnosticoInternetDanteRef.current = {
+                etapa: "CONFIRMAR_CPE",
+                candidatos: [],
+                seleccionado:
+                    flujoActual?.seleccionado ||
+                    servicioClienteDanteRef.current,
+                router: null,
+            };
+
+            actualizarContextoDante({
+                tema: "CLIENTE",
+                ultimaIntencion: "CONFIRMAR_DIAGNOSTICO_CPE",
+                esperandoRespuesta: true,
+                datoPendiente: "CONFIRMAR_CPE_CLIENTE",
+            });
+
+            responderDante(
+                "No tengo un router MikroTik asociado para ampliar esa comprobación. ¿Quieres que continúe buscando directamente el equipo de enlace del cliente en los equipos wireless registrados?"
+            );
+            return;
+        }
+
+        try {
+            responderDante(
+                `De acuerdo. Voy a revisar también los recursos de ${router.nombre}.`
+            );
+
+            const token = getToken();
+            const usaWireGuard =
+                Number(router.UsaWireGuard ?? router.usa_wireguard ?? 0) === 1 ||
+                Boolean(router.IpWireGuard || router.ip_wireguard);
+
+            let recurso: any = null;
+
+            if (!usaWireGuard) {
+                const res = await fetch(
+                    `${API_BASE}/mikrotik/routers/${router.id}/test`,
+                    {
+                        headers: { Authorization: `Bearer ${token}` },
+                        cache: "no-store",
+                    }
+                );
+
+                const data = await res.json().catch(() => ({}));
+
+                if (res.ok && data?.ok !== false) {
+                    recurso = data?.router || null;
+                }
+            } else {
+                const resEstado = await fetch(
+                    `${API_BASE}/mikrotik/routers/${router.id}/agent/estado`,
+                    {
+                        headers: { Authorization: `Bearer ${token}` },
+                        cache: "no-store",
+                    }
+                );
+
+                const estado = await resEstado.json().catch(() => ({}));
+                const nodo = estado?.nodo;
+
+                if (resEstado.ok && estado?.ok !== false && nodo) {
+                    const res = await fetch(
+                        `${API_BASE}/mikrotik/agent/resource`,
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                Authorization: `Bearer ${token}`,
+                            },
+                            body: JSON.stringify({ nodo }),
+                        }
+                    );
+
+                    const data = await res.json().catch(() => ({}));
+
+                    if (res.ok && data?.ok !== false) {
+                        recurso =
+                            data?.data?.resource?.[0] ||
+                            data?.data?.resources?.[0] ||
+                            data?.data?.[0] ||
+                            data?.data?.resource ||
+                            data?.data ||
+                            null;
+                    }
+                }
+            }
+
+            if (!recurso) {
+                const flujoActual =
+                    flujoDiagnosticoInternetDanteRef.current;
+
+                flujoDiagnosticoInternetDanteRef.current = {
+                    etapa: "CONFIRMAR_CPE",
+                    candidatos: [],
+                    seleccionado:
+                        flujoActual?.seleccionado ||
+                        servicioClienteDanteRef.current,
+                    router,
+                };
+
+                actualizarContextoDante({
+                    tema: "CLIENTE",
+                    ultimaIntencion: "CONFIRMAR_DIAGNOSTICO_CPE",
+                    esperandoRespuesta: true,
+                    datoPendiente: "CONFIRMAR_CPE_CLIENTE",
+                });
+
+                responderDante(
+                    `No pude obtener los recursos de ${router.nombre}. El diagnóstico inicial queda disponible. ¿Quieres que continúe revisando directamente el equipo de enlace del cliente?`
+                );
+                return;
+            }
+
+            const cargaCpu =
+                recurso?.cpuLoad ??
+                recurso?.["cpu-load"] ??
+                null;
+
+            const uptime = recurso?.uptime || null;
+            const memoriaLibre =
+                recurso?.freeMemory ??
+                recurso?.["free-memory"] ??
+                null;
+
+            let respuesta =
+                `${router.nombre} respondió a la comprobación técnica.`;
+
+            if (cargaCpu !== null && cargaCpu !== undefined) {
+                respuesta += ` La carga de CPU es ${cargaCpu} por ciento.`;
+            }
+
+            if (uptime) {
+                respuesta += ` Uptime ${uptime}.`;
+            }
+
+            if (memoriaLibre) {
+                respuesta += ` Memoria libre ${memoriaLibre}.`;
+            }
+
+            respuesta +=
+                " Con esto confirmamos que el MikroTik está accesible.";
+
+            const flujoActual =
+                flujoDiagnosticoInternetDanteRef.current;
+
+            flujoDiagnosticoInternetDanteRef.current = {
+                etapa: "CONFIRMAR_CPE",
+                candidatos: [],
+                seleccionado:
+                    flujoActual?.seleccionado ||
+                    servicioClienteDanteRef.current,
+                router:
+                    flujoActual?.router ||
+                    router,
+            };
+
+            actualizarContextoDante({
+                tema: "CLIENTE",
+                ultimaIntencion: "CONFIRMAR_DIAGNOSTICO_CPE",
+                esperandoRespuesta: true,
+                datoPendiente: "CONFIRMAR_CPE_CLIENTE",
+            });
+
+            respuesta +=
+                " ¿Quieres que continúe y revise directamente el equipo de enlace del cliente?";
+
+            responderDante(respuesta);
+        } catch (error) {
+            console.error("DANTE V3: error en comprobaciones técnicas:", error);
+            responderDante(
+                `No pude completar las comprobaciones técnicas de ${router.nombre}.`
+            );
+        }
+    }
+
+    async function ejecutarDiagnosticoInternetClienteDante(
+        servicio: ServicioClienteDante
+    ): Promise<void> {
+        servicioClienteDanteRef.current = servicio;
+        perfilClienteDanteRef.current = null;
+        clientesPendientesSeleccionDanteRef.current = [];
+
+        const nombre =
+            `${servicio.nombres || ""} ${servicio.apellidos || ""}`.trim();
+
+        actualizarContextoDante({
+            tema: "CLIENTE",
+            entidadId: servicio.clienteId,
+            entidadNombre: nombre,
+            ultimaIntencion: "DIAGNOSTICO_INTERNET_V3",
+            esperandoRespuesta: false,
+            datoPendiente: null,
+        });
+
+        const tipoProblema =
+            tipoProblemaDiagnosticoDanteRef.current;
+
+        const descripcionProblema =
+            tipoProblema === "LENTITUD"
+                ? "el reporte de lentitud"
+                : tipoProblema === "INTERMITENCIA"
+                    ? "el reporte de intermitencia"
+                    : tipoProblema === "SIN_INTERNET"
+                        ? "por qué no tiene internet"
+                        : "el estado de su conexión";
+
+        responderDante(
+            `Encontré a ${nombre}. Voy a revisar ${descripcionProblema}, su servicio, MikroTik y conectividad.`
+        );
+
+        const [perfil, cortes, ping] = await Promise.all([
+            obtenerPerfilActualDante(),
+            obtenerCortesClientesDante(),
+            consultarPingDiagnosticoDante(servicio),
+        ]);
+
+        const ip =
+            String(
+                perfil?.servicio?.ipCliente ||
+                servicio.ipCliente ||
+                ""
+            ).trim();
+
+        const registroCorte =
+            cortes.find(
+                (item) =>
+                    ip &&
+                    String(item.ipCliente || "").trim() === ip
+            ) || null;
+
+        const routers = await obtenerRoutersMikrotikDante();
+
+        const router =
+            registroCorte
+                ? routers.find(
+                    (item) =>
+                        Number(item.id) === Number(registroCorte.routerId)
+                ) ||
+                buscarRouterMencionadoDante(
+                    registroCorte.routerNombre || "",
+                    routers
+                )
+                : null;
+
+        const routerOnline =
+            router
+                ? await consultarEstadoRouterDiagnosticoDante(router)
+                : null;
+
+        const estadoServicio =
+            String(
+                perfil?.servicio?.estadoServicio ||
+                servicio.estadoServicio ||
+                "SIN_ESTADO"
+            ).toUpperCase();
+
+        const estadoCorte =
+            String(
+                registroCorte?.estado ||
+                "SIN_REGISTRO"
+            ).toUpperCase();
+
+        const online = ping?.online === true;
+        const routerNombre =
+            router?.nombre ||
+            registroCorte?.routerNombre ||
+            "sin MikroTik identificado";
+
+        const sector =
+            router?.sector ||
+            registroCorte?.sector ||
+            "";
+
+        let respuesta =
+            `Diagnóstico de ${nombre}. `;
+
+        if (routerNombre !== "sin MikroTik identificado") {
+            respuesta += `Está asociado a ${routerNombre}`;
+            if (sector) respuesta += `, sector ${sector}`;
+            respuesta += ". ";
+        }
+
+        respuesta += `Su servicio aparece ${estadoServicio}. `;
+
+        if (estadoCorte === "CORTADO") {
+            respuesta +=
+                "En MikroTik figura como CORTADO. Esa es la causa más probable de que no tenga internet.";
+
+            flujoDiagnosticoInternetDanteRef.current = null;
+            return responderDante(respuesta);
+        }
+
+        if (estadoServicio === "SUSPENDIDO") {
+            respuesta +=
+                "El servicio está SUSPENDIDO en el sistema. Antes de hacer más pruebas técnicas conviene revisar por qué fue suspendido.";
+
+            flujoDiagnosticoInternetDanteRef.current = null;
+            return responderDante(respuesta);
+        }
+
+        if (routerOnline === false) {
+            respuesta +=
+                `El MikroTik ${routerNombre} no está respondiendo. La falla puede estar en el router, nodo o enlace hacia ese equipo.`;
+
+            flujoDiagnosticoInternetDanteRef.current = null;
+            return responderDante(respuesta);
+        }
+
+        if (online) {
+            const pingPromedio =
+                typeof ping?.pingPromedioMs === "number"
+                    ? ping.pingPromedioMs.toFixed(1)
+                    : null;
+
+            const latencia =
+                String(ping?.latencia || "").trim();
+
+            const enviados =
+                Number(ping?.enviados || 0);
+
+            const recibidos =
+                Number(ping?.recibidos || 0);
+
+            const perdidos =
+                Number(
+                    ping?.perdidos ??
+                    (enviados > 0
+                        ? Math.max(0, enviados - recibidos)
+                        : 0)
+                );
+
+            const tipoProblema =
+                tipoProblemaDiagnosticoDanteRef.current;
+
+            respuesta +=
+                "El cliente responde desde la red y aparece conectado.";
+
+            if (pingPromedio) {
+                respuesta += ` El ping promedio es ${pingPromedio} milisegundos.`;
+            }
+
+            if (latencia) {
+                respuesta += ` La latencia está clasificada como ${latencia}.`;
+            }
+
+            if (enviados > 0) {
+                respuesta += ` Respondió ${recibidos} de ${enviados} paquetes.`;
+            }
+
+            if (perdidos > 0) {
+                respuesta += ` Se detectaron ${perdidos} paquetes perdidos.`;
+            }
+
+            if (
+                tipoProblema === "LENTITUD" ||
+                tipoProblema === "INTERMITENCIA"
+            ) {
+                respuesta +=
+                    tipoProblema === "LENTITUD"
+                        ? " Como el reporte es de lentitud, que responda al ping no descarta el problema."
+                        : " Como el reporte es de intermitencia, una respuesta correcta en este momento no descarta cortes ocasionales.";
+
+                respuesta +=
+                    " ¿Quieres que continúe con las comprobaciones técnicas del MikroTik?";
+
+                flujoDiagnosticoInternetDanteRef.current = {
+                    etapa: "CONFIRMAR_COMPROBACIONES",
+                    candidatos: [],
+                    seleccionado: servicio,
+                    router,
+                };
+
+                actualizarContextoDante({
+                    tema: "CLIENTE",
+                    ultimaIntencion:
+                        tipoProblema === "LENTITUD"
+                            ? "DIAGNOSTICO_LENTITUD_V3"
+                            : "DIAGNOSTICO_INTERMITENCIA_V3",
+                    esperandoRespuesta: true,
+                    datoPendiente: "CONFIRMAR_COMPROBACIONES_TECNICAS",
+                });
+
+                return responderDante(respuesta);
+            }
+
+            if (tipoProblema === "SIN_INTERNET") {
+                respuesta +=
+                    " Si el usuario sigue reportando que no navega, la falla puede estar después de la conectividad básica.";
+
+                flujoDiagnosticoInternetDanteRef.current = {
+                    etapa: "CONFIRMAR_CPE",
+                    candidatos: [],
+                    seleccionado: servicio,
+                    router,
+                };
+
+                actualizarContextoDante({
+                    tema: "CLIENTE",
+                    ultimaIntencion: "CONFIRMAR_DIAGNOSTICO_CPE",
+                    esperandoRespuesta: true,
+                    datoPendiente: "CONFIRMAR_CPE_CLIENTE",
+                });
+
+                respuesta +=
+                    " ¿Quieres que continúe y revise directamente el equipo de enlace del cliente?";
+
+                return responderDante(respuesta);
+            }
+
+            respuesta +=
+                " La conectividad básica hacia el cliente está funcionando.";
+
+            flujoDiagnosticoInternetDanteRef.current = null;
+            return responderDante(respuesta);
+        }
+
+        if (estadoServicio === "ACTIVO") {
+            respuesta +=
+                "El servicio aparece ACTIVO, pero el cliente no responde desde la red.";
+
+            if (routerOnline === true && router) {
+                respuesta += ` El MikroTik ${router.nombre} sí está accesible.`;
+            }
+
+            respuesta +=
+                " ¿Quieres que haga las siguientes comprobaciones técnicas?";
+
+            flujoDiagnosticoInternetDanteRef.current = {
+                etapa: "CONFIRMAR_COMPROBACIONES",
+                candidatos: [],
+                seleccionado: servicio,
+                router,
+            };
+
+            actualizarContextoDante({
+                tema: "CLIENTE",
+                ultimaIntencion: "DIAGNOSTICO_INTERNET_V3",
+                esperandoRespuesta: true,
+                datoPendiente: "CONFIRMAR_COMPROBACIONES_TECNICAS",
+            });
+
+            return responderDante(respuesta);
+        }
+
+        respuesta +=
+            " No pude determinar una causa única con las comprobaciones actuales.";
+
+        flujoDiagnosticoInternetDanteRef.current = {
+            etapa: "CONFIRMAR_CPE",
+            candidatos: [],
+            seleccionado: servicio,
+            router,
+        };
+
+        actualizarContextoDante({
+            tema: "CLIENTE",
+            ultimaIntencion: "CONFIRMAR_DIAGNOSTICO_CPE",
+            esperandoRespuesta: true,
+            datoPendiente: "CONFIRMAR_CPE_CLIENTE",
+        });
+
+        respuesta +=
+            " ¿Quieres que continúe y revise directamente el equipo de enlace del cliente?";
+
+        responderDante(respuesta);
+    }
+
+    async function buscarClienteParaDiagnosticoDante(
+        termino: string
+    ): Promise<void> {
+        responderDante("Un momento. Estoy identificando al cliente para iniciar el diagnóstico.");
+
+        const servicios = await obtenerServiciosParaDiagnosticoDante();
+        const coincidencias = buscarServiciosDiagnosticoDante(
+            termino,
+            servicios
+        );
+
+        if (!coincidencias.length) {
+            flujoDiagnosticoInternetDanteRef.current = {
+                etapa: "BUSCAR_CLIENTE",
+                candidatos: [],
+                seleccionado: null,
+                router: null,
+            };
+
+            responderDante(
+                "No encontré ese cliente. Dime su nombre, cédula, teléfono o IP para continuar el diagnóstico."
+            );
+            return;
+        }
+
+        if (coincidencias.length === 1) {
+            await ejecutarDiagnosticoInternetClienteDante(
+                coincidencias[0]
+            );
+            return;
+        }
+
+        const candidatos = coincidencias.slice(0, 9);
+
+        flujoDiagnosticoInternetDanteRef.current = {
+            etapa: "SELECCIONAR_CLIENTE",
+            candidatos,
+            seleccionado: null,
+            router: null,
+        };
+
+        const opciones = candidatos
+            .map(
+                (item, index) =>
+                    `${index + 1}. ${item.nombres || ""} ${item.apellidos || ""}, IP ${item.ipCliente || "sin IP"}`.trim()
+            )
+            .join(". ");
+
+        responderDante(
+            `Encontré ${coincidencias.length} coincidencias. ${opciones}. Dime el número, el nombre completo o la IP y continuaré automáticamente con el diagnóstico.`
+        );
+    }
+
+    async function iniciarDiagnosticoInternetDante(
+        textoOriginal: string
+    ): Promise<boolean> {
+        const tipoProblema =
+            detectarTipoProblemaInternetDante(textoOriginal) ||
+            "GENERAL";
+
+        tipoProblemaDiagnosticoDanteRef.current =
+            tipoProblema;
+
+        const termino = extraerClienteDiagnosticoInternetDante(
+            textoOriginal
+        );
+
+        const clienteActual =
+            servicioClienteDanteRef.current;
+
+        const terminoContextual =
+            normalizarTextoDante(
+                termino
+            )
+                .replace(
+                    /\b(ahi|ahí|hay|ese|esa|el|ella|este|esta|mismo|misma|cliente|usuario)\b/g,
+                    " "
+                )
+                .replace(
+                    /\s+/g,
+                    " "
+                )
+                .trim();
+
+        if (
+            clienteActual &&
+            !terminoContextual
+        ) {
+            flujoDiagnosticoInternetDanteRef.current = {
+                etapa: "BUSCAR_CLIENTE",
+                candidatos: [],
+                seleccionado:
+                    clienteActual,
+                router: null,
+            };
+
+            await ejecutarDiagnosticoInternetClienteDante(
+                clienteActual
+            );
+
+            return true;
+        }
+
+        flujoDiagnosticoInternetDanteRef.current = {
+            etapa: "BUSCAR_CLIENTE",
+            candidatos: [],
+            seleccionado: null,
+            router: null,
+        };
+
+        if (!termino || termino.length < 2) {
+            responderDante(
+                "¿Qué cliente deseas diagnosticar? Dime su nombre, cédula, teléfono o IP."
+            );
+            return true;
+        }
+
+        await buscarClienteParaDiagnosticoDante(termino);
+        return true;
+    }
+
+
+
+    // ========================================================
+    // DANTE - TICKETS DE MANTENIMIENTO
+    // Reutiliza exactamente el módulo existente de /tickets.
+    // ========================================================
+
+    function esSolicitudTicketMantenimientoDante(
+        textoOriginal: string
+    ): boolean {
+        const texto =
+            normalizarTextoDante(
+                textoOriginal
+            )
+                .replace(/\bdante\b/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
+
+        // La intención debe funcionar también inmediatamente después
+        // de una búsqueda de cliente, por ejemplo:
+        // "creale un ticket", "una visita de tecnico",
+        // "manda un tecnico", "que vayan a revisarlo".
+        const accion =
+            /\b(crea|crear|creale|genera|generar|abre|abrir|haz|hacer|hazle|manda|mandar|mande|envia|enviar|envie|programa|programar|agenda|agendar|solicita|solicitar)\b/.test(
+                texto
+            );
+
+        const mantenimiento =
+            /\b(ticket|tiquet|tiket|mantenimiento|visita|tecnico|tecnica|orden de trabajo|revision fisica|revisar fisicamente|soporte tecnico)\b/.test(
+                texto
+            );
+
+        const frasesDirectas = [
+            "manda un tecnico",
+            "mande un tecnico",
+            "envia un tecnico",
+            "envie un tecnico",
+            "que vaya un tecnico",
+            "que vayan a revisarlo",
+            "que vayan a revisar",
+            "que lo revise un tecnico",
+            "que lo revisen",
+            "hazle un mantenimiento",
+            "creale un ticket",
+            "crea un ticket",
+            "genera un ticket",
+            "abre un ticket",
+            "ticket de mantenimiento",
+            "ticket para mantenimiento",
+            "una visita tecnica",
+            "visita tecnica",
+            "visita de tecnico",
+            "una visita de tecnico",
+            "necesita un tecnico",
+            "necesito un tecnico",
+            "necesito que vaya un tecnico",
+            "necesito que lo revisen",
+            "agenda una visita",
+            "programa una visita",
+            "orden de trabajo",
+            "crea una orden de trabajo",
+            "revision en sitio",
+            "revision fisica",
+            "revisar en sitio",
+            "revisar fisicamente",
+        ];
+
+        return (
+            (accion && mantenimiento) ||
+            frasesDirectas.some(
+                (frase) =>
+                    texto.includes(
+                        frase
+                    )
+            )
+        );
+    }
+
+    function esPersistenciaProblemaDespuesDiagnosticoDante(
+        textoOriginal: string
+    ): boolean {
+        const texto =
+            normalizarTextoDante(
+                textoOriginal
+            );
+
+        const sigueConProblema =
+            /\b(sigue lento|sigue lenta|todavia esta lento|todavia esta lenta|aun esta lento|aun esta lenta|continua lento|continua lenta|sigue fallando|todavia falla|aun falla|sigue sin navegar|sigue sin servicio)\b/.test(
+                texto
+            );
+
+        const dudaCausa =
+            /\b(no entiendo|entonces por que|y por que sera|por que sera|si todo esta bien|si esta bien|si sale bien|si la senal esta bien|si la señal esta bien|que mas puede ser|que puede ser entonces|no encuentro la falla|no se que pasa)\b/.test(
+                texto
+            );
+
+        const problema =
+            /\b(lento|lenta|lentitud|falla|fallando|internet|servicio|conexion|conectividad|navega|navegar)\b/.test(
+                texto
+            );
+
+        return (
+            sigueConProblema ||
+            (dudaCausa && problema)
+        );
+    }
+
+    function obtenerPrioridadTicketMantenimientoDante():
+        "BAJA" | "MEDIA" | "ALTA" | "CRITICA" {
+        const tipo =
+            tipoProblemaDiagnosticoDanteRef.current;
+
+        if (
+            tipo === "SIN_INTERNET" ||
+            tipo === "INTERMITENCIA"
+        ) {
+            return "ALTA";
+        }
+
+        const contexto =
+            cpeDiagnosticoDanteRef.current;
+
+        if (contexto) {
+            const cliente =
+                contexto.cliente ||
+                {};
+
+            const remote =
+                cliente.remote ||
+                {};
+
+            const senal =
+                cliente.signal ??
+                remote.signal;
+
+            const clasificacion =
+                clasificarSenalExperienciaDante(
+                    senal
+                );
+
+            if (
+                clasificacion === "MALO" ||
+                clasificacion === "HORRIBLE"
+            ) {
+                return "ALTA";
+            }
+        }
+
+        return "MEDIA";
+    }
+
+    function construirDescripcionTicketMantenimientoDante(
+        servicio: ServicioClienteDante
+    ): string {
+        const nombre =
+            `${servicio.nombres || ""} ${servicio.apellidos || ""}`
+                .trim();
+
+        const tipo =
+            tipoProblemaDiagnosticoDanteRef.current;
+
+        const problema =
+            tipo === "LENTITUD"
+                ? "lentitud"
+                : tipo === "INTERMITENCIA"
+                    ? "intermitencia"
+                    : tipo === "SIN_INTERNET"
+                        ? "falta de servicio"
+                        : "problema de conectividad";
+
+        const partes: string[] = [
+            `Cliente ${nombre} reporta ${problema}.`,
+            `IP ${servicio.ipCliente || "no disponible"}.`,
+        ];
+
+        const contexto =
+            cpeDiagnosticoDanteRef.current;
+
+        if (contexto) {
+            const cliente =
+                contexto.cliente ||
+                {};
+
+            const remote =
+                cliente.remote ||
+                {};
+
+            const senal =
+                cliente.signal ??
+                remote.signal;
+
+            const ruido =
+                cliente.noisefloor ??
+                remote.noisefloor;
+
+            const clasificacionSenal =
+                clasificarSenalExperienciaDante(
+                    senal
+                );
+
+            if (
+                senal !== undefined &&
+                senal !== null &&
+                senal !== ""
+            ) {
+                partes.push(
+                    `Señal ${senal} dBm${clasificacionSenal ? ` (${clasificacionSenal.toLowerCase()})` : ""}.`
+                );
+            }
+
+            if (
+                ruido !== undefined &&
+                ruido !== null &&
+                ruido !== ""
+            ) {
+                partes.push(
+                    `Ruido ${ruido} dBm.`
+                );
+            }
+
+            if (
+                cliente.tx !== undefined &&
+                cliente.tx !== null
+            ) {
+                partes.push(
+                    `TX ${cliente.tx} Mbps.`
+                );
+            }
+
+            if (
+                cliente.rx !== undefined &&
+                cliente.rx !== null
+            ) {
+                partes.push(
+                    `RX ${cliente.rx} Mbps.`
+                );
+            }
+        }
+
+        const diagnostico =
+            String(
+                diagnosticoHumanoCpeDanteRef.current ||
+                ""
+            ).trim();
+
+        if (diagnostico) {
+            partes.push(
+                `Diagnóstico de Dante: ${diagnostico}`
+            );
+        }
+
+        partes.push(
+            "Se solicita revisión física en sitio para comprobar equipo de enlace, fijación, alineación, cableado, línea de vista y condiciones del entorno."
+        );
+
+        return partes.join(
+            " "
+        );
+    }
+
+    async function prepararTicketMantenimientoDante(
+        servicio?: ServicioClienteDante | null
+    ): Promise<boolean> {
+        const cliente =
+            servicio ||
+            servicioClienteDanteRef.current;
+
+        if (!cliente) {
+            responderDante(
+                "Primero necesito saber para qué cliente deseas generar el ticket de mantenimiento."
+            );
+            return true;
+        }
+
+        const nombre =
+            `${cliente.nombres || ""} ${cliente.apellidos || ""}`
+                .trim();
+
+        const prioridad =
+            obtenerPrioridadTicketMantenimientoDante();
+
+        const tipo =
+            tipoProblemaDiagnosticoDanteRef.current;
+
+        const categoria:
+            "INTERNET" | "EQUIPO" =
+            cpeDiagnosticoDanteRef.current
+                ? "EQUIPO"
+                : "INTERNET";
+
+        const motivo =
+            tipo === "LENTITUD"
+                ? "Lentitud"
+                : tipo === "INTERMITENCIA"
+                    ? "Intermitencia"
+                    : tipo === "SIN_INTERNET"
+                        ? "Sin servicio"
+                        : "Revisión técnica";
+
+        const pendiente:
+            TicketMantenimientoPendienteDante = {
+            servicio: cliente,
+            titulo:
+                `${motivo} - mantenimiento ${nombre}`,
+            descripcion:
+                construirDescripcionTicketMantenimientoDante(
+                    cliente
+                ),
+            categoria,
+            prioridad,
+        };
+
+        ticketMantenimientoPendienteDanteRef.current =
+            pendiente;
+
+        actualizarContextoDante({
+            tema: "CLIENTE",
+            entidadId:
+                cliente.clienteId,
+            entidadNombre:
+                nombre,
+            ultimaIntencion:
+                "CONFIRMAR_TICKET_MANTENIMIENTO",
+            esperandoRespuesta:
+                true,
+            datoPendiente:
+                "CONFIRMAR_TICKET_MANTENIMIENTO",
+        });
+
+        responderDante(
+            `De acuerdo. Tomaré como referencia al cliente ${nombre} que tenemos en contexto. ` +
+            `Puedo generar un ticket de mantenimiento, categoría ${categoria.toLowerCase()} y prioridad ${prioridad.toLowerCase()}. ¿Deseas que lo genere?`
+        );
+
+        return true;
+    }
+
+    async function crearTicketMantenimientoDesdeDante(): Promise<void> {
+        const pendiente =
+            ticketMantenimientoPendienteDanteRef.current;
+
+        if (!pendiente) {
+            responderDante(
+                "No tengo un ticket de mantenimiento pendiente."
+            );
+            return;
+        }
+
+        try {
+            const token =
+                getToken();
+
+            responderDante(
+                "De acuerdo. Estoy generando el ticket de mantenimiento."
+            );
+
+            // La pantalla de tickets utiliza la empresa principal.
+            const resEmpresa =
+                await fetch(
+                    `${API_BASE}/facturacion/config/empresa`,
+                    {
+                        headers: {
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+                        cache:
+                            "no-store",
+                    }
+                );
+
+            const dataEmpresa =
+                await resEmpresa
+                    .json()
+                    .catch(
+                        () => ({})
+                    );
+
+            const empresas =
+                Array.isArray(
+                    dataEmpresa?.data
+                )
+                    ? dataEmpresa.data
+                    : [];
+
+            const empresaPrincipal =
+                empresas.find(
+                    (item: any) =>
+                        Number(
+                            item?.es_principal
+                        ) === 1
+                ) ||
+                empresas[0];
+
+            if (
+                !resEmpresa.ok ||
+                !empresaPrincipal?.id
+            ) {
+                throw new Error(
+                    "No pude identificar la empresa principal."
+                );
+            }
+
+            const res =
+                await fetch(
+                    `${API_BASE}/tickets`,
+                    {
+                        method:
+                            "POST",
+                        headers: {
+                            "Content-Type":
+                                "application/json",
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+                        body:
+                            JSON.stringify({
+                                empresaId:
+                                    String(
+                                        empresaPrincipal.id
+                                    ),
+                                clienteTipo:
+                                    "ISP",
+                                clienteId:
+                                    pendiente.servicio
+                                        .cedula ||
+                                    null,
+                                titulo:
+                                    pendiente.titulo,
+                                descripcion:
+                                    pendiente.descripcion,
+                                categoria:
+                                    pendiente.categoria,
+                                prioridad:
+                                    pendiente.prioridad,
+                            }),
+                    }
+                );
+
+            const data =
+                await res
+                    .json()
+                    .catch(
+                        () => ({})
+                    );
+
+            if (
+                !res.ok ||
+                data?.ok === false
+            ) {
+                throw new Error(
+                    data?.mensaje ||
+                    data?.message ||
+                    "No pude crear el ticket."
+                );
+            }
+
+            const codigo =
+                String(
+                    data?.codigoTicket ||
+                    data?.data
+                        ?.codigoTicket ||
+                    ""
+                ).trim();
+
+            ticketMantenimientoPendienteDanteRef.current =
+                null;
+
+            actualizarContextoDante({
+                tema: "CLIENTE",
+                ultimaIntencion:
+                    "TICKET_MANTENIMIENTO_CREADO",
+                esperandoRespuesta:
+                    false,
+                datoPendiente:
+                    null,
+            });
+
+            responderDante(
+                codigo
+                    ? `Ticket de mantenimiento creado correctamente. Código ${codigo}.`
+                    : "Ticket de mantenimiento creado correctamente."
+            );
+        } catch (error: any) {
+            console.error(
+                "DANTE: error creando ticket de mantenimiento:",
+                error
+            );
+
+            responderDante(
+                error?.message ||
+                "No pude crear el ticket de mantenimiento."
+            );
+        }
+    }
+
+    async function procesarConfirmacionTicketMantenimientoDante(
+        textoOriginal: string
+    ): Promise<boolean> {
+        if (
+            !ticketMantenimientoPendienteDanteRef.current
+        ) {
+            return false;
+        }
+
+        const respuesta =
+            normalizarTextoDante(
+                textoOriginal
+            )
+                .replace(
+                    /^\s*dante\s+/,
+                    ""
+                )
+                .trim();
+
+        if (esSiDante(respuesta)) {
+            await crearTicketMantenimientoDesdeDante();
+            return true;
+        }
+
+        if (esNoDante(respuesta)) {
+            ticketMantenimientoPendienteDanteRef.current =
+                null;
+
+            actualizarContextoDante({
+                tema: "CLIENTE",
+                esperandoRespuesta:
+                    false,
+                datoPendiente:
+                    null,
+            });
+
+            responderDante(
+                "De acuerdo. No generaré el ticket de mantenimiento."
+            );
+
+            return true;
+        }
+
+        responderDante(
+            "Necesito tu confirmación. Dime sí para generar el ticket de mantenimiento o no para cancelarlo."
+        );
+
+        return true;
+    }
+
+    // ========================================================
+    // DANTE V3 - DIAGNÓSTICO DIRECTO DEL CPE DEL CLIENTE
+    // Reutiliza las rutas existentes de EquiposWirelessPage.
+    // IMPORTANTE: aquí NO usamos /estado ONLINE/OFFLINE.
+    // ========================================================
+
+    function parseMcaStatusCpeDante(salida: string) {
+        const bloque =
+            String(salida || "").split("---IWCONFIG---")[0] || "";
+
+        const data: any = {};
+
+        bloque
+            .split("\n")
+            .forEach((linea) => {
+                const textoLinea = linea.trim();
+
+                if (
+                    !textoLinea ||
+                    textoLinea.includes("---MCA_STATUS---")
+                ) {
+                    return;
+                }
+
+                textoLinea
+                    .split(",")
+                    .forEach((parte) => {
+                        const [key, value] =
+                            parte.split("=");
+
+                        if (
+                            key &&
+                            value !== undefined
+                        ) {
+                            data[key.trim()] =
+                                value.trim();
+                        }
+                    });
+            });
+
+        return data;
+    }
+
+    function parseStationsCpeDante(salida: string): any[] {
+        const bloque =
+            String(salida || "")
+                .split("---STATIONS---")[1]
+                ?.split("---IWCONFIG---")[0]
+                ?.trim() || "";
+
+        if (!bloque) {
+            return [];
+        }
+
+        try {
+            const inicioArray =
+                bloque.indexOf("[");
+
+            const finArray =
+                bloque.lastIndexOf("]");
+
+            if (
+                inicioArray >= 0 &&
+                finArray > inicioArray
+            ) {
+                const json =
+                    JSON.parse(
+                        bloque.substring(
+                            inicioArray,
+                            finArray + 1
+                        )
+                    );
+
+                if (Array.isArray(json)) {
+                    return json;
+                }
+            }
+
+            const inicioObj =
+                bloque.indexOf("{");
+
+            const finObj =
+                bloque.lastIndexOf("}");
+
+            if (
+                inicioObj >= 0 &&
+                finObj > inicioObj
+            ) {
+                const json =
+                    JSON.parse(
+                        bloque.substring(
+                            inicioObj,
+                            finObj + 1
+                        )
+                    );
+
+                if (Array.isArray(json)) {
+                    return json;
+                }
+
+                if (Array.isArray(json?.stations)) {
+                    return json.stations;
+                }
+
+                if (Array.isArray(json?.hosts)) {
+                    return json.hosts;
+                }
+
+                if (Array.isArray(json?.data)) {
+                    return json.data;
+                }
+
+                return [json];
+            }
+        } catch (error) {
+            console.error(
+                "DANTE V3 CPE: error parseando estaciones:",
+                error
+            );
+        }
+
+        return [];
+    }
+
+    function obtenerBloquesRedCpeDante(
+        salidaOriginal: string
+    ) {
+        const salida =
+            String(salidaOriginal || "");
+
+        const cfg =
+            salida
+                .split("---CFG---")[1]
+                ?.split("---ROUTES---")[0] ||
+            "";
+
+        const routes =
+            salida
+                .split("---ROUTES---")[1]
+                ?.split("---DNS---")[0] ||
+            "";
+
+        const dns =
+            salida
+                .split("---DNS---")[1]
+                ?.split("---NAT---")[0] ||
+            "";
+
+        const obtenerCfg = (
+            clave: string
+        ) => {
+            const linea =
+                cfg
+                    .split("\n")
+                    .find(
+                        (item) =>
+                            item.startsWith(
+                                `${clave}=`
+                            )
+                    );
+
+            return (
+                linea
+                    ?.split("=")[1]
+                    ?.trim() ||
+                ""
+            );
+        };
+
+        const lineaGateway =
+            routes
+                .split("\n")
+                .map(
+                    (linea) =>
+                        linea.trim()
+                )
+                .find(
+                    (linea) =>
+                        linea.startsWith(
+                            "0.0.0.0"
+                        ) ||
+                        linea.includes(
+                            " UG "
+                        )
+                );
+
+        let gateway = "-";
+        let interfaz = "-";
+
+        if (lineaGateway) {
+            const partes =
+                lineaGateway.split(/\s+/);
+
+            gateway =
+                partes[1] || "-";
+
+            interfaz =
+                partes[7] ||
+                partes[
+                partes.length - 1
+                ] ||
+                "-";
+        }
+
+        const servidoresDns =
+            dns
+                .split("\n")
+                .filter(
+                    (linea) =>
+                        linea.includes(
+                            "nameserver"
+                        )
+                )
+                .map(
+                    (linea) =>
+                        linea
+                            .replace(
+                                "nameserver",
+                                ""
+                            )
+                            .trim()
+                );
+
+        return {
+            frecuencia:
+                obtenerCfg(
+                    "radio.1.freq"
+                ),
+            anchoCanal:
+                obtenerCfg(
+                    "radio.1.chanbw"
+                ),
+            potenciaTx:
+                obtenerCfg(
+                    "radio.1.txpower"
+                ),
+            gateway,
+            interfaz,
+            dns1:
+                servidoresDns[0] ||
+                "-",
+            dns2:
+                servidoresDns[1] ||
+                "-",
+        };
+    }
+
+    function formatearUptimeCpeDante(
+        segundosValor: unknown
+    ): string {
+        const segundos =
+            Number(
+                segundosValor ||
+                0
+            );
+
+        if (
+            !Number.isFinite(segundos) ||
+            segundos <= 0
+        ) {
+            return "";
+        }
+
+        const dias =
+            Math.floor(
+                segundos /
+                86400
+            );
+
+        const horas =
+            Math.floor(
+                (
+                    segundos %
+                    86400
+                ) /
+                3600
+            );
+
+        const minutos =
+            Math.floor(
+                (
+                    segundos %
+                    3600
+                ) /
+                60
+            );
+
+        return `${dias} días, ${horas} horas y ${minutos} minutos`;
+    }
+
+    async function obtenerEquiposWirelessDante(
+        router: RouterMikrotikDante | null
+    ): Promise<EquipoWirelessDante[]> {
+        try {
+            const token =
+                getToken();
+
+            const res =
+                await fetch(
+                    `${API_BASE}/wireless/equipos`,
+                    {
+                        headers: {
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+                        cache:
+                            "no-store",
+                    }
+                );
+
+            const data =
+                await res
+                    .json()
+                    .catch(
+                        () => ({})
+                    );
+
+            if (
+                !res.ok ||
+                data?.ok === false
+            ) {
+                return [];
+            }
+
+            const lista =
+                Array.isArray(
+                    data?.equipos
+                )
+                    ? data.equipos
+                    : Array.isArray(
+                        data?.data
+                    )
+                        ? data.data
+                        : [];
+
+            if (!router) {
+                return lista;
+            }
+
+            const mismoRouter =
+                lista.filter(
+                    (
+                        equipo:
+                            EquipoWirelessDante
+                    ) =>
+                        Number(
+                            equipo.routerId
+                        ) ===
+                        Number(
+                            router.id
+                        )
+                );
+
+            return mismoRouter.length
+                ? mismoRouter
+                : lista;
+        } catch (error) {
+            console.error(
+                "DANTE V3 CPE: error cargando equipos wireless:",
+                error
+            );
+
+            return [];
+        }
+    }
+
+    async function obtenerMetricasWirelessDante(
+        equipoId: string
+    ): Promise<any | null> {
+        try {
+            const token =
+                getToken();
+
+            const res =
+                await fetch(
+                    `${API_BASE}/wireless/equipos/${equipoId}/metricas`,
+                    {
+                        headers: {
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+                        cache:
+                            "no-store",
+                    }
+                );
+
+            const data =
+                await res
+                    .json()
+                    .catch(
+                        () => ({})
+                    );
+
+            if (
+                !res.ok ||
+                data?.ok === false ||
+                !data?.salida
+            ) {
+                return null;
+            }
+
+            return data;
+        } catch (error) {
+            console.error(
+                "DANTE V3 CPE: error consultando métricas:",
+                error
+            );
+
+            return null;
+        }
+    }
+
+    async function localizarCpeClienteDante(
+        servicio: ServicioClienteDante,
+        router: RouterMikrotikDante | null
+    ): Promise<ContextoCpeDante | null> {
+        const perfil =
+            await obtenerPerfilActualDante();
+
+        const ipCliente =
+            String(
+                perfil?.servicio
+                    ?.ipCliente ||
+                servicio.ipCliente ||
+                ""
+            ).trim();
+
+        if (!ipCliente) {
+            return null;
+        }
+
+        const equipos =
+            await obtenerEquiposWirelessDante(
+                router
+            );
+
+        const ordenados =
+            [...equipos].sort(
+                (a, b) => {
+                    const prioridad = (
+                        equipo:
+                            EquipoWirelessDante
+                    ) => {
+                        const tipo =
+                            String(
+                                equipo.tipoEquipo ||
+                                ""
+                            ).toUpperCase();
+
+                        if (
+                            tipo ===
+                            "SECTORIAL"
+                        ) {
+                            return 0;
+                        }
+
+                        if (
+                            tipo === "AP"
+                        ) {
+                            return 1;
+                        }
+
+                        if (
+                            tipo === "ENLACE"
+                        ) {
+                            return 2;
+                        }
+
+                        if (
+                            tipo ===
+                            "CPE_CLIENTE"
+                        ) {
+                            return 3;
+                        }
+
+                        return 4;
+                    };
+
+                    return (
+                        prioridad(a) -
+                        prioridad(b)
+                    );
+                }
+            );
+
+        for (
+            const equipo of
+            ordenados
+        ) {
+            const equipoId =
+                String(
+                    equipo.equipoId ||
+                    ""
+                ).trim();
+
+            if (!equipoId) {
+                continue;
+            }
+
+            const metricas =
+                await obtenerMetricasWirelessDante(
+                    equipoId
+                );
+
+            if (!metricas?.salida) {
+                continue;
+            }
+
+            const estaciones =
+                parseStationsCpeDante(
+                    metricas.salida
+                );
+
+            const cliente =
+                estaciones.find(
+                    (item: any) => {
+                        const ips =
+                            [
+                                item?.lastip,
+                                ...(Array.isArray(
+                                    item?.remote
+                                        ?.ipaddr
+                                )
+                                    ? item.remote.ipaddr
+                                    : []),
+                            ]
+                                .map(
+                                    (valor) =>
+                                        String(
+                                            valor ||
+                                            ""
+                                        ).trim()
+                                )
+                                .filter(
+                                    Boolean
+                                );
+
+                        return ips.includes(
+                            ipCliente
+                        );
+                    }
+                );
+
+            if (cliente) {
+                return {
+                    equipo,
+                    cliente,
+                    metricas,
+                    ipCliente,
+                };
+            }
+
+            // Respaldo: si el propio CPE está registrado directamente
+            // con la misma IP de gestión, aprovechamos sus métricas.
+            if (
+                String(
+                    equipo.ipGestion ||
+                    ""
+                ).trim() ===
+                ipCliente
+            ) {
+                const mca =
+                    parseMcaStatusCpeDante(
+                        metricas.salida
+                    );
+
+                return {
+                    equipo,
+                    metricas,
+                    ipCliente,
+                    cliente: {
+                        lastip:
+                            ipCliente,
+                        mac:
+                            equipo.mac ||
+                            mca.deviceId,
+                        signal:
+                            mca.signal,
+                        noisefloor:
+                            mca.noise,
+                        tx:
+                            mca.wlanTxRate,
+                        rx:
+                            mca.wlanRxRate,
+                        remote: {
+                            hostname:
+                                mca.deviceName ||
+                                equipo.nombre,
+                            platform:
+                                mca.platform ||
+                                equipo.modelo,
+                            cpuload:
+                                mca.cpuUsage,
+                            freeram:
+                                mca.freeMemory,
+                            uptime:
+                                mca.uptime,
+                        },
+                    },
+                };
+            }
+        }
+
+        return null;
+    }
+
+    function construirResumenCpeDante(
+        contexto:
+            ContextoCpeDante
+    ): string {
+        const cliente =
+            contexto.cliente ||
+            {};
+
+        const remote =
+            cliente.remote ||
+            {};
+
+        const salida =
+            String(
+                contexto.metricas
+                    ?.salida ||
+                ""
+            );
+
+        const red =
+            obtenerBloquesRedCpeDante(
+                salida
+            );
+
+        const nombre =
+            remote.hostname ||
+            cliente.name ||
+            contexto.equipo.nombre ||
+            "equipo";
+
+        const modelo =
+            remote.platform ||
+            cliente.platform ||
+            contexto.equipo.modelo ||
+            contexto.equipo.marca ||
+            "";
+
+        const firmware =
+            remote.version ||
+            cliente.version ||
+            "";
+
+        const signal =
+            cliente.signal ??
+            remote.signal;
+
+        const noise =
+            cliente.noisefloor ??
+            remote.noisefloor;
+
+        const ack =
+            cliente.ack;
+
+        const tx =
+            cliente.tx;
+
+        const rx =
+            cliente.rx;
+
+        const distancia =
+            cliente.distance ??
+            remote.distance;
+
+        const cpu =
+            remote.cpuload ??
+            cliente.cpuload;
+
+        const ram =
+            remote.freeram ??
+            cliente.freeram;
+
+        const uptime =
+            formatearUptimeCpeDante(
+                remote.uptime ??
+                cliente.uptime
+            );
+
+        const eth =
+            remote?.ethlist?.[0] ||
+            null;
+
+        let respuesta =
+            `Encontré el equipo de enlace ${nombre}, IP ${contexto.ipCliente}.`;
+
+        if (modelo) {
+            respuesta +=
+                ` Modelo ${modelo}.`;
+        }
+
+        if (firmware) {
+            respuesta +=
+                ` Firmware ${firmware}.`;
+        }
+
+        if (
+            signal !== undefined &&
+            signal !== null &&
+            signal !== ""
+        ) {
+            respuesta +=
+                ` Señal ${signal} dBm.`;
+        }
+
+        if (
+            noise !== undefined &&
+            noise !== null &&
+            noise !== ""
+        ) {
+            respuesta +=
+                ` Ruido ${noise} dBm.`;
+        }
+
+        if (
+            ack !== undefined &&
+            ack !== null &&
+            ack !== ""
+        ) {
+            respuesta +=
+                ` ACK ${ack} microsegundos.`;
+        }
+
+        if (
+            tx !== undefined &&
+            tx !== null &&
+            tx !== ""
+        ) {
+            respuesta +=
+                ` TX ${tx} Mbps.`;
+        }
+
+        if (
+            rx !== undefined &&
+            rx !== null &&
+            rx !== ""
+        ) {
+            respuesta +=
+                ` RX ${rx} Mbps.`;
+        }
+
+        if (
+            distancia !== undefined &&
+            distancia !== null &&
+            distancia !== ""
+        ) {
+            respuesta +=
+                ` Distancia ${distancia} metros.`;
+        }
+
+        if (
+            cpu !== undefined &&
+            cpu !== null &&
+            cpu !== ""
+        ) {
+            respuesta +=
+                ` CPU ${cpu} por ciento.`;
+        }
+
+        if (
+            ram !== undefined &&
+            ram !== null &&
+            ram !== ""
+        ) {
+            respuesta +=
+                ` RAM libre ${ram} KB.`;
+        }
+
+        if (uptime) {
+            respuesta +=
+                ` Tiempo encendido ${uptime}.`;
+        }
+
+        if (eth) {
+            respuesta +=
+                eth.plugged
+                    ? ` El puerto Ethernet está conectado${eth.speed ? ` a ${eth.speed} Mbps` : ""}${eth.duplex === true ? " Full Duplex" : eth.duplex === false ? " Half Duplex" : ""}.`
+                    : " El puerto Ethernet aparece desconectado.";
+        }
+
+        if (
+            red.frecuencia &&
+            red.frecuencia !== "-"
+        ) {
+            respuesta +=
+                ` Frecuencia ${red.frecuencia} MHz.`;
+        }
+
+        if (
+            red.anchoCanal &&
+            red.anchoCanal !== "-"
+        ) {
+            respuesta +=
+                ` Ancho de canal ${red.anchoCanal} MHz.`;
+        }
+
+        if (
+            red.potenciaTx &&
+            red.potenciaTx !== "-"
+        ) {
+            respuesta +=
+                ` Potencia TX ${red.potenciaTx} dBm.`;
+        }
+
+        return respuesta;
+    }
+
+    // ========================================================
+    // DANTE V3 - MOTOR DE EXPERIENCIA HUMANA PARA CPE
+    // Reglas aportadas desde experiencia de campo.
+    // No reemplaza las métricas: las interpreta y busca patrones.
+    // ========================================================
+
+    function numeroCpeDante(
+        valor: unknown
+    ): number | null {
+        if (
+            valor === null ||
+            valor === undefined ||
+            valor === ""
+        ) {
+            return null;
+        }
+
+        const numero =
+            Number(
+                String(valor)
+                    .replace(/[^\d.-]/g, "")
+            );
+
+        return Number.isFinite(numero)
+            ? numero
+            : null;
+    }
+
+    function clasificarSenalExperienciaDante(
+        senalValor: unknown
+    ): string | null {
+        const senal =
+            numeroCpeDante(
+                senalValor
+            );
+
+        if (senal === null) {
+            return null;
+        }
+
+        if (senal <= -53 && senal >= -63) {
+            return "EXCELENTE";
+        }
+
+        if (senal <= -64 && senal >= -72) {
+            return "MUY BUENO";
+        }
+
+        if (senal <= -73 && senal >= -76) {
+            return "BUENO";
+        }
+
+        if (senal <= -77 && senal >= -82) {
+            return "REGULAR";
+        }
+
+        if (senal <= -83 && senal >= -87) {
+            return "MALO";
+        }
+
+        if (senal <= -88) {
+            return "HORRIBLE";
+        }
+
+        return null;
+    }
+
+    function clasificarRuidoExperienciaDante(
+        ruidoValor: unknown
+    ): string | null {
+        const ruido =
+            numeroCpeDante(
+                ruidoValor
+            );
+
+        if (ruido === null) {
+            return null;
+        }
+
+        if (ruido <= -96 && ruido >= -120) {
+            return "EXCELENTE";
+        }
+
+        return null;
+    }
+
+    function encontrarClienteEnMetricasCpeDante(
+        salida: string,
+        contexto: ContextoCpeDante
+    ): any | null {
+        const estaciones =
+            parseStationsCpeDante(
+                salida
+            );
+
+        const mac =
+            String(
+                contexto.cliente?.mac ||
+                ""
+            )
+                .trim()
+                .toLowerCase();
+
+        return (
+            estaciones.find(
+                (item: any) => {
+                    const mismaMac =
+                        mac &&
+                        String(
+                            item?.mac ||
+                            ""
+                        )
+                            .trim()
+                            .toLowerCase() === mac;
+
+                    const ips =
+                        [
+                            item?.lastip,
+                            ...(Array.isArray(
+                                item?.remote
+                                    ?.ipaddr
+                            )
+                                ? item.remote.ipaddr
+                                : []),
+                        ]
+                            .map(
+                                (valor) =>
+                                    String(
+                                        valor ||
+                                        ""
+                                    ).trim()
+                            )
+                            .filter(Boolean);
+
+                    return (
+                        mismaMac ||
+                        ips.includes(
+                            contexto.ipCliente
+                        )
+                    );
+                }
+            ) ||
+            null
+        );
+    }
+
+    type MuestraExperienciaCpeDante = {
+        tx: number | null;
+        rx: number | null;
+        ruido: number | null;
+        senal: number | null;
+    };
+
+    function extraerMuestraExperienciaCpeDante(
+        cliente: any
+    ): MuestraExperienciaCpeDante {
+        const remote =
+            cliente?.remote ||
+            {};
+
+        return {
+            tx:
+                numeroCpeDante(
+                    cliente?.tx
+                ),
+            rx:
+                numeroCpeDante(
+                    cliente?.rx
+                ),
+            ruido:
+                numeroCpeDante(
+                    cliente?.noisefloor ??
+                    remote?.noisefloor
+                ),
+            senal:
+                numeroCpeDante(
+                    cliente?.signal ??
+                    remote?.signal
+                ),
+        };
+    }
+
+    async function tomarMuestrasExperienciaCpeDante(
+        contexto: ContextoCpeDante,
+        cantidad = 4
+    ): Promise<MuestraExperienciaCpeDante[]> {
+        const muestras:
+            MuestraExperienciaCpeDante[] =
+            [];
+
+        const inicial =
+            extraerMuestraExperienciaCpeDante(
+                contexto.cliente
+            );
+
+        muestras.push(
+            inicial
+        );
+
+        const equipoId =
+            String(
+                contexto.equipo
+                    ?.equipoId ||
+                ""
+            ).trim();
+
+        if (!equipoId) {
+            return muestras;
+        }
+
+        for (
+            let i = 1;
+            i < cantidad;
+            i++
+        ) {
+            await new Promise(
+                (resolve) =>
+                    setTimeout(
+                        resolve,
+                        900
+                    )
+            );
+
+            const metricas =
+                await obtenerMetricasWirelessDante(
+                    equipoId
+                );
+
+            if (!metricas?.salida) {
+                continue;
+            }
+
+            const cliente =
+                encontrarClienteEnMetricasCpeDante(
+                    metricas.salida,
+                    contexto
+                );
+
+            if (!cliente) {
+                continue;
+            }
+
+            muestras.push(
+                extraerMuestraExperienciaCpeDante(
+                    cliente
+                )
+            );
+        }
+
+        return muestras;
+    }
+
+    function cercaDeValorExperienciaDante(
+        valor: number | null,
+        objetivo: number,
+        tolerancia = 1.5
+    ): boolean {
+        return (
+            valor !== null &&
+            Math.abs(
+                valor -
+                objetivo
+            ) <= tolerancia
+        );
+    }
+
+    function detectarVariacionBruscaExperienciaDante(
+        valores:
+            Array<number | null>,
+        diferenciaMinima:
+            number
+    ): boolean {
+        const validos =
+            valores.filter(
+                (
+                    valor
+                ): valor is number =>
+                    valor !== null &&
+                    Number.isFinite(
+                        valor
+                    )
+            );
+
+        if (validos.length < 2) {
+            return false;
+        }
+
+        const minimo =
+            Math.min(
+                ...validos
+            );
+
+        const maximo =
+            Math.max(
+                ...validos
+            );
+
+        return (
+            maximo -
+            minimo >=
+            diferenciaMinima
+        );
+    }
+
+    function construirDiagnosticoHumanoCpeDante(
+        contexto: ContextoCpeDante,
+        muestras:
+            MuestraExperienciaCpeDante[]
+    ): string {
+        const actual =
+            muestras[muestras.length - 1] ||
+            extraerMuestraExperienciaCpeDante(
+                contexto.cliente
+            );
+
+        const senales =
+            muestras.map(
+                (muestra) => muestra.senal
+            );
+
+        const ruidos =
+            muestras.map(
+                (muestra) => muestra.ruido
+            );
+
+        const txs =
+            muestras.map(
+                (muestra) => muestra.tx
+            );
+
+        const rxs =
+            muestras.map(
+                (muestra) => muestra.rx
+            );
+
+        const senalActual =
+            actual.senal;
+
+        const ruidoActual =
+            actual.ruido;
+
+        const txActual =
+            actual.tx;
+
+        const rxActual =
+            actual.rx;
+
+        const clasificacionSenal =
+            clasificarSenalExperienciaDante(
+                senalActual
+            );
+
+        const clasificacionRuido =
+            clasificarRuidoExperienciaDante(
+                ruidoActual
+            );
+
+        const textos: string[] = [];
+
+        if (
+            senalActual !== null &&
+            clasificacionSenal
+        ) {
+            textos.push(
+                `La señal ${senalActual} dBm está clasificada como ${clasificacionSenal.toLowerCase()}.`
+            );
+        }
+
+        if (
+            ruidoActual !== null &&
+            clasificacionRuido === "EXCELENTE"
+        ) {
+            textos.push(
+                `El ruido ${ruidoActual} dBm está en un nivel excelente.`
+            );
+        }
+
+        // MOVIMIENTO / DESALINEACIÓN:
+        // cambios bruscos 6 <-> 18 Mbps + señal en zona -76 / -81.
+        const cambiaTx =
+            detectarVariacionBruscaExperienciaDante(
+                txs,
+                8
+            );
+
+        const cambiaRx =
+            detectarVariacionBruscaExperienciaDante(
+                rxs,
+                8
+            );
+
+        const cambiaSenal =
+            detectarVariacionBruscaExperienciaDante(
+                senales,
+                4
+            );
+
+        const apareceZonaSeis =
+            muestras.some(
+                (muestra) =>
+                    cercaDeValorExperienciaDante(
+                        muestra.tx,
+                        6,
+                        2
+                    ) ||
+                    cercaDeValorExperienciaDante(
+                        muestra.rx,
+                        6,
+                        2
+                    )
+            );
+
+        const apareceZonaDieciocho =
+            muestras.some(
+                (muestra) =>
+                    cercaDeValorExperienciaDante(
+                        muestra.tx,
+                        18,
+                        4
+                    ) ||
+                    cercaDeValorExperienciaDante(
+                        muestra.rx,
+                        18,
+                        4
+                    )
+            );
+
+        const senalZonaMovimiento =
+            senales.some(
+                (senal) =>
+                    senal !== null &&
+                    senal <= -76 &&
+                    senal >= -82
+            );
+
+        const posibleMovimiento =
+            (cambiaTx || cambiaRx) &&
+            cambiaSenal &&
+            apareceZonaSeis &&
+            apareceZonaDieciocho &&
+            senalZonaMovimiento;
+
+        if (posibleMovimiento) {
+            textos.push(
+                "Detecto un patrón compatible con movimiento o desalineación física del equipo de enlace: TX y RX cambian bruscamente entre valores bajos cercanos a 6 Mbps y valores cercanos a 18 Mbps, mientras la señal también cambia y entra aproximadamente entre -76 y -81 dBm. En campo este comportamiento es muy común cuando el viento mueve el equipo o se pierde la alineación. Recomiendo revisar primero la fijación, orientación y alineación física."
+            );
+        }
+
+        // OBSTÁCULO / INTERFERENCIA AMBIENTAL:
+        // señal -60 / -63 excelente + TX/RX alrededor de 6/6.
+        const senalExcelenteAmbiental =
+            senalActual !== null &&
+            senalActual <= -60 &&
+            senalActual >= -63;
+
+        const enlaceSeisSeis =
+            cercaDeValorExperienciaDante(
+                txActual,
+                6,
+                2
+            ) &&
+            cercaDeValorExperienciaDante(
+                rxActual,
+                6,
+                2
+            );
+
+        const posibleObstaculo =
+            senalExcelenteAmbiental &&
+            enlaceSeisSeis;
+
+        if (
+            posibleObstaculo &&
+            !posibleMovimiento
+        ) {
+            textos.push(
+                "La señal es excelente, pero TX y RX permanecen aproximadamente en 6 Mbps. Este patrón indica que los datos están limitados aunque la señal sea buena y es compatible con algo interfiriendo u obstruyendo el trayecto del enlace. Conviene revisar la línea de vista por plantas, ramas, vegetación, construcciones, relieve o montaña."
+            );
+        }
+
+        if (
+            !posibleMovimiento &&
+            !posibleObstaculo
+        ) {
+            if (
+                clasificacionSenal === "HORRIBLE"
+            ) {
+                textos.push(
+                    "La señal está en una zona horrible y no es recomendable mantener el enlace en estas condiciones. Conviene revisar alineación, obstáculos y una posible sectorial alternativa."
+                );
+            } else if (
+                clasificacionSenal === "MALO"
+            ) {
+                textos.push(
+                    "La señal está en una zona mala. Puede degradar de forma importante el enlace y conviene revisar alineación, obstáculos e interferencias."
+                );
+            } else if (
+                clasificacionSenal === "REGULAR"
+            ) {
+                textos.push(
+                    "La señal está en una zona regular. No confirma por sí sola la falla, pero debe revisarse junto con la estabilidad de TX y RX."
+                );
+            }
+        }
+
+        if (textos.length === 0) {
+            return (
+                "Con las lecturas actuales no encuentro todavía un patrón de experiencia suficientemente claro para atribuir la falla a movimiento del equipo u obstáculo ambiental."
+            );
+        }
+
+        return textos.join(" ");
+    }
+
+    async function ejecutarDiagnosticoHumanoCpeDante(
+        contexto: ContextoCpeDante
+    ): Promise<string> {
+        try {
+            const muestras =
+                await tomarMuestrasExperienciaCpeDante(
+                    contexto,
+                    4
+                );
+
+            const diagnostico =
+                construirDiagnosticoHumanoCpeDante(
+                    contexto,
+                    muestras
+                );
+
+            diagnosticoHumanoCpeDanteRef.current =
+                diagnostico;
+
+            return diagnostico;
+        } catch (error) {
+            console.error(
+                "DANTE V3 CPE: error en diagnóstico humano:",
+                error
+            );
+
+            diagnosticoHumanoCpeDanteRef.current =
+                "";
+
+            return "";
+        }
+    }
+
+    async function iniciarDiagnosticoCpeDante(
+        servicio:
+            ServicioClienteDante,
+        router:
+            RouterMikrotikDante |
+            null
+    ): Promise<void> {
+        credencialesCpeDanteRef.current = {
+            usuario: "ubnt",
+            clave: "jlzg",
+            puerto: 22,
+        };
+
+        accionPendienteCpeDanteRef.current =
+            null;
+
+        // Desde este punto Dante entra en análisis técnico real.
+        // El micrófono se apaga para impedir que conversaciones cercanas
+        // alteren el flujo mientras localiza y compara el equipo.
+        pausarMicrofonoParaAnalisisDante();
+
+        responderDante(
+            "De acuerdo. Voy a localizar el equipo de enlace del cliente y revisar sus métricas."
+        );
+
+        const contexto =
+            await localizarCpeClienteDante(
+                servicio,
+                router
+            );
+
+        if (!contexto) {
+            flujoDiagnosticoInternetDanteRef.current =
+                null;
+
+            cpeDiagnosticoDanteRef.current =
+                null;
+
+            actualizarContextoDante({
+                tema: "CLIENTE",
+                ultimaIntencion:
+                    "DIAGNOSTICO_CPE_NO_ENCONTRADO",
+                esperandoRespuesta:
+                    false,
+                datoPendiente:
+                    null,
+            });
+
+            reanudarMicrofonoDespuesAnalisisDante();
+
+            responderDante(
+                "No pude localizar el equipo de enlace de este cliente dentro de las estaciones wireless registradas. El diagnóstico anterior se mantiene sin cambios."
+            );
+
+            return;
+        }
+
+        cpeDiagnosticoDanteRef.current =
+            contexto;
+
+        flujoDiagnosticoInternetDanteRef.current = {
+            etapa:
+                "COMANDOS_CPE",
+            candidatos: [],
+            seleccionado:
+                servicio,
+            router,
+        };
+
+        actualizarContextoDante({
+            tema: "WIRELESS",
+            entidadId:
+                servicio.clienteId,
+            entidadNombre:
+                `${servicio.nombres || ""} ${servicio.apellidos || ""}`.trim(),
+            ultimaIntencion:
+                "DIAGNOSTICO_CPE_V3",
+            esperandoRespuesta:
+                true,
+            datoPendiente:
+                "COMANDOS_CPE",
+        });
+
+        responderDante(
+            construirResumenCpeDante(
+                contexto
+            ) +
+            " Voy a comparar varias lecturas para aplicar también el diagnóstico de experiencia de campo."
+        );
+
+        let diagnosticoHumano =
+            "";
+
+        try {
+            diagnosticoHumano =
+                await ejecutarDiagnosticoHumanoCpeDante(
+                    contexto
+                );
+        } finally {
+            reanudarMicrofonoDespuesAnalisisDante();
+        }
+
+        responderDante(
+            (
+                diagnosticoHumano
+                    ? `Diagnóstico técnico: ${diagnosticoHumano} `
+                    : ""
+            ) +
+            "Ya estoy dentro de la revisión técnica del equipo de enlace. Puedes preguntarme por señal, ruido, TX y RX, diagnóstico, CPU, RAM, firmware, Ethernet, frecuencia, DNS, gateway, consumo, escanear sectoriales o pedirme reiniciar el equipo."
+        );
+    }
+
+    function esFalloCredencialesCpeDante(
+        data: any
+    ): boolean {
+        const mensaje =
+            normalizarTextoDante(
+                String(
+                    data?.mensaje ||
+                    data?.message ||
+                    data?.error ||
+                    ""
+                )
+            );
+
+        return (
+            mensaje.includes(
+                "ssh"
+            ) ||
+            mensaje.includes(
+                "usuario"
+            ) ||
+            mensaje.includes(
+                "clave"
+            ) ||
+            mensaje.includes(
+                "password"
+            ) ||
+            mensaje.includes(
+                "autentic"
+            ) ||
+            mensaje.includes(
+                "login"
+            ) ||
+            mensaje.includes(
+                "permiso"
+            ) ||
+            mensaje.includes(
+                "acceso"
+            )
+        );
+    }
+
+    function pedirCredencialesCpeDante(
+        accion:
+            Exclude<
+                AccionPendienteCpeDante,
+                null
+            >
+    ) {
+        accionPendienteCpeDanteRef.current =
+            accion;
+
+        const flujo =
+            flujoDiagnosticoInternetDanteRef.current;
+
+        if (flujo) {
+            flujo.etapa =
+                "ESPERAR_USUARIO_CPE";
+        }
+
+        setMostrarEntradaTextoDante(
+            true
+        );
+
+        setEntradaTextoDante(
+            ""
+        );
+
+        actualizarContextoDante({
+            tema: "WIRELESS",
+            esperandoRespuesta:
+                true,
+            datoPendiente:
+                "USUARIO_CPE",
+        });
+
+        responderDante(
+            "No pude ingresar al equipo de enlace con las credenciales predeterminadas. Te habilité la entrada de texto. Escribe el usuario del equipo."
+        );
+    }
+
+    async function ejecutarAccionPendienteCpeDante() {
+        const accion =
+            accionPendienteCpeDanteRef.current;
+
+        accionPendienteCpeDanteRef.current =
+            null;
+
+        if (
+            accion ===
+            "REINICIAR"
+        ) {
+            await reiniciarCpeDesdeDante();
+            return;
+        }
+
+        if (
+            accion ===
+            "ESCANEAR"
+        ) {
+            await escanearSectorialesCpeDante();
+        }
+    }
+
+    async function reiniciarCpeDesdeDante() {
+        const contexto =
+            cpeDiagnosticoDanteRef.current;
+
+        const flujo =
+            flujoDiagnosticoInternetDanteRef.current;
+
+        if (
+            !contexto ||
+            !flujo
+        ) {
+            responderDante(
+                "Ya no tengo un equipo de enlace seleccionado."
+            );
+            return;
+        }
+
+        const equipoId =
+            String(
+                contexto.equipo
+                    .equipoId ||
+                ""
+            ).trim();
+
+        if (!equipoId) {
+            responderDante(
+                "No tengo el identificador del equipo wireless para enviar el reinicio."
+            );
+            return;
+        }
+
+        try {
+            const token =
+                getToken();
+
+            const credenciales =
+                credencialesCpeDanteRef.current;
+
+            responderDante(
+                `Voy a enviar el reinicio al equipo ${contexto.ipCliente}.`
+            );
+
+            const res =
+                await fetch(
+                    `${API_BASE}/wireless/equipos/${equipoId}/reiniciar`,
+                    {
+                        method:
+                            "POST",
+                        headers: {
+                            "Content-Type":
+                                "application/json",
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+                        body:
+                            JSON.stringify({
+                                ipCliente:
+                                    contexto.ipCliente,
+                                usuarioCliente:
+                                    credenciales.usuario,
+                                claveCliente:
+                                    credenciales.clave,
+                                puertoCliente:
+                                    Number(
+                                        credenciales.puerto ||
+                                        22
+                                    ),
+                            }),
+                    }
+                );
+
+            const data =
+                await res
+                    .json()
+                    .catch(
+                        () => ({})
+                    );
+
+            if (
+                !res.ok ||
+                data?.ok === false
+            ) {
+                if (
+                    esFalloCredencialesCpeDante(
+                        data
+                    )
+                ) {
+                    pedirCredencialesCpeDante(
+                        "REINICIAR"
+                    );
+                    return;
+                }
+
+                responderDante(
+                    data?.mensaje ||
+                    data?.message ||
+                    "No pude reiniciar el equipo de enlace."
+                );
+
+                flujo.etapa =
+                    "COMANDOS_CPE";
+
+                return;
+            }
+
+            flujo.etapa =
+                "COMANDOS_CPE";
+
+            setMostrarEntradaTextoDante(
+                false
+            );
+
+            responderDante(
+                data?.mensaje ||
+                "El reinicio fue enviado correctamente al equipo de enlace. Puede tardar unos momentos en volver a responder."
+            );
+        } catch (error) {
+            console.error(
+                "DANTE V3 CPE: error reiniciando CPE:",
+                error
+            );
+
+            flujo.etapa =
+                "COMANDOS_CPE";
+
+            responderDante(
+                "Ocurrió un error al intentar reiniciar el equipo de enlace."
+            );
+        }
+    }
+
+    function parseScanSectorialesCpeDante(
+        salidaOriginal: string
+    ) {
+        const bloque =
+            String(
+                salidaOriginal ||
+                ""
+            )
+                .split("---SCAN---")[1]
+                ?.split("---END---")[0] ||
+            "";
+
+        return bloque
+            .split("Cell ")
+            .slice(1)
+            .map(
+                (cell) => ({
+                    mac:
+                        cell.match(
+                            /Address:\s*([A-Fa-f0-9:]+)/
+                        )?.[1] ||
+                        "",
+                    ssid:
+                        cell.match(
+                            /ESSID:"([^"]+)"/
+                        )?.[1] ||
+                        "",
+                    frecuencia:
+                        cell.match(
+                            /Frequency:([\d.]+)\s*GHz/
+                        )?.[1] ||
+                        "",
+                    canal:
+                        cell.match(
+                            /Channel[:=]\s*(\d+)/
+                        )?.[1] ||
+                        "",
+                    signal:
+                        cell.match(
+                            /Signal level=(-?\d+)/
+                        )?.[1] ||
+                        "",
+                    noise:
+                        cell.match(
+                            /Noise level=(-?\d+)/
+                        )?.[1] ||
+                        "",
+                })
+            )
+            .filter(
+                (item) =>
+                    item.mac ||
+                    item.ssid
+            );
+    }
+
+    async function escanearSectorialesCpeDante() {
+        const contexto =
+            cpeDiagnosticoDanteRef.current;
+
+        const flujo =
+            flujoDiagnosticoInternetDanteRef.current;
+
+        if (
+            !contexto ||
+            !flujo
+        ) {
+            return;
+        }
+
+        const equipoId =
+            String(
+                contexto.equipo
+                    .equipoId ||
+                ""
+            ).trim();
+
+        if (!equipoId) {
+            responderDante(
+                "No tengo el identificador del equipo wireless para ejecutar el escaneo."
+            );
+            return;
+        }
+
+        try {
+            const token =
+                getToken();
+
+            const credenciales =
+                credencialesCpeDanteRef.current;
+
+            responderDante(
+                "De acuerdo. Voy a escanear las sectoriales visibles desde el equipo de enlace."
+            );
+
+            const res =
+                await fetch(
+                    `${API_BASE}/wireless/equipos/${equipoId}/cliente/scan-sectoriales`,
+                    {
+                        method:
+                            "POST",
+                        headers: {
+                            "Content-Type":
+                                "application/json",
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+                        body:
+                            JSON.stringify({
+                                ipCliente:
+                                    contexto.ipCliente,
+                                usuarioCliente:
+                                    credenciales.usuario,
+                                claveCliente:
+                                    credenciales.clave,
+                                puertoCliente:
+                                    Number(
+                                        credenciales.puerto ||
+                                        22
+                                    ),
+                            }),
+                    }
+                );
+
+            const data =
+                await res
+                    .json()
+                    .catch(
+                        () => ({})
+                    );
+
+            if (
+                !res.ok ||
+                data?.ok === false
+            ) {
+                if (
+                    esFalloCredencialesCpeDante(
+                        data
+                    )
+                ) {
+                    pedirCredencialesCpeDante(
+                        "ESCANEAR"
+                    );
+                    return;
+                }
+
+                responderDante(
+                    data?.mensaje ||
+                    data?.message ||
+                    "No pude escanear las sectoriales desde el equipo de enlace."
+                );
+
+                flujo.etapa =
+                    "COMANDOS_CPE";
+
+                return;
+            }
+
+            const lista =
+                parseScanSectorialesCpeDante(
+                    data?.salida ||
+                    ""
+                );
+
+            const sinRepetidos =
+                Array.from(
+                    new Map(
+                        lista.map(
+                            (item: any) => [
+                                item.mac ||
+                                item.ssid,
+                                item,
+                            ]
+                        )
+                    ).values()
+                ) as any[];
+
+            flujo.etapa =
+                "COMANDOS_CPE";
+
+            setMostrarEntradaTextoDante(
+                false
+            );
+
+            if (
+                sinRepetidos.length ===
+                0
+            ) {
+                responderDante(
+                    "El escaneo terminó, pero no encontré sectoriales visibles."
+                );
+                return;
+            }
+
+            const mejores =
+                sinRepetidos
+                    .sort(
+                        (a, b) =>
+                            Number(
+                                b.signal ||
+                                -999
+                            ) -
+                            Number(
+                                a.signal ||
+                                -999
+                            )
+                    )
+                    .slice(0, 5)
+                    .map(
+                        (
+                            item,
+                            index
+                        ) =>
+                            `${index + 1}. ${item.ssid || "sin nombre"}, señal ${item.signal || "-"} dBm${item.noise ? `, ruido ${item.noise} dBm` : ""}${item.frecuencia ? `, frecuencia ${item.frecuencia} GHz` : ""}`
+                    )
+                    .join(". ");
+
+            responderDante(
+                `Encontré ${sinRepetidos.length} sectoriales visibles. Las principales son: ${mejores}.`
+            );
+        } catch (error) {
+            console.error(
+                "DANTE V3 CPE: error escaneando sectoriales:",
+                error
+            );
+
+            flujo.etapa =
+                "COMANDOS_CPE";
+
+            responderDante(
+                "Ocurrió un error al escanear las sectoriales."
+            );
+        }
+    }
+
+    async function medirConsumoClienteCpeDante() {
+        const contexto =
+            cpeDiagnosticoDanteRef.current;
+
+        if (!contexto) {
+            return;
+        }
+
+        const equipoId =
+            String(
+                contexto.equipo
+                    .equipoId ||
+                ""
+            ).trim();
+
+        if (!equipoId) {
+            responderDante(
+                "No tengo el identificador necesario para medir el consumo."
+            );
+            return;
+        }
+
+        responderDante(
+            "Voy a tomar una muestra corta del tráfico real del cliente."
+        );
+
+        const muestra1 =
+            await obtenerMetricasWirelessDante(
+                equipoId
+            );
+
+        if (!muestra1?.salida) {
+            responderDante(
+                "No pude obtener la primera muestra de tráfico."
+            );
+            return;
+        }
+
+        const estaciones1 =
+            parseStationsCpeDante(
+                muestra1.salida
+            );
+
+        const mac =
+            String(
+                contexto.cliente
+                    ?.mac ||
+                ""
+            ).toLowerCase();
+
+        const buscarEstacion = (
+            lista: any[]
+        ) =>
+            lista.find(
+                (item: any) =>
+                    (
+                        mac &&
+                        String(
+                            item?.mac ||
+                            ""
+                        ).toLowerCase() ===
+                        mac
+                    ) ||
+                    String(
+                        item?.lastip ||
+                        ""
+                    ).trim() ===
+                    contexto.ipCliente
+            );
+
+        const cliente1 =
+            buscarEstacion(
+                estaciones1
+            );
+
+        if (!cliente1?.stats) {
+            responderDante(
+                "El equipo de enlace responde, pero no recibí contadores de tráfico del cliente."
+            );
+            return;
+        }
+
+        await new Promise(
+            (resolve) =>
+                setTimeout(
+                    resolve,
+                    3000
+                )
+        );
+
+        const muestra2 =
+            await obtenerMetricasWirelessDante(
+                equipoId
+            );
+
+        const cliente2 =
+            muestra2?.salida
+                ? buscarEstacion(
+                    parseStationsCpeDante(
+                        muestra2.salida
+                    )
+                )
+                : null;
+
+        if (!cliente2?.stats) {
+            responderDante(
+                "No pude completar la segunda muestra de tráfico."
+            );
+            return;
+        }
+
+        const rxDiff =
+            Number(
+                cliente2.stats
+                    .rx_bytes ||
+                0
+            ) -
+            Number(
+                cliente1.stats
+                    .rx_bytes ||
+                0
+            );
+
+        const txDiff =
+            Number(
+                cliente2.stats
+                    .tx_bytes ||
+                0
+            ) -
+            Number(
+                cliente1.stats
+                    .tx_bytes ||
+                0
+            );
+
+        const rxMbps =
+            Math.max(
+                0,
+                Number(
+                    (
+                        (
+                            rxDiff *
+                            8
+                        ) /
+                        3 /
+                        1000000
+                    ).toFixed(2)
+                )
+            );
+
+        const txMbps =
+            Math.max(
+                0,
+                Number(
+                    (
+                        (
+                            txDiff *
+                            8
+                        ) /
+                        3 /
+                        1000000
+                    ).toFixed(2)
+                )
+            );
+
+        responderDante(
+            `Consumo real aproximado del cliente: RX ${rxMbps} Mbps y TX ${txMbps} Mbps durante la muestra.`
+        );
+    }
+
+    function responderDatoCpeDante(
+        textoOriginal: string
+    ): boolean {
+        const contexto =
+            cpeDiagnosticoDanteRef.current;
+
+        if (!contexto) {
+            return false;
+        }
+
+        const texto =
+            normalizarTextoDante(
+                textoOriginal
+            );
+
+        const cliente =
+            contexto.cliente ||
+            {};
+
+        const remote =
+            cliente.remote ||
+            {};
+
+        const red =
+            obtenerBloquesRedCpeDante(
+                contexto.metricas
+                    ?.salida ||
+                ""
+            );
+
+        const eth =
+            remote?.ethlist?.[0] ||
+            null;
+
+        if (
+            /\b(diagnostico|diagnóstico|causa|problema|que encuentras|qué encuentras|que detectas|qué detectas|recomendacion|recomendación|movimiento|desalineado|desalineacion|desalineación|obstaculo|obstáculo|interferencia|plantas|vegetacion|vegetación|montana|montaña)\b/.test(
+                texto
+            )
+        ) {
+            const diagnostico =
+                diagnosticoHumanoCpeDanteRef.current;
+
+            responderDante(
+                diagnostico ||
+                "Con las lecturas actuales todavía no tengo un patrón de experiencia suficientemente claro. Puedo volver a revisar las métricas del equipo."
+            );
+
+            return true;
+        }
+
+        if (
+            /\b(senal|señal|ruido|ack|radio|enlace)\b/.test(
+                texto
+            )
+        ) {
+            const senalActual =
+                cliente.signal ??
+                remote.signal;
+
+            const ruidoActual =
+                cliente.noisefloor ??
+                remote.noisefloor;
+
+            const clasificacionSenal =
+                clasificarSenalExperienciaDante(
+                    senalActual
+                );
+
+            const clasificacionRuido =
+                clasificarRuidoExperienciaDante(
+                    ruidoActual
+                );
+
+            responderDante(
+                `En el equipo de enlace tengo señal ${senalActual ?? "-"} dBm${clasificacionSenal ? `, clasificada como ${clasificacionSenal.toLowerCase()}` : ""}, ruido ${ruidoActual ?? "-"} dBm${clasificacionRuido ? `, clasificado como ${clasificacionRuido.toLowerCase()}` : ""}, ACK ${cliente.ack ?? "-"} microsegundos, TX ${cliente.tx ?? "-"} Mbps y RX ${cliente.rx ?? "-"} Mbps.`
+            );
+            return true;
+        }
+
+        if (
+            /\b(cpu|ram|memoria|recursos|uptime|encendido)\b/.test(
+                texto
+            )
+        ) {
+            const uptime =
+                formatearUptimeCpeDante(
+                    remote.uptime ??
+                    cliente.uptime
+                ) ||
+                "sin dato";
+
+            responderDante(
+                `Recursos del equipo de enlace: CPU ${remote.cpuload ?? cliente.cpuload ?? "-"} por ciento, RAM libre ${remote.freeram ?? cliente.freeram ?? "-"} KB y tiempo encendido ${uptime}.`
+            );
+            return true;
+        }
+
+        if (
+            /\b(modelo|firmware|version|versión|nombre del equipo|nombre cpe)\b/.test(
+                texto
+            )
+        ) {
+            responderDante(
+                `El equipo de enlace se identifica como ${remote.hostname || cliente.name || contexto.equipo.nombre || "sin nombre"}, modelo ${remote.platform || cliente.platform || contexto.equipo.modelo || "-"}, firmware ${remote.version || cliente.version || "-"}.`
+            );
+            return true;
+        }
+
+        if (
+            /\b(ethernet|lan|cable|duplex|puerto)\b/.test(
+                texto
+            )
+        ) {
+            if (!eth) {
+                responderDante(
+                    "No recibí información Ethernet del equipo de enlace."
+                );
+            } else {
+                responderDante(
+                    `Ethernet ${eth.ifname || ""}: ${eth.plugged ? "conectado" : "desconectado"}${eth.speed ? ` a ${eth.speed} Mbps` : ""}${eth.duplex === true ? ", Full Duplex" : eth.duplex === false ? ", Half Duplex" : ""}.`
+                );
+            }
+
+            return true;
+        }
+
+        if (
+            /\b(frecuencia|canal|potencia)\b/.test(
+                texto
+            )
+        ) {
+            responderDante(
+                `Radio del enlace: frecuencia ${red.frecuencia || "-"} MHz, ancho de canal ${red.anchoCanal || "-"} MHz y potencia TX ${red.potenciaTx || "-"} dBm.`
+            );
+            return true;
+        }
+
+        if (
+            /\b(dns|gateway|puerta de enlace|wan|configuracion de red|configuración de red)\b/.test(
+                texto
+            )
+        ) {
+            responderDante(
+                `Configuración de red disponible: IP ${contexto.ipCliente}, gateway ${red.gateway}, interfaz ${red.interfaz}, DNS primario ${red.dns1} y DNS secundario ${red.dns2}.`
+            );
+            return true;
+        }
+
+        if (
+            /\b(resumen|detalle|todo|diagnostico cpe|diagnóstico cpe)\b/.test(
+                texto
+            )
+        ) {
+            const diagnostico =
+                diagnosticoHumanoCpeDanteRef.current;
+
+            responderDante(
+                construirResumenCpeDante(
+                    contexto
+                ) +
+                (
+                    diagnostico
+                        ? ` Diagnóstico técnico: ${diagnostico}`
+                        : ""
+                )
+            );
+            return true;
+        }
+
+        return false;
+    }
+
+    async function procesarComandosCpeDante(
+        textoOriginal: string
+    ): Promise<boolean> {
+        const flujo =
+            flujoDiagnosticoInternetDanteRef.current;
+
+        if (
+            !flujo ||
+            flujo.etapa !==
+            "COMANDOS_CPE"
+        ) {
+            return false;
+        }
+
+        const texto =
+            normalizarTextoDante(
+                textoOriginal
+            );
+
+        if (
+            texto === "salir" ||
+            texto === "terminar" ||
+            texto.includes(
+                "termina la revision"
+            ) ||
+            texto.includes(
+                "terminar la revision"
+            ) ||
+            texto.includes(
+                "salir del cpe"
+            ) ||
+            texto.includes(
+                "termina el diagnostico"
+            )
+        ) {
+            flujoDiagnosticoInternetDanteRef.current =
+                null;
+
+            cpeDiagnosticoDanteRef.current =
+                null;
+
+            accionPendienteCpeDanteRef.current =
+                null;
+
+            actualizarContextoDante({
+                tema: "CLIENTE",
+                esperandoRespuesta:
+                    false,
+                datoPendiente:
+                    null,
+            });
+
+            responderDante(
+                "De acuerdo. Terminé la revisión directa del equipo de enlace. ¿En qué más te puedo ayudar?"
+            );
+
+            return true;
+        }
+
+        if (
+            /\b(reinicia|reiniciar|reinicio|reboot)\b/.test(
+                texto
+            ) &&
+            /\b(cpe|equipo|radio|antena|cliente)\b/.test(
+                texto
+            )
+        ) {
+            flujo.etapa =
+                "CONFIRMAR_REINICIO_CPE";
+
+            actualizarContextoDante({
+                tema: "WIRELESS",
+                esperandoRespuesta:
+                    true,
+                datoPendiente:
+                    "CONFIRMAR_REINICIO_CPE",
+            });
+
+            responderDante(
+                `¿Confirmas que deseas reiniciar el equipo ${cpeDiagnosticoDanteRef.current?.ipCliente || ""}?`
+            );
+
+            return true;
+        }
+
+        if (
+            (
+                texto.includes(
+                    "escanear"
+                ) ||
+                texto.includes(
+                    "escanea"
+                ) ||
+                texto.includes(
+                    "scan"
+                )
+            ) &&
+            (
+                texto.includes(
+                    "sectorial"
+                ) ||
+                texto.includes(
+                    "ssid"
+                ) ||
+                texto.includes(
+                    "redes"
+                )
+            )
+        ) {
+            await escanearSectorialesCpeDante();
+            return true;
+        }
+
+        if (
+            /\b(trafico|tráfico|consumo|consumiendo|velocidad real|uso actual)\b/.test(
+                texto
+            )
+        ) {
+            await medirConsumoClienteCpeDante();
+            return true;
+        }
+
+        // --------------------------------------------------------
+        // ESCALAMIENTO A VISITA TÉCNICA / MANTENIMIENTO
+        // --------------------------------------------------------
+        if (
+            esSolicitudTicketMantenimientoDante(
+                textoOriginal
+            )
+        ) {
+            return await prepararTicketMantenimientoDante(
+                flujo.seleccionado ||
+                servicioClienteDanteRef.current
+            );
+        }
+
+        if (
+            esPersistenciaProblemaDespuesDiagnosticoDante(
+                textoOriginal
+            )
+        ) {
+            const contexto =
+                cpeDiagnosticoDanteRef.current;
+
+            const clienteEquipo =
+                contexto?.cliente ||
+                {};
+
+            const remote =
+                clienteEquipo?.remote ||
+                {};
+
+            const senal =
+                clienteEquipo?.signal ??
+                remote?.signal;
+
+            const clasificacion =
+                clasificarSenalExperienciaDante(
+                    senal
+                );
+
+            const estadoSenalBueno =
+                clasificacion === "EXCELENTE" ||
+                clasificacion === "MUY BUENO" ||
+                clasificacion === "BUENO";
+
+            const nombre =
+                `${flujo.seleccionado?.nombres || servicioClienteDanteRef.current?.nombres || ""} ${flujo.seleccionado?.apellidos || servicioClienteDanteRef.current?.apellidos || ""}`
+                    .trim();
+
+            responderDante(
+                estadoSenalBueno
+                    ? `Entiendo. La señal del equipo está ${String(clasificacion).toLowerCase()} y las comprobaciones remotas no muestran una causa concluyente para la lentitud. En este punto lo mejor es enviar un técnico para revisar físicamente el lugar, el cableado, la alineación y el entorno${nombre ? ` de ${nombre}` : ""}. ¿Deseas que genere un ticket de mantenimiento?`
+                    : `Entiendo. Como el problema continúa y las comprobaciones remotas no permiten confirmar una causa única, lo mejor es enviar un técnico para revisar físicamente el lugar${nombre ? ` de ${nombre}` : ""}. ¿Deseas que genere un ticket de mantenimiento?`
+            );
+
+            const clienteTicket =
+                flujo.seleccionado ||
+                servicioClienteDanteRef.current;
+
+            if (clienteTicket) {
+                const prioridad =
+                    obtenerPrioridadTicketMantenimientoDante();
+
+                ticketMantenimientoPendienteDanteRef.current = {
+                    servicio:
+                        clienteTicket,
+                    titulo:
+                        `${tipoProblemaDiagnosticoDanteRef.current === "LENTITUD" ? "Lentitud" : tipoProblemaDiagnosticoDanteRef.current === "INTERMITENCIA" ? "Intermitencia" : tipoProblemaDiagnosticoDanteRef.current === "SIN_INTERNET" ? "Sin servicio" : "Revisión técnica"} - mantenimiento ${`${clienteTicket.nombres || ""} ${clienteTicket.apellidos || ""}`.trim()}`,
+                    descripcion:
+                        construirDescripcionTicketMantenimientoDante(
+                            clienteTicket
+                        ),
+                    categoria:
+                        contexto
+                            ? "EQUIPO"
+                            : "INTERNET",
+                    prioridad,
+                };
+
+                actualizarContextoDante({
+                    tema: "CLIENTE",
+                    entidadId:
+                        clienteTicket.clienteId,
+                    entidadNombre:
+                        `${clienteTicket.nombres || ""} ${clienteTicket.apellidos || ""}`.trim(),
+                    ultimaIntencion:
+                        "CONFIRMAR_TICKET_MANTENIMIENTO",
+                    esperandoRespuesta:
+                        true,
+                    datoPendiente:
+                        "CONFIRMAR_TICKET_MANTENIMIENTO",
+                });
+            }
+
+            return true;
+        }
+
+        if (
+            responderDatoCpeDante(
+                textoOriginal
+            )
+        ) {
+            return true;
+        }
+
+        responderDante(
+            "Estoy en la revisión directa del equipo de enlace. Puedes preguntarme por el diagnóstico o causa probable, señal, ruido, TX y RX, CPU, RAM, firmware, Ethernet, frecuencia, DNS, gateway o consumo. También puedes pedirme escanear sectoriales o reiniciar el equipo."
+        );
+
+        return true;
+    }
+
+    async function procesarFlujoDiagnosticoInternetDante(
+        textoOriginal: string
+    ): Promise<boolean> {
+        const flujo = flujoDiagnosticoInternetDanteRef.current;
+        if (!flujo) return false;
+
+        if (flujo.etapa === "CONFIRMAR_CPE") {
+            if (esSiDante(textoOriginal)) {
+                if (!flujo.seleccionado) {
+                    flujoDiagnosticoInternetDanteRef.current = null;
+
+                    responderDante(
+                        "Perdí la referencia del cliente. Dime nuevamente qué cliente deseas revisar."
+                    );
+
+                    return true;
+                }
+
+                await iniciarDiagnosticoCpeDante(
+                    flujo.seleccionado,
+                    flujo.router
+                );
+
+                return true;
+            }
+
+            if (esNoDante(textoOriginal)) {
+                flujoDiagnosticoInternetDanteRef.current = null;
+
+                cpeDiagnosticoDanteRef.current = null;
+
+                actualizarContextoDante({
+                    tema: "CLIENTE",
+                    esperandoRespuesta: false,
+                    datoPendiente: null,
+                });
+
+                responderDante(
+                    "De acuerdo. No entraré al equipo de enlace. Dejamos el diagnóstico hasta aquí. ¿En qué más te puedo ayudar?"
+                );
+
+                return true;
+            }
+
+            responderDante(
+                "Dime sí para revisar directamente el equipo de enlace del cliente o no para terminar el diagnóstico."
+            );
+
+            return true;
+        }
+
+        if (flujo.etapa === "COMANDOS_CPE") {
+            return await procesarComandosCpeDante(
+                textoOriginal
+            );
+        }
+
+        if (flujo.etapa === "CONFIRMAR_REINICIO_CPE") {
+            if (esSiDante(textoOriginal)) {
+                await reiniciarCpeDesdeDante();
+                return true;
+            }
+
+            if (esNoDante(textoOriginal)) {
+                flujo.etapa =
+                    "COMANDOS_CPE";
+
+                actualizarContextoDante({
+                    tema: "WIRELESS",
+                    esperandoRespuesta: true,
+                    datoPendiente: "COMANDOS_CPE",
+                });
+
+                responderDante(
+                    "De acuerdo. No reiniciaré el equipo. Podemos continuar revisando sus métricas."
+                );
+
+                return true;
+            }
+
+            responderDante(
+                "Necesito tu confirmación. Dime sí para reiniciar el equipo o no para cancelar."
+            );
+
+            return true;
+        }
+
+        if (flujo.etapa === "ESPERAR_USUARIO_CPE") {
+            const usuario =
+                String(
+                    textoOriginal ||
+                    ""
+                ).trim();
+
+            if (!usuario) {
+                responderDante(
+                    "Escribe el usuario SSH del equipo."
+                );
+                return true;
+            }
+
+            credencialesCpeDanteRef.current.usuario =
+                usuario;
+
+            flujo.etapa =
+                "ESPERAR_CLAVE_CPE";
+
+            setMostrarEntradaTextoDante(
+                true
+            );
+
+            setEntradaTextoDante(
+                ""
+            );
+
+            actualizarContextoDante({
+                tema: "WIRELESS",
+                esperandoRespuesta: true,
+                datoPendiente: "CLAVE_CPE",
+            });
+
+            responderDante(
+                "Usuario recibido. Ahora escribe la clave SSH del equipo."
+            );
+
+            return true;
+        }
+
+        if (flujo.etapa === "ESPERAR_CLAVE_CPE") {
+            const clave =
+                String(
+                    textoOriginal ||
+                    ""
+                ).trim();
+
+            if (!clave) {
+                responderDante(
+                    "Escribe la clave SSH del equipo."
+                );
+                return true;
+            }
+
+            credencialesCpeDanteRef.current.clave =
+                clave;
+
+            flujo.etapa =
+                "COMANDOS_CPE";
+
+            actualizarContextoDante({
+                tema: "WIRELESS",
+                esperandoRespuesta: true,
+                datoPendiente: "COMANDOS_CPE",
+            });
+
+            responderDante(
+                "Credenciales recibidas. Voy a volver a intentar la operación."
+            );
+
+            await ejecutarAccionPendienteCpeDante();
+
+            return true;
+        }
+
+        if (flujo.etapa === "CONFIRMAR_COMPROBACIONES") {
+            if (esSiDante(textoOriginal)) {
+                await ejecutarComprobacionesTecnicasDante(
+                    flujo.router
+                );
+                return true;
+            }
+
+            if (esNoDante(textoOriginal)) {
+                flujoDiagnosticoInternetDanteRef.current = null;
+                actualizarContextoDante({
+                    tema: "CLIENTE",
+                    esperandoRespuesta: false,
+                    datoPendiente: null,
+                });
+                responderDante(
+                    "De acuerdo. Dejamos el diagnóstico hasta aquí. ¿En qué más te puedo ayudar?"
+                );
+                return true;
+            }
+
+            responderDante(
+                "Dime sí para continuar con las comprobaciones técnicas o no para terminar el diagnóstico."
+            );
+            return true;
+        }
+
+        if (flujo.etapa === "SELECCIONAR_CLIENTE") {
+            const numero = extraerNumeroSeleccionClienteDante(
+                textoOriginal
+            );
+
+            if (
+                numero !== null &&
+                numero >= 1 &&
+                numero <= flujo.candidatos.length
+            ) {
+                await ejecutarDiagnosticoInternetClienteDante(
+                    flujo.candidatos[numero - 1]
+                );
+                return true;
+            }
+
+            const coincidencias = buscarServiciosDiagnosticoDante(
+                textoOriginal,
+                flujo.candidatos
+            );
+
+            if (coincidencias.length === 1) {
+                await ejecutarDiagnosticoInternetClienteDante(
+                    coincidencias[0]
+                );
+                return true;
+            }
+
+            if (coincidencias.length > 1) {
+                responderDante(
+                    "Todavía tengo varias coincidencias. Dime el número de la opción, el nombre completo o la IP."
+                );
+                return true;
+            }
+
+            await buscarClienteParaDiagnosticoDante(
+                textoOriginal
+            );
+            return true;
+        }
+
+        await buscarClienteParaDiagnosticoDante(
+            textoOriginal
+        );
+        return true;
+    }
+
+    // DANTE - ALERTAS DE PAGOS Y LÍMITE DE CORTE (2 DÍAS)
+    type AlertaPagoDante = { id: string; clienteId?: string | number | null; nombres: string; apellidos: string; fecha: string; dias: number; tipo: "PAGO" | "CORTE"; };
+    const alertasPagoDanteRef = useRef<{ pagos: AlertaPagoDante[]; cortes: AlertaPagoDante[] }>({ pagos: [], cortes: [] });
+    const ultimaClaveAlertasPagoDanteRef = useRef("");
+    const esperandoConfirmacionAlertasPagoDanteRef = useRef(false);
+    const alertaPagoDanteYaAnunciadaRef = useRef(false);
+
+    // ========================================================
+    // DANTE - CONTROL DE ESPERA PARA ALERTAS DE PAGO / CORTE
+    // ========================================================
+
+    const timeoutConfirmacionAlertasPagoDanteRef =
+        useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const TIEMPO_CONFIRMACION_ALERTAS_DANTE =
+        20000;
+
+
+    // ========================================================
+    // CERRAR ESPERA DE CONFIRMACIÓN
+    // ========================================================
+
+    function cerrarConfirmacionAlertasPagoDante() {
+
+        esperandoConfirmacionAlertasPagoDanteRef.current =
+            false;
+
+
+        // ====================================================
+        // CANCELAR TIMEOUT SI TODAVÍA EXISTE
+        // ====================================================
+
+        if (
+            timeoutConfirmacionAlertasPagoDanteRef.current
+        ) {
+
+            clearTimeout(
+                timeoutConfirmacionAlertasPagoDanteRef.current
+            );
+
+            timeoutConfirmacionAlertasPagoDanteRef.current =
+                null;
+        }
+
+
+        // ====================================================
+        // LIBERAR CONTEXTO CONVERSACIONAL
+        // ====================================================
+
+        if (
+            contextoDanteRef.current.datoPendiente ===
+            "CONFIRMAR_ALERTAS_PAGO"
+        ) {
+
+            actualizarContextoDante({
+
+                esperandoRespuesta:
+                    false,
+
+                datoPendiente:
+                    null,
+
+            });
+        }
+
+
+        // ====================================================
+        // VOLVER A ESCUCHA NORMAL
+        // ====================================================
+
+        if (
+            microfonoActivoRef.current &&
+            !pausaMicrofonoAnalisisDanteRef.current &&
+            !danteHablandoRef.current
+        ) {
+
+            setEstadoDante(
+                "ESPERANDO_DANTE"
+            );
+
+            estadoDanteRef.current =
+                "ESPERANDO_DANTE";
+
+
+            // ================================================
+            // ASEGURAR QUE SPEECH RECOGNITION ESTÉ ACTIVO
+            // ================================================
+
+            try {
+
+                reconocimientoRef.current?.start();
+
+            } catch (error: any) {
+
+                // InvalidStateError significa que ya estaba escuchando.
+                if (
+                    error?.name !==
+                    "InvalidStateError"
+                ) {
+
+                    console.error(
+                        "DANTE: error reactivando escucha después de alertas:",
+                        error
+                    );
+                }
+            }
+        }
+    }
+
+
+    // ========================================================
+    // INICIAR ESPERA DE CONFIRMACIÓN
+    // ========================================================
+
+    function iniciarConfirmacionAlertasPagoDante() {
+
+        // ====================================================
+        // LIMPIAR SOLAMENTE EL TIMEOUT ANTERIOR
+        // NO LLAMAMOS cerrarConfirmacionAlertasPagoDante()
+        // PORQUE ESTAMOS ABRIENDO UNA NUEVA CONVERSACIÓN.
+        // ====================================================
+
+        if (
+            timeoutConfirmacionAlertasPagoDanteRef.current
+        ) {
+
+            clearTimeout(
+                timeoutConfirmacionAlertasPagoDanteRef.current
+            );
+
+            timeoutConfirmacionAlertasPagoDanteRef.current =
+                null;
+        }
+
+
+        // ====================================================
+        // MARCAR CONFIRMACIÓN ACTIVA
+        // ====================================================
+
+        esperandoConfirmacionAlertasPagoDanteRef.current =
+            true;
+
+
+        // ====================================================
+        // IMPORTANTE:
+        // DANTE ESTÁ ESPERANDO RESPUESTA DEL OPERADOR
+        // ESTO PERMITE RESPONDER "SÍ" / "NO"
+        // SIN VOLVER A DECIR "DANTE"
+        // ====================================================
+
+        actualizarContextoDante({
+
+            ultimaIntencion:
+                "CONFIRMAR_ALERTAS_PAGO",
+
+            esperandoRespuesta:
+                true,
+
+            datoPendiente:
+                "CONFIRMAR_ALERTAS_PAGO",
+
+        });
+
+
+        console.log(
+            "DANTE: esperando respuesta de alertas durante 20 segundos"
+        );
+
+
+        // ====================================================
+        // TIMEOUT DE SEGURIDAD
+        // ====================================================
+
+        timeoutConfirmacionAlertasPagoDanteRef.current =
+            setTimeout(
+
+                () => {
+
+                    // Si todavía seguimos esperando,
+                    // cerramos la conversación.
+                    if (
+                        esperandoConfirmacionAlertasPagoDanteRef.current
+                    ) {
+
+                        cerrarConfirmacionAlertasPagoDante();
+
+                        console.log(
+                            "DANTE: confirmación de alertas vencida. " +
+                            "La pregunta se cerró automáticamente."
+                        );
+                    }
+
+                },
+
+                TIEMPO_CONFIRMACION_ALERTAS_DANTE
+
+            );
+    }
+
+
+    function seleccionarClientePendienteDante(
+        servicio: ServicioClienteDante
+    ) {
+        servicioClienteDanteRef.current = servicio;
+
+        clientesPendientesSeleccionDanteRef.current = [];
+
+        actualizarContextoDante({
+            tema: "CLIENTE",
+            entidadId: servicio.clienteId,
+            entidadNombre:
+                `${servicio.nombres || ""} ${servicio.apellidos || ""}`
+                    .trim(),
+            ultimaIntencion: "BUSCAR_CLIENTE",
+            esperandoRespuesta: false,
+            datoPendiente: null,
+        });
+
+        responderDante(
+            `Encontré a ${servicio.nombres || ""} ${servicio.apellidos || ""}. ` +
+            `Su servicio está ${servicio.estadoServicio || "registrado"}.`
+        );
+    }
+
+    function extraerNumeroSeleccionClienteDante(
+        texto: string
+    ): number | null {
+        const normalizado = normalizarTextoDante(texto);
+
+        const numeros: Record<string, number> = {
+            primero: 1,
+            primera: 1,
+            uno: 1,
+            una: 1,
+            segundo: 2,
+            segunda: 2,
+            dos: 2,
+            tercero: 3,
+            tercera: 3,
+            tres: 3,
+            cuarto: 4,
+            cuarta: 4,
+            cuatro: 4,
+            quinto: 5,
+            quinta: 5,
+            cinco: 5,
+            sexto: 6,
+            sexta: 6,
+            seis: 6,
+            septimo: 7,
+            septima: 7,
+            siete: 7,
+            octavo: 8,
+            octava: 8,
+            ocho: 8,
+            noveno: 9,
+            novena: 9,
+            nueve: 9,
+        };
+
+        const matchNumero =
+            normalizado.match(/\b(?:opcion|opción|numero|número|el|la)\s*(\d{1,2})\b/);
+
+        if (matchNumero?.[1]) {
+            const numero = Number(matchNumero[1]);
+            return Number.isInteger(numero) ? numero : null;
+        }
+
+        const matchSoloNumero =
+            normalizado.match(/^\d{1,2}$/);
+
+        if (matchSoloNumero) {
+            return Number(matchSoloNumero[0]);
+        }
+
+        const palabras = normalizado.split(/\s+/).filter(Boolean);
+
+        for (const palabra of palabras) {
+            if (numeros[palabra]) {
+                return numeros[palabra];
+            }
+        }
+
+        return null;
+    }
+
+    async function procesarSeleccionClientePendienteDante(
+        texto: string
+    ): Promise<boolean> {
+        const pendientes =
+            clientesPendientesSeleccionDanteRef.current;
+
+        if (!pendientes.length) {
+            return false;
+        }
+
+        const normalizado = normalizarTextoDante(texto);
+
+        if (!normalizado) {
+            return false;
+        }
+
+        // Selección por número: "2", "el 2", "opción 2", "segundo", etc.
+        const numero =
+            extraerNumeroSeleccionClienteDante(normalizado);
+
+        if (numero !== null) {
+            if (numero < 1 || numero > pendientes.length) {
+                responderDante(
+                    `Tengo ${pendientes.length} opciones. Indícame un número entre 1 y ${pendientes.length}.`
+                );
+                return true;
+            }
+
+            seleccionarClientePendienteDante(
+                pendientes[numero - 1]
+            );
+            return true;
+        }
+
+        // Selección por nombre completo o nombre dicho de forma natural.
+        const coincidenciasPorNombre =
+            pendientes.filter((servicio) => {
+                const nombreCompleto =
+                    `${servicio.nombres || ""} ${servicio.apellidos || ""}`.trim();
+
+                return nombreCoincideDante(
+                    normalizado,
+                    nombreCompleto
+                );
+            });
+
+        if (coincidenciasPorNombre.length === 1) {
+            seleccionarClientePendienteDante(
+                coincidenciasPorNombre[0]
+            );
+            return true;
+        }
+
+        if (coincidenciasPorNombre.length > 1) {
+            responderDante(
+                "Ese nombre coincide con más de una persona. Indícame el número de la opción que deseas consultar."
+            );
+            return true;
+        }
+
+        // Si todavía estamos esperando la elección, no dejamos que una
+        // frase cualquiera pase al intérprete como si fuera un comando nuevo.
+        responderDante(
+            "No pude identificar la opción. Puedes decirme el número, por ejemplo 2, o el nombre completo del cliente."
+        );
+
+        return true;
+    }
 
     // ========================================================
     // BUSCAR CLIENTE / SERVICIO
@@ -2332,6 +8282,9 @@ export default function BotNotificaciones({
                 servicioClienteDanteRef.current =
                     null;
 
+                clientesPendientesSeleccionDanteRef.current =
+                    [];
+
 
                 responderDante(
                     `No encontré ningún cliente que coincida con ${terminoBusqueda}.`
@@ -2349,20 +8302,34 @@ export default function BotNotificaciones({
                 coincidencias.length > 1
             ) {
 
-                const nombres =
-                    coincidencias
-                        .slice(0, 4)
-                        .map(
-                            (servicio) =>
-                                `${servicio.nombres} ${servicio.apellidos}`
-                        )
-                        .join(", ");
+                clientesPendientesSeleccionDanteRef.current =
+                    coincidencias;
 
+                actualizarContextoDante({
+                    tema: "CLIENTE",
+                    ultimaIntencion: "BUSCAR_CLIENTE",
+                    esperandoRespuesta: true,
+                    datoPendiente: "SELECCION_CLIENTE",
+                });
+
+                const opciones =
+                    coincidencias
+                        .slice(0, 9)
+                        .map(
+                            (servicio, index) =>
+                                `${index + 1}. ${servicio.nombres || ""} ${servicio.apellidos || ""}`.trim()
+                        )
+                        .join(". ");
+
+                const adicionales =
+                    coincidencias.length > 9
+                        ? ` Hay ${coincidencias.length - 9} coincidencias adicionales.`
+                        : "";
 
                 responderDante(
-                    `Encontré ${coincidencias.length} coincidencias. ` +
-                    `Entre ellas: ${nombres}. ` +
-                    `Indícame la cédula o la IP para identificar al cliente correctamente.`
+                    `Encontré ${coincidencias.length} clientes que coinciden con ${terminoBusqueda}. ` +
+                    `Te los muestro para que elijas: ${opciones}. ` +
+                    `${adicionales} ¿Cuál deseas consultar? Puedes decirme el número, por ejemplo 2, o el nombre completo.`
                 );
 
                 return;
@@ -2376,6 +8343,9 @@ export default function BotNotificaciones({
             const servicio =
                 coincidencias[0];
 
+
+            clientesPendientesSeleccionDanteRef.current =
+                [];
 
             servicioClienteDanteRef.current =
                 servicio;
@@ -5009,6 +10979,7 @@ export default function BotNotificaciones({
 
                                 if (
                                     microfonoActivoRef.current &&
+                                    !pausaMicrofonoAnalisisDanteRef.current &&
                                     reconocimientoRef.current
                                 ) {
 
@@ -5100,6 +11071,7 @@ export default function BotNotificaciones({
 
                                 if (
                                     microfonoActivoRef.current &&
+                                    !pausaMicrofonoAnalisisDanteRef.current &&
                                     reconocimientoRef.current
                                 ) {
 
@@ -5202,43 +11174,27 @@ export default function BotNotificaciones({
         reproducirVoz = true
     ) {
 
+        const respuesta =
+            String(texto || "").trim();
+
+        ultimaRespuestaDanteRef.current =
+            respuesta;
+
         setRespuestaDante(
-            texto
+            respuesta
         );
 
-
         if (
-            reproducirVoz
+            reproducirVoz &&
+            respuesta
         ) {
 
             hablar(
-                texto
+                respuesta
             );
         }
     }
 
-
-    // ========================================================
-    // DANTE FASE 1H - MOTOR CENTRAL DE INTENCIONES
-    // ========================================================
-    // Esta capa NO reemplaza los comandos anteriores.
-    // Solo reconoce expresiones más naturales y, cuando identifica
-    // una intención con seguridad, reutiliza las funciones que Dante
-    // ya tenía implementadas.
-
-    type IntencionCentralDante =
-        | "PING_CLIENTE"
-        | "BUSCAR_CLIENTE"
-        | "PERFIL_CLIENTE"
-        | "MIKROTIK"
-        | "NINGUNA";
-
-    type InterpretacionCentralDante = {
-        intencion: IntencionCentralDante;
-        entidad: string | null;
-        usaContextoActual: boolean;
-        confianza: number;
-    };
 
     function limpiarEntidadNaturalDante(valor: string) {
         return valor
@@ -5267,7 +11223,7 @@ export default function BotNotificaciones({
         const patrones = [
             /(?:haz|hacer|realiza|realizar|prueba|probar|revisa|revisar|comprueba|comprobar|verifica|verificar|mira|consultar|consulta)?\s*(?:un\s+)?ping\s+(?:a|al|del|de)?\s*(.+)$/,
             /(?:revisa|revisar|comprueba|comprobar|verifica|verificar|mira|consultar|consulta)\s+(?:la\s+)?(?:conexion|conectividad|estado|servicio)\s+(?:de|del)\s+(.+)$/,
-            /(?:busca|buscar|encuentra|encontrar|localiza|localizar)\s+(?:al|a la|el|la|cliente|usuario|abonado)?\s*(.+)$/,
+            /(?:busca|buscar|buscame|búscame|encuentra|encuentrame|encuéntrame|encontrar|localiza|localizar)\s+(?:al|a la|el|la|cliente|usuario|abonado)?\s*(.+)$/,
             /(?:perfil|datos|informacion|informacion del cliente|ficha)\s+(?:de|del)\s+(.+)$/,
         ];
 
@@ -5284,6 +11240,201 @@ export default function BotNotificaciones({
         return null;
     }
 
+    async function buscarInternetDesdeDante(
+        consulta: string
+    ): Promise<void> {
+
+        const termino =
+            String(
+                consulta || ""
+            ).trim();
+
+
+        if (
+            !termino
+        ) {
+
+            responderDante(
+                "Indícame qué deseas buscar en Internet."
+            );
+
+            return;
+        }
+
+
+        try {
+
+            await informarProcesamientoDante(
+                "BUSCANDO"
+            );
+
+
+            const token =
+                getToken();
+
+
+            const res =
+                await fetch(
+                    `${API_BASE}/dante/internet/buscar`,
+                    {
+                        method:
+                            "POST",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json",
+
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+
+                        body:
+                            JSON.stringify({
+                                consulta:
+                                    termino,
+                            }),
+                    }
+                );
+
+
+            const data =
+                await res.json();
+
+
+            if (
+                !res.ok ||
+                data?.ok === false
+            ) {
+
+                responderDante(
+                    data?.message ||
+                    "No pude realizar la búsqueda en Internet."
+                );
+
+                return;
+            }
+
+
+            console.log(
+                "🌐 DANTE RESULTADO INTERNET:",
+                data
+            );
+
+
+            // ====================================================
+            // RESPUESTA GENERADA POR EL BACKEND / TAVILY
+            // ====================================================
+
+            const respuestaInternet =
+                String(
+                    data?.respuesta ||
+                    ""
+                ).trim();
+
+
+            if (
+                respuestaInternet
+            ) {
+
+                cambiarTemaDante(
+                    "GENERAL",
+                    {
+                        ultimaIntencion:
+                            "BUSCAR_INTERNET",
+                    }
+                );
+
+
+                responderDante(
+                    respuestaInternet
+                );
+
+                return;
+            }
+
+
+            // ====================================================
+            // SI NO VINO RESPUESTA, USAMOS RESULTADOS
+            // ====================================================
+
+            const resultados =
+                Array.isArray(
+                    data?.resultados
+                )
+                    ? data.resultados
+                    : [];
+
+
+            if (
+                resultados.length === 0
+            ) {
+
+                responderDante(
+                    `No encontré resultados en Internet sobre ${termino}.`
+                );
+
+                return;
+            }
+
+
+            if (
+                resultados.length === 0
+            ) {
+
+                responderDante(
+                    `No encontré resultados en Internet sobre ${termino}.`
+                );
+
+                return;
+            }
+
+
+            const titulos =
+                resultados
+                    .slice(
+                        0,
+                        3
+                    )
+                    .map(
+                        (
+                            resultado: any,
+                            index: number
+                        ) => {
+
+                            const titulo =
+                                String(
+                                    resultado?.titulo ||
+                                    ""
+                                ).trim();
+
+
+                            return (
+                                `Resultado ${index + 1}: ${titulo}`
+                            );
+                        }
+                    )
+                    .filter(Boolean)
+                    .join(". ");
+
+
+            responderDante(
+                `Encontré información relacionada con ${termino}. ${titulos}.`
+            );
+
+        } catch (error) {
+
+            console.error(
+                "DANTE INTERNET FRONTEND:",
+                error
+            );
+
+
+            responderDante(
+                "Ocurrió un error mientras buscaba en Internet."
+            );
+        }
+    }
+
     function interpretarIntencionCentralDante(
         textoOriginal: string
     ): InterpretacionCentralDante {
@@ -5291,6 +11442,55 @@ export default function BotNotificaciones({
             .replace(/\bdante\b/g, " ")
             .replace(/\s+/g, " ")
             .trim();
+
+        // ========================================================
+        // DIAGNÓSTICO DE RED TIENE PRIORIDAD SOBRE INTERNET
+        // ========================================================
+        // Evita que expresiones como:
+        // "averigua si hay problemas en la red de barrio_lindo"
+        // sean interpretadas como una búsqueda web.
+        const diagnosticoRed =
+            interpretarDiagnosticoRedDante(
+                textoOriginal
+            );
+
+        if (diagnosticoRed) {
+            return {
+                intencion: "DIAGNOSTICO_RED",
+                entidad: diagnosticoRed.entidad,
+                usaContextoActual: diagnosticoRed.usaContextoActual,
+                confianza: diagnosticoRed.confianza,
+            };
+        }
+
+        const consultaInternet =
+            extraerConsultaInternetDante(
+                textoOriginal
+            );
+
+
+        // ========================================================
+        // INTERNET TIENE PRIORIDAD ANTES DE BUSCAR CLIENTES
+        // ========================================================
+
+        if (
+            consultaInternet
+        ) {
+
+            return {
+                intencion:
+                    "BUSCAR_INTERNET",
+
+                entidad:
+                    consultaInternet,
+
+                usaContextoActual:
+                    false,
+
+                confianza:
+                    0.98,
+            };
+        }
 
         const usaContextoActual =
             esReferenciaContextualDante(texto) ||
@@ -5328,7 +11528,7 @@ export default function BotNotificaciones({
         }
 
         if (
-            /\b(busca|buscar|encuentra|encontrar|localiza|localizar)\b/.test(texto) &&
+            /\b(busca|buscar|buscame|encuentra|encuentrame|encontrar|localiza|localizar)\b/.test(texto) &&
             (entidad || /\b(cliente|usuario|abonado)\b/.test(texto))
         ) {
             return {
@@ -5371,6 +11571,87 @@ export default function BotNotificaciones({
         };
     }
 
+    function extraerConsultaInternetDante(
+        textoOriginal: string
+    ): string | null {
+
+        let texto =
+            normalizarTextoDante(
+                textoOriginal
+            )
+                .replace(
+                    /\bdante\b/g,
+                    " "
+                )
+                .replace(
+                    /\s+/g,
+                    " "
+                )
+                .trim();
+
+
+        const patrones = [
+
+            /^busca\s+en\s+internet\s+(.+)$/,
+
+            /^buscar\s+en\s+internet\s+(.+)$/,
+
+            /^busca\s+en\s+la\s+web\s+(.+)$/,
+
+            /^buscar\s+en\s+la\s+web\s+(.+)$/,
+
+            /^consulta\s+en\s+internet\s+(.+)$/,
+
+            /^consultar\s+en\s+internet\s+(.+)$/,
+
+            /^investiga\s+en\s+internet\s+(.+)$/,
+
+            /^investigar\s+en\s+internet\s+(.+)$/,
+
+            /^averigua\s+en\s+internet\s+(.+)$/,
+
+            /^averiguar\s+en\s+internet\s+(.+)$/,
+
+            /^buscame\s+en\s+internet\s+(.+)$/,
+
+            /^investiga\s+(.+)$/,
+
+            /^averigua\s+(.+)$/,
+        ];
+
+
+        for (
+            const patron
+            of patrones
+        ) {
+
+            const match =
+                texto.match(
+                    patron
+                );
+
+
+            if (
+                match?.[1]
+            ) {
+
+                const consulta =
+                    match[1]
+                        .trim();
+
+
+                if (
+                    consulta.length >= 2
+                ) {
+
+                    return consulta;
+                }
+            }
+        }
+
+
+        return null;
+    }
     async function asegurarClienteNaturalDante(
         entidad: string | null
     ) {
@@ -5412,6 +11693,35 @@ export default function BotNotificaciones({
             interpretacion
         );
 
+        //Busqueda a internet
+
+        if (
+            interpretacion.intencion ===
+            "BUSCAR_INTERNET"
+        ) {
+
+            if (
+                !interpretacion.entidad
+            ) {
+
+                responderDante(
+                    "Indícame qué deseas buscar en Internet."
+                );
+
+                return true;
+            }
+
+
+            await buscarInternetDesdeDante(
+                interpretacion.entidad
+            );
+
+
+            return true;
+        }
+
+        //Busqueda de cliente
+
         if (interpretacion.intencion === "BUSCAR_CLIENTE") {
             if (!interpretacion.entidad) {
                 responderDante(
@@ -5451,6 +11761,15 @@ export default function BotNotificaciones({
             }
 
             await consultarPerfilClienteDante();
+            return true;
+        }
+
+        if (interpretacion.intencion === "DIAGNOSTICO_RED") {
+            await procesarDiagnosticoRedDante(
+                textoOriginal,
+                interpretacion.entidad,
+                interpretacion.usaContextoActual
+            );
             return true;
         }
 
@@ -5502,6 +11821,1921 @@ export default function BotNotificaciones({
     // PROCESAR COMANDO
     // ========================================================
 
+    function fechaDanteComoDia(valor: any): Date | null {
+        if (!valor) return null;
+        const texto = String(valor).trim();
+        const iso = texto.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
+        const latam = texto.match(/^(\d{2})[/-](\d{2})[/-](\d{4})/);
+        if (latam) return new Date(Number(latam[3]), Number(latam[2]) - 1, Number(latam[1]));
+        const fecha = new Date(texto);
+        return Number.isNaN(fecha.getTime()) ? null : new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+    }
+
+    function diferenciaDiasDante(fechaObjetivo: Date) {
+        const hoy = new Date();
+        const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+        const objetivo = new Date(fechaObjetivo.getFullYear(), fechaObjetivo.getMonth(), fechaObjetivo.getDate());
+        return Math.round((objetivo.getTime() - inicio.getTime()) / 86400000);
+    }
+
+    function obtenerNombreAlertaPagoDante(item: any) {
+        const nombres = item?.nombres ?? item?.nombre ?? item?.cliente?.nombres ?? item?.cliente?.nombre ?? "";
+        const apellidos = item?.apellidos ?? item?.apellido ?? item?.cliente?.apellidos ?? item?.cliente?.apellido ?? "";
+        return { nombres: String(nombres || "").trim(), apellidos: String(apellidos || "").trim() };
+    }
+
+    function obtenerFechaAlertaPagoDante(item: any, tipo: "PAGO" | "CORTE") {
+        return tipo === "PAGO"
+            ? item?.fechaVencimiento ?? item?.fecha_vencimiento ?? item?.vencimiento ?? item?.fechaPago ?? item?.fecha_pago
+            : item?.fechaLimiteCorte ?? item?.fecha_limite_corte ?? item?.limiteCorte ?? item?.fechaCorte ?? item?.fecha_corte;
+    }
+
+    function construirAlertasPagoDante(lista: any[], tipo: "PAGO" | "CORTE") {
+        const mapa = new Map<string, AlertaPagoDante>();
+        for (const item of lista) {
+            const estado = normalizarTextoDante(String(item?.estado ?? item?.estadoPago ?? item?.estado_pago ?? ""));
+            if (["pagado", "cancelado", "anulado", "anulada", "eliminado"].includes(estado)) continue;
+            const fechaTexto = obtenerFechaAlertaPagoDante(item, tipo);
+            const fecha = fechaDanteComoDia(fechaTexto);
+            if (!fecha) continue;
+            const dias = diferenciaDiasDante(fecha);
+            if (dias < 0 || dias > 2) continue;
+            const nombre = obtenerNombreAlertaPagoDante(item);
+            const nombreCompleto = `${nombre.nombres} ${nombre.apellidos}`.trim();
+            if (!nombreCompleto) continue;
+            const clienteId = item?.clienteId ?? item?.cliente_id ?? item?.cliente?.clienteId ?? item?.cliente?.id ?? null;
+            const clave = String(clienteId ?? nombreCompleto.toLowerCase());
+            const anterior = mapa.get(clave);
+            const alerta: AlertaPagoDante = { id: `${tipo}-${clave}-${String(fechaTexto)}`, clienteId, nombres: nombre.nombres, apellidos: nombre.apellidos, fecha: String(fechaTexto), dias, tipo };
+            if (!anterior || dias < anterior.dias) mapa.set(clave, alerta);
+        }
+        return Array.from(mapa.values()).sort((a, b) => a.dias - b.dias || `${a.nombres} ${a.apellidos}`.localeCompare(`${b.nombres} ${b.apellidos}`));
+    }
+
+    function extraerListaMensualidadesDante(data: any): any[] {
+        const candidatos = [data?.mensualidades, data?.todas, data?.result, data?.datos, data?.data];
+        for (const c of candidatos) {
+            if (Array.isArray(c)) return c;
+            if (Array.isArray(c?.mensualidades)) return c.mensualidades;
+            if (Array.isArray(c?.todas)) return c.todas;
+            if (Array.isArray(c?.data)) return c.data;
+        }
+        return [];
+    }
+
+    function diasAlertaPagoDante(dias: number) { return dias === 0 ? "hoy" : dias === 1 ? "mañana" : "en 2 días"; }
+
+    function nombresAlertasPagoDante(lista: AlertaPagoDante[]) {
+        return lista.map((x, i) => `${i + 1}. ${x.nombres} ${x.apellidos}, ${diasAlertaPagoDante(x.dias)}.`).join(" ");
+    }
+
+    function limpiarRespuestaAlertasPagoDante(
+        textoOriginal: string
+    ): string {
+        return normalizarTextoDante(
+            textoOriginal
+        )
+            .replace(
+                /^dante\s+/,
+                ""
+            )
+            .replace(
+                /\s+/g,
+                " "
+            )
+            .trim();
+    }
+
+    function esSiAlertasPagoDante(textoOriginal: string) {
+        const texto =
+            limpiarRespuestaAlertasPagoDante(
+                textoOriginal
+            );
+
+        return /^(si|claro|ok|okay|adelante|dale|dime|dime los nombres|nombres|nombra|nombralos|nombralas|si dime|si claro|si por favor)$/.test(
+            texto
+        );
+    }
+
+    function esNoAlertasPagoDante(textoOriginal: string) {
+        const texto =
+            limpiarRespuestaAlertasPagoDante(
+                textoOriginal
+            );
+
+        return /^(no|no gracias|cancelar|cancela|cancelalo|dejalo|mejor no|no quiero|no me los digas|no los nombres|no las nombres)$/.test(
+            texto
+        );
+    }
+
+    function procesarConfirmacionAlertasPagoDante(texto: string) {
+
+        if (
+            !esperandoConfirmacionAlertasPagoDanteRef.current
+        ) {
+            return false;
+        }
+
+        if (
+            esSiAlertasPagoDante(texto)
+        ) {
+
+            cerrarConfirmacionAlertasPagoDante();
+
+            const todas = [
+                ...alertasPagoDanteRef.current.pagos,
+                ...alertasPagoDanteRef.current.cortes,
+            ];
+
+            responderDante(
+                `Claro. Te indico los clientes con aviso próximo. ${nombresAlertasPagoDante(todas)}`
+            );
+
+            return true;
+        }
+
+        if (
+            esNoAlertasPagoDante(texto)
+        ) {
+
+            cerrarConfirmacionAlertasPagoDante();
+
+            responderDante(
+                "De acuerdo. Quedo listo para otra orden."
+            );
+
+            return true;
+        }
+
+        // IMPORTANTE: esta confirmación NO BLOQUEA a Dante.
+        // Si el usuario dijo otra orden en lugar de sí/no, cerramos
+        // inmediatamente la pregunta de alertas y devolvemos false.
+        // Así, ESTE MISMO TEXTO continúa por procesarComandoDante()
+        // y se ejecuta como una orden normal sin esperar los 20 segundos.
+        cerrarConfirmacionAlertasPagoDante();
+
+        return false;
+    }
+
+    function consultarNombreEnAlertasPagoDante(texto: string) {
+
+        const normalizado =
+            normalizarTextoDante(texto);
+
+        // Solo entra aquí cuando el usuario pregunta expresamente
+        // si una persona está dentro de las alertas.
+        const esConsultaAlertaCliente =
+            /^(dime si|consulta si|revisa si|esta|esta el|y que hay de|que hay de)\b/
+                .test(normalizado);
+
+        if (
+            !esConsultaAlertaCliente
+        ) {
+            return false;
+        }
+
+        const todas = [
+            ...alertasPagoDanteRef.current.pagos,
+            ...alertasPagoDanteRef.current.cortes,
+        ];
+
+        if (
+            !todas.length
+        ) {
+            return false;
+        }
+
+        const termino =
+            normalizado
+                .replace(
+                    /^(dime si |consulta si |revisa si |esta |esta el |y que hay de |que hay de )/,
+                    ""
+                )
+                .trim();
+
+        if (
+            termino.length < 3
+        ) {
+            return false;
+        }
+
+        const coincide =
+            (x: AlertaPagoDante) => {
+
+                const nombre =
+                    normalizarTextoDante(
+                        `${x.nombres} ${x.apellidos}`
+                    );
+
+                return (
+                    nombre.includes(termino) ||
+                    termino
+                        .split(" ")
+                        .every(
+                            p =>
+                                nombre.includes(p)
+                        )
+                );
+            };
+
+        const pagos =
+            alertasPagoDanteRef.current.pagos
+                .filter(coincide);
+
+        const cortes =
+            alertasPagoDanteRef.current.cortes
+                .filter(coincide);
+
+        if (
+            !pagos.length &&
+            !cortes.length
+        ) {
+
+            responderDante(
+                `No, ${termino} no está dentro de los clientes con aviso de pago o límite de corte próximo.`
+            );
+
+            return true;
+        }
+
+        const respuestas: string[] = [];
+
+        if (
+            pagos.length
+        ) {
+
+            respuestas.push(
+                `${pagos[0].nombres} ${pagos[0].apellidos} sí está en la lista de pagos próximos, ${diasAlertaPagoDante(pagos[0].dias)}.`
+            );
+        }
+
+        if (
+            cortes.length
+        ) {
+
+            respuestas.push(
+                `${cortes[0].nombres} ${cortes[0].apellidos} sí está en la lista de límite de corte próximo, ${diasAlertaPagoDante(cortes[0].dias)}.`
+            );
+        }
+
+        responderDante(
+            respuestas.join(" ")
+        );
+
+        return true;
+    }
+
+    async function revisarAlertasPagoDante() {
+        try {
+            const token = getToken();
+            if (!token) return;
+            const res = await fetch(`${API_BASE}/mensualidades/todas`, { method: "GET", headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, cache: "no-store" });
+            const data = await res.json();
+            if (!res.ok || data?.ok === false) return;
+            const lista = extraerListaMensualidadesDante(data);
+            const pagos = construirAlertasPagoDante(lista, "PAGO");
+            const cortes = construirAlertasPagoDante(lista, "CORTE");
+            alertasPagoDanteRef.current = { pagos, cortes };
+            const clave = [...pagos.map(x => x.id), ...cortes.map(x => x.id)].sort().join("|");
+            const cambio = clave !== ultimaClaveAlertasPagoDanteRef.current;
+            ultimaClaveAlertasPagoDanteRef.current = clave;
+            if (!cambio || alertaPagoDanteYaAnunciadaRef.current) return;
+            alertaPagoDanteYaAnunciadaRef.current = true;
+            if (!pagos.length && !cortes.length) return;
+            const total = pagos.length + cortes.length;
+            if (total <= 5) {
+                const partes: string[] = [];
+                if (pagos.length) partes.push(pagos.length === 1 ? "Hay 1 cliente con fecha de pago próxima." : `Hay ${pagos.length} clientes con fecha de pago próxima.`, nombresAlertasPagoDante(pagos));
+                if (cortes.length) partes.push(cortes.length === 1 ? "Hay 1 cliente con límite de corte próximo." : `Hay ${cortes.length} clientes con límite de corte próximo.`, nombresAlertasPagoDante(cortes));
+                responderDante(partes.join(" "));
+                return;
+            }
+            let respuesta = "";
+            if (pagos.length) respuesta += pagos.length === 1 ? "Hay 1 cliente con fecha de pago próxima. " : `Hay ${pagos.length} clientes con fecha de pago próxima. `;
+            if (cortes.length) respuesta += cortes.length === 1 ? "Hay 1 cliente con límite de corte próximo. " : `Hay ${cortes.length} clientes con límite de corte próximo. `;
+            // La confirmación queda abierta máximo 20 segundos, pero
+            // durante ese tiempo Dante sigue aceptando cualquier otra orden.
+            iniciarConfirmacionAlertasPagoDante();
+            responderDante(`${respuesta}¿Deseas que te indique los nombres?`);
+        } catch (error) { console.error("DANTE: Error revisando alertas de pagos:", error); }
+    }
+
+
+
+
+    // ========================================================
+    // DANTE - NORMALIZAR NOMBRE / ALIAS DE ROUTER MIKROTIK
+    // ========================================================
+
+    function normalizarNombreRouterDante(
+        valor: string
+    ): string {
+
+        return String(valor || "")
+
+            // MikrotikViaAnchayacuA1
+            // -> Mikrotik Via Anchayacu A1
+            .replace(
+                /([a-záéíóúñ])([A-ZÁÉÍÓÚÑ])/g,
+                "$1 $2"
+            )
+
+            .toLowerCase()
+
+            // Quitar tildes
+            .normalize("NFD")
+            .replace(
+                /[\u0300-\u036f]/g,
+                ""
+            )
+
+            // Quitar palabra MikroTik
+            .replace(
+                /\bmikrotik\b/g,
+                " "
+            )
+
+            // ============================================
+            // ALIAS NATURALES DE ROUTERS
+            // ============================================
+
+            // Todas estas pronunciaciones significan Anchayacu
+            .replace(
+                /\bvia\s+anchayacu\b/g,
+                "anchayacu"
+            )
+            .replace(
+                /\bancahyacu\b/g,
+                "anchayacu"
+            )
+            .replace(
+                /\banchayaco\b/g,
+                "anchayacu"
+            )
+
+            .replace(
+                /\ba\s+chayaco\b/g,
+                "anchayacu"
+            )
+            .replace(
+                /\bancha\s+yaco\b/g,
+                "anchayacu"
+            )
+            .replace(
+                /\bchayaco\b/g,
+                "anchayacu"
+            )
+            // Quitar códigos finales:
+            // A1, T1, S1, etc.
+            .replace(
+                /\b[a-z]\s*\d+\b/g,
+                " "
+            )
+
+            // Quitar caracteres especiales
+            .replace(
+                /[^a-z0-9\s]/g,
+                " "
+            )
+
+            // Espacios
+            .replace(
+                /\s+/g,
+                " "
+            )
+
+            .trim();
+    }
+
+    // ========================================================
+    // DANTE - EXTRAER REFERENCIA DEL ROUTER DEL COMANDO
+    // ========================================================
+
+    function limpiarBusquedaRouterDante(
+        textoOriginal: string
+    ): string {
+
+        return normalizarNombreRouterDante(
+            textoOriginal
+        )
+
+            .replace(
+                /\bdante\b/g,
+                " "
+            )
+
+            .replace(
+                /\brevisa(?:r|n)?\b/g,
+                " "
+            )
+
+            .replace(
+                /\bconsulta\b/g,
+                " "
+            )
+
+            .replace(
+                /\bconsultar\b/g,
+                " "
+            )
+
+            .replace(
+                /\bverifica\b/g,
+                " "
+            )
+
+            .replace(
+                /\bverificar\b/g,
+                " "
+            )
+
+            .replace(
+                /\brouter\b/g,
+                " "
+            )
+
+            .replace(
+                /\bestado\b/g,
+                " "
+            )
+
+            .replace(
+                /\bconexion\b/g,
+                " "
+            )
+
+            .replace(
+                /\bconectado\b/g,
+                " "
+            )
+
+            .replace(
+                /\bactivo\b/g,
+                " "
+            )
+
+            .replace(
+                /\bel\b/g,
+                " "
+            )
+
+            .replace(
+                /\bla\b/g,
+                " "
+            )
+
+            .replace(
+                /\bde\b/g,
+                " "
+            )
+
+            .replace(
+                /\s+/g,
+                " "
+            )
+
+            .trim();
+    }
+
+
+    // ========================================================
+    // DANTE - TEXTO COMPACTO PARA COMPARACIÓN
+    // ========================================================
+
+    function compactarTextoRouterDante(
+        valor: string
+    ) {
+
+        return normalizarNombreRouterDante(
+            valor
+        )
+            .replace(
+                /\s+/g,
+                ""
+            );
+    }
+
+
+    // ========================================================
+    // DANTE - PORCENTAJE DE SIMILITUD
+    // ========================================================
+
+    function similitudRouterDante(
+        texto1: string,
+        texto2: string
+    ): number {
+
+        const a =
+            compactarTextoRouterDante(
+                texto1
+            );
+
+        const b =
+            compactarTextoRouterDante(
+                texto2
+            );
+
+
+        if (
+            !a ||
+            !b
+        ) {
+            return 0;
+        }
+
+
+        if (
+            a === b
+        ) {
+            return 1;
+        }
+
+
+        // Si uno contiene gran parte del otro,
+        // lo consideramos una coincidencia fuerte.
+
+        if (
+            a.includes(b) ||
+            b.includes(a)
+        ) {
+
+            const menor =
+                Math.min(
+                    a.length,
+                    b.length
+                );
+
+            const mayor =
+                Math.max(
+                    a.length,
+                    b.length
+                );
+
+            return menor / mayor;
+        }
+
+
+        const distancia =
+            distanciaRouterDante(
+                a,
+                b
+            );
+
+
+        const longitud =
+            Math.max(
+                a.length,
+                b.length
+            );
+
+
+        return (
+            1 -
+            distancia / longitud
+        );
+    }
+
+    // ========================================================
+    // DANTE - DISTANCIA LEVENSHTEIN PARA ROUTERS
+    // ========================================================
+
+    function distanciaRouterDante(
+        a: string,
+        b: string
+    ): number {
+
+        const matriz: number[][] =
+            Array.from(
+                {
+                    length: b.length + 1
+                },
+                () =>
+                    Array(
+                        a.length + 1
+                    ).fill(0)
+            );
+
+
+        for (
+            let i = 0;
+            i <= b.length;
+            i++
+        ) {
+            matriz[i][0] = i;
+        }
+
+
+        for (
+            let j = 0;
+            j <= a.length;
+            j++
+        ) {
+            matriz[0][j] = j;
+        }
+
+
+        for (
+            let i = 1;
+            i <= b.length;
+            i++
+        ) {
+
+            for (
+                let j = 1;
+                j <= a.length;
+                j++
+            ) {
+
+                const costo =
+                    b[i - 1] === a[j - 1]
+                        ? 0
+                        : 1;
+
+
+                matriz[i][j] =
+                    Math.min(
+
+                        matriz[i - 1][j] + 1,
+
+                        matriz[i][j - 1] + 1,
+
+                        matriz[i - 1][j - 1] + costo
+                    );
+            }
+        }
+
+
+        return matriz[b.length][a.length];
+    }
+
+
+    // ========================================================
+    // DANTE - OBTENER ROUTERS REGISTRADOS
+    // ========================================================
+
+    async function obtenerRoutersMikrotikDante():
+        Promise<RouterMikrotikDante[]> {
+
+        try {
+
+            const token =
+                getToken();
+
+            const res =
+                await fetch(
+                    `${API_BASE}/mikrotik/routers`,
+                    {
+                        method:
+                            "GET",
+
+                        headers: {
+                            Authorization:
+                                `Bearer ${token}`,
+                        },
+
+                        cache:
+                            "no-store",
+                    }
+                );
+
+
+            const data =
+                await res.json();
+
+
+            if (
+                !res.ok ||
+                data.ok === false
+            ) {
+
+                console.error(
+                    "DANTE: error obteniendo routers:",
+                    data
+                );
+
+                return [];
+            }
+
+
+            return Array.isArray(
+                data.routers
+            )
+                ? data.routers
+                : [];
+
+        } catch (error) {
+
+            console.error(
+                "DANTE: error consultando routers MikroTik:",
+                error
+            );
+
+            return [];
+        }
+    }
+
+    // ========================================================
+    // DANTE - BUSCAR ROUTER MIKROTIK
+    //
+    // PRIORIDAD:
+    // 1. NOMBRE EXACTO
+    // 2. NOMBRE APROXIMADO >= 80%
+    // 3. SECTOR
+    // 4. PARROQUIA
+    // 5. IP WIREGUARD
+    //
+    // IMPORTANTE:
+    // El sector NUNCA debe ganar a un nombre parecido.
+    // ========================================================
+
+    function buscarRouterMencionadoDante(
+        textoOriginal: string,
+        routers: RouterMikrotikDante[]
+    ): RouterMikrotikDante | null {
+
+        const texto =
+            normalizarNombreRouterDante(
+                textoOriginal
+            );
+
+
+        const busqueda =
+            limpiarBusquedaRouterDante(
+                textoOriginal
+            );
+
+
+        const busquedaCompacta =
+            compactarTextoRouterDante(
+                busqueda
+            );
+
+
+        console.log(
+            "DANTE BUSCANDO ROUTER:",
+            {
+                original:
+                    textoOriginal,
+
+                normalizado:
+                    texto,
+
+                busqueda,
+
+                busquedaCompacta
+            }
+        );
+
+
+        // ====================================================
+        // 1. NOMBRE EXACTO
+        // ====================================================
+
+        for (
+            const router
+            of routers
+        ) {
+
+            const nombre =
+                normalizarNombreRouterDante(
+                    router.nombre || ""
+                );
+
+
+            const nombreCompacto =
+                compactarTextoRouterDante(
+                    router.nombre || ""
+                );
+
+
+            if (
+                nombre &&
+                (
+                    busqueda === nombre ||
+
+                    busquedaCompacta ===
+                    nombreCompacto ||
+
+                    (
+                        nombreCompacto.length >= 4 &&
+                        busquedaCompacta.includes(
+                            nombreCompacto
+                        )
+                    )
+                )
+            ) {
+
+                console.log(
+                    "✅ DANTE ROUTER EXACTO POR NOMBRE:",
+                    router.nombre
+                );
+
+
+                return router;
+            }
+        }
+
+
+        // ====================================================
+        // 2. NOMBRE APROXIMADO
+        //
+        // ESTO SE HACE ANTES DE MIRAR SECTOR.
+        // ====================================================
+
+        let mejorRouterNombre: RouterMikrotikDante | null = null;
+
+
+        let mejorPuntajeNombre =
+            0;
+
+
+        for (
+            const router
+            of routers
+        ) {
+
+            const nombre =
+                router.nombre || "";
+
+
+            if (
+                !nombre
+            ) {
+                continue;
+            }
+
+
+            const similitud =
+                similitudRouterDante(
+                    busqueda,
+                    nombre
+                );
+
+
+            console.log(
+                "DANTE SIMILITUD NOMBRE:",
+                {
+                    busqueda,
+
+                    router:
+                        router.nombre,
+
+                    nombreNormalizado:
+                        normalizarNombreRouterDante(
+                            nombre
+                        ),
+
+                    similitud:
+                        Math.round(
+                            similitud * 100
+                        ) + "%"
+                }
+            );
+
+
+            if (
+                similitud >
+                mejorPuntajeNombre
+            ) {
+
+                mejorPuntajeNombre =
+                    similitud;
+
+                mejorRouterNombre =
+                    router;
+            }
+        }
+
+
+        // ====================================================
+        // SI UN NOMBRE SUPERA 80%, ESE GANA.
+        //
+        // NO SEGUIMOS BUSCANDO POR SECTOR.
+        // ====================================================
+
+        if (
+            mejorRouterNombre &&
+            mejorPuntajeNombre >= 0.80
+        ) {
+
+            console.log(
+                "✅ DANTE ROUTER POR NOMBRE APROXIMADO:",
+                {
+                    router:
+                        mejorRouterNombre.nombre,
+
+                    similitud:
+                        Math.round(
+                            mejorPuntajeNombre *
+                            100
+                        ) + "%"
+                }
+            );
+
+
+            return mejorRouterNombre;
+        }
+
+
+        // ====================================================
+        // 3. SECTOR
+        //
+        // SOLO LLEGAMOS AQUÍ SI NO HUBO
+        // UN NOMBRE CON 80% O MÁS.
+        // ====================================================
+
+        for (
+            const router
+            of routers
+        ) {
+
+            const sector =
+                normalizarNombreRouterDante(
+                    router.sector || ""
+                );
+
+
+            if (
+                sector.length >= 3 &&
+                (
+                    texto.includes(
+                        sector
+                    ) ||
+
+                    sector.includes(
+                        busqueda
+                    ) ||
+
+                    busqueda.includes(
+                        sector
+                    )
+                )
+            ) {
+
+                console.log(
+                    "⚠️ DANTE ROUTER ENCONTRADO POR SECTOR:",
+                    {
+                        router:
+                            router.nombre,
+
+                        sector:
+                            router.sector
+                    }
+                );
+
+
+                return router;
+            }
+        }
+
+
+        // ====================================================
+        // 4. PARROQUIA
+        // ====================================================
+
+        for (
+            const router
+            of routers
+        ) {
+
+            const parroquia =
+                normalizarNombreRouterDante(
+                    router.parroquia || ""
+                );
+
+
+            if (
+                parroquia.length >= 3 &&
+                (
+                    texto.includes(
+                        parroquia
+                    ) ||
+
+                    parroquia.includes(
+                        busqueda
+                    )
+                )
+            ) {
+
+                console.log(
+                    "⚠️ DANTE ROUTER ENCONTRADO POR PARROQUIA:",
+                    {
+                        router:
+                            router.nombre,
+
+                        parroquia:
+                            router.parroquia
+                    }
+                );
+
+
+                return router;
+            }
+        }
+
+
+        // ====================================================
+        // 5. IP WIREGUARD
+        // ====================================================
+
+        for (
+            const router
+            of routers
+        ) {
+
+            const ipWG =
+                String(
+                    router.IpWireGuard ||
+                    router.ip_wireguard ||
+                    ""
+                ).trim();
+
+
+            if (
+                ipWG &&
+                textoOriginal.includes(
+                    ipWG
+                )
+            ) {
+
+                console.log(
+                    "✅ DANTE ROUTER POR IP WIREGUARD:",
+                    router.nombre,
+                    ipWG
+                );
+
+
+                return router;
+            }
+        }
+
+
+        // ====================================================
+        // NO ENCONTRADO
+        // ====================================================
+
+        console.log(
+            "❌ DANTE: NO SE IDENTIFICÓ ROUTER",
+            {
+                busqueda,
+
+                mejorNombre:
+                    mejorRouterNombre
+                        ? mejorRouterNombre.nombre
+                        : null,
+
+                mejorSimilitudNombre:
+                    Math.round(
+                        mejorPuntajeNombre *
+                        100
+                    ) + "%"
+            }
+        );
+
+
+        return null;
+    }
+
+
+    // ========================================================
+    // DANTE - GUARDAR ROUTER EN CONTEXTO
+    // ========================================================
+
+    function seleccionarRouterMikrotikDante(
+        router: RouterMikrotikDante,
+        intencion: string
+    ) {
+
+        routerMikrotikDanteRef.current =
+            router;
+
+
+        actualizarContextoDante({
+
+            tema:
+                "MIKROTIK",
+
+            entidadId:
+                String(
+                    router.id
+                ),
+
+            entidadNombre:
+                router.nombre,
+
+            ultimaIntencion:
+                intencion,
+
+            esperandoRespuesta:
+                false,
+
+            datoPendiente:
+                null,
+
+        });
+
+
+        console.log(
+            "DANTE ROUTER ACTUAL:",
+            router
+        );
+    }
+
+    // ========================================================
+    // DANTE V4 - DIAGNÓSTICO AUTÓNOMO DE RED / NODO
+    // ========================================================
+    // Flujo de interpretación:
+    // frase natural -> intención DIAGNOSTICO_RED -> identificar router
+    // -> comprobar estado -> recursos -> equipos wireless -> métricas
+    // -> interpretar anomalías -> conclusión OK/ADVERTENCIA/CRITICO.
+    //
+    // IMPORTANTE:
+    // - Solo consulta información. No cambia configuración.
+    // - Reutiliza rutas y funciones que Dante ya utiliza.
+    // ========================================================
+
+    type NivelDiagnosticoRedDante =
+        | "OK"
+        | "ADVERTENCIA"
+        | "CRITICO";
+
+    type InterpretacionDiagnosticoRedDante = {
+        entidad: string | null;
+        usaContextoActual: boolean;
+        confianza: number;
+    };
+
+    function interpretarDiagnosticoRedDante(
+        textoOriginal: string
+    ): InterpretacionDiagnosticoRedDante | null {
+        const texto =
+            normalizarTextoDante(textoOriginal)
+                .replace(/\bdante\b/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
+
+        const accion =
+            /\b(revisa|revisar|diagnostica|diagnosticar|analiza|analizar|verifica|verificar|comprueba|comprobar|chequea|chequear|mira|mirar|averigua|averiguar)\b/.test(texto);
+
+        const hablaDeRed =
+            /\b(red|nodo|mikrotik|router|sector|infraestructura)\b/.test(texto);
+
+        const buscaProblema =
+            /\b(problema|problemas|falla|fallas|error|errores|anomalia|anomalias|salud|estado|algo mal|esta bien|funciona bien|funcionando bien)\b/.test(texto);
+
+        const fraseDiagnostico =
+            /\b(diagnostico|diagnosticar|diagnostica)\b/.test(texto);
+
+        const referenciaContextual =
+            /\b(esa red|esta red|ese router|este router|ese nodo|este nodo|ahi|alli|el mismo|la misma)\b/.test(texto);
+
+        // Debe existir una intención clara de revisión técnica.
+        if (
+            !(
+                fraseDiagnostico ||
+                (accion && hablaDeRed && buscaProblema) ||
+                (accion && hablaDeRed) ||
+                (referenciaContextual && (accion || buscaProblema))
+            )
+        ) {
+            return null;
+        }
+
+        // Evitamos capturar diagnósticos claramente dirigidos a un cliente.
+        if (
+            /\b(cliente|abonado|usuario)\b/.test(texto) &&
+            !hablaDeRed
+        ) {
+            return null;
+        }
+
+        let entidad = texto
+            .replace(/\b(revisa|revisar|diagnostica|diagnosticar|analiza|analizar|verifica|verificar|comprueba|comprobar|chequea|chequear|mira|mirar|averigua|averiguar)\b/g, " ")
+            .replace(/\b(la red|el nodo|el router|router|mikrotik|red|nodo|sector|infraestructura)\b/g, " ")
+            .replace(/\b(dime|decime|indicame|me dices|me dice|si|ves|hay|existe|existen|algun|alguna|algunos|algunas|problema|problemas|falla|fallas|error|errores|anomalia|anomalias|salud|estado|algo|mal|funciona|funcionando|bien|por favor)\b/g, " ")
+            .replace(/\b(de|del|en|a|al)\b/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        if (
+            referenciaContextual ||
+            entidad === "ese" ||
+            entidad === "esa" ||
+            entidad === "este" ||
+            entidad === "esta"
+        ) {
+            entidad = "";
+        }
+
+        return {
+            entidad: entidad || null,
+            usaContextoActual:
+                referenciaContextual ||
+                (!entidad && !!routerMikrotikDanteRef.current),
+            confianza:
+                fraseDiagnostico
+                    ? 0.98
+                    : (accion && hablaDeRed && buscaProblema)
+                        ? 0.97
+                        : 0.92,
+        };
+    }
+
+    function numeroTecnicoDante(
+        valor: unknown
+    ): number | null {
+        if (
+            valor === null ||
+            valor === undefined ||
+            valor === ""
+        ) {
+            return null;
+        }
+
+        const numero = Number(
+            String(valor)
+                .replace(/[^\d.-]/g, "")
+        );
+
+        return Number.isFinite(numero)
+            ? numero
+            : null;
+    }
+
+    function uptimeMinutosDante(
+        valor: unknown
+    ): number | null {
+        const texto =
+            String(valor || "")
+                .toLowerCase()
+                .trim();
+
+        if (!texto) {
+            return null;
+        }
+
+        let minutos = 0;
+        let encontro = false;
+
+        const semanas = texto.match(/(\d+)w/);
+        const dias = texto.match(/(\d+)d/);
+        const horas = texto.match(/(\d+)h/);
+        const mins = texto.match(/(\d+)m/);
+        const segundos = texto.match(/(\d+)s/);
+
+        if (semanas) {
+            minutos += Number(semanas[1]) * 7 * 24 * 60;
+            encontro = true;
+        }
+
+        if (dias) {
+            minutos += Number(dias[1]) * 24 * 60;
+            encontro = true;
+        }
+
+        if (horas) {
+            minutos += Number(horas[1]) * 60;
+            encontro = true;
+        }
+
+        if (mins) {
+            minutos += Number(mins[1]);
+            encontro = true;
+        }
+
+        if (segundos) {
+            minutos += Number(segundos[1]) / 60;
+            encontro = true;
+        }
+
+        return encontro
+            ? minutos
+            : null;
+    }
+
+    async function obtenerSaludRouterRedDante(
+        router: RouterMikrotikDante
+    ): Promise<{
+        online: boolean;
+        recurso: any | null;
+        nodo: string | null;
+        error: string | null;
+    }> {
+        try {
+            const token = getToken();
+            const usaWireGuard =
+                Number(
+                    router.UsaWireGuard ??
+                    router.usa_wireguard ??
+                    0
+                ) === 1 ||
+                Boolean(
+                    router.IpWireGuard ||
+                    router.ip_wireguard
+                );
+
+            if (!usaWireGuard) {
+                const res = await fetch(
+                    `${API_BASE}/mikrotik/routers/${router.id}/test`,
+                    {
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                        },
+                        cache: "no-store",
+                    }
+                );
+
+                const data =
+                    await res.json().catch(() => ({}));
+
+                if (!res.ok || data?.ok === false) {
+                    return {
+                        online: false,
+                        recurso: null,
+                        nodo: null,
+                        error:
+                            data?.message ||
+                            data?.mensaje ||
+                            "El router no respondió a la prueba.",
+                    };
+                }
+
+                return {
+                    online: true,
+                    recurso:
+                        data?.router ||
+                        data?.data?.router ||
+                        data?.data ||
+                        null,
+                    nodo: null,
+                    error: null,
+                };
+            }
+
+            const resEstado = await fetch(
+                `${API_BASE}/mikrotik/routers/${router.id}/agent/estado`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                    cache: "no-store",
+                }
+            );
+
+            const estado =
+                await resEstado.json().catch(() => ({}));
+
+            if (
+                !resEstado.ok ||
+                estado?.ok === false ||
+                estado?.conectado === false
+            ) {
+                return {
+                    online: false,
+                    recurso: null,
+                    nodo:
+                        estado?.nodo ||
+                        null,
+                    error:
+                        estado?.message ||
+                        estado?.mensaje ||
+                        "El nodo Agent no está respondiendo.",
+                };
+            }
+
+            const nodo =
+                String(estado?.nodo || "").trim();
+
+            if (!nodo) {
+                return {
+                    online: true,
+                    recurso: null,
+                    nodo: null,
+                    error:
+                        "El router responde, pero no tiene nodo Agent identificado.",
+                };
+            }
+
+            const resRecurso = await fetch(
+                `${API_BASE}/mikrotik/agent/resource`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({ nodo }),
+                }
+            );
+
+            const dataRecurso =
+                await resRecurso.json().catch(() => ({}));
+
+            if (
+                !resRecurso.ok ||
+                dataRecurso?.ok === false
+            ) {
+                return {
+                    online: true,
+                    recurso: null,
+                    nodo,
+                    error:
+                        dataRecurso?.message ||
+                        dataRecurso?.mensaje ||
+                        "No pude consultar los recursos del router.",
+                };
+            }
+
+            const recurso =
+                dataRecurso?.data?.resource?.[0] ||
+                dataRecurso?.data?.resources?.[0] ||
+                dataRecurso?.data?.[0] ||
+                dataRecurso?.data?.resource ||
+                dataRecurso?.data ||
+                null;
+
+            return {
+                online: true,
+                recurso,
+                nodo,
+                error: null,
+            };
+        } catch (error: any) {
+            console.error(
+                "DANTE RED: error consultando salud del router:",
+                error
+            );
+
+            return {
+                online: false,
+                recurso: null,
+                nodo: null,
+                error:
+                    error?.message ||
+                    "No pude comunicarme con el router.",
+            };
+        }
+    }
+
+    async function obtenerEquiposWirelessRedDante(
+        router: RouterMikrotikDante
+    ): Promise<EquipoWirelessDante[]> {
+        // Pedimos todos y filtramos estrictamente por routerId.
+        // No usamos el fallback de obtenerEquiposWirelessDante(router),
+        // porque para un diagnóstico de red no debemos mezclar equipos
+        // de otros nodos si este router no tiene coincidencias.
+        const todos =
+            await obtenerEquiposWirelessDante(null);
+
+        return todos.filter(
+            (equipo) =>
+                Number(equipo.routerId) ===
+                Number(router.id)
+        );
+    }
+
+    async function analizarWirelessRedDante(
+        router: RouterMikrotikDante
+    ): Promise<{
+        totalEquipos: number;
+        consultados: number;
+        sinMetricas: number;
+        estaciones: number;
+        senalesRegulares: number;
+        senalesMalas: number;
+        peorSenal: number | null;
+        equiposSinMetricas: string[];
+    }> {
+        const equipos =
+            await obtenerEquiposWirelessRedDante(router);
+
+        let consultados = 0;
+        let sinMetricas = 0;
+        let estaciones = 0;
+        let senalesRegulares = 0;
+        let senalesMalas = 0;
+        let peorSenal: number | null = null;
+        const equiposSinMetricas: string[] = [];
+
+        const tamanoLote = 5;
+
+        for (
+            let inicio = 0;
+            inicio < equipos.length;
+            inicio += tamanoLote
+        ) {
+            const lote =
+                equipos.slice(
+                    inicio,
+                    inicio + tamanoLote
+                );
+
+            const resultados =
+                await Promise.all(
+                    lote.map(async (equipo) => {
+                        const equipoId =
+                            String(
+                                equipo.equipoId ||
+                                ""
+                            ).trim();
+
+                        if (!equipoId) {
+                            return {
+                                equipo,
+                                metricas: null,
+                            };
+                        }
+
+                        const metricas =
+                            await obtenerMetricasWirelessDante(
+                                equipoId
+                            );
+
+                        return {
+                            equipo,
+                            metricas,
+                        };
+                    })
+                );
+
+            for (const resultado of resultados) {
+                if (!resultado.metricas?.salida) {
+                    sinMetricas += 1;
+                    equiposSinMetricas.push(
+                        String(
+                            resultado.equipo.nombre ||
+                            resultado.equipo.ipGestion ||
+                            resultado.equipo.equipoId ||
+                            "equipo"
+                        )
+                    );
+                    continue;
+                }
+
+                consultados += 1;
+
+                const listaEstaciones =
+                    parseStationsCpeDante(
+                        resultado.metricas.salida
+                    );
+
+                estaciones +=
+                    listaEstaciones.length;
+
+                for (const estacion of listaEstaciones) {
+                    const senal =
+                        numeroTecnicoDante(
+                            estacion?.signal ??
+                            estacion?.remote?.signal
+                        );
+
+                    if (senal === null) {
+                        continue;
+                    }
+
+                    if (
+                        peorSenal === null ||
+                        senal < peorSenal
+                    ) {
+                        peorSenal = senal;
+                    }
+
+                    if (senal <= -83) {
+                        senalesMalas += 1;
+                    } else if (senal <= -77) {
+                        senalesRegulares += 1;
+                    }
+                }
+            }
+        }
+
+        return {
+            totalEquipos: equipos.length,
+            consultados,
+            sinMetricas,
+            estaciones,
+            senalesRegulares,
+            senalesMalas,
+            peorSenal,
+            equiposSinMetricas,
+        };
+    }
+
+    async function ejecutarDiagnosticoRedDante(
+        router: RouterMikrotikDante
+    ): Promise<void> {
+        const procesoId =
+            procesoDanteIdRef.current;
+
+        seleccionarRouterMikrotikDante(
+            router,
+            "DIAGNOSTICO_RED"
+        );
+
+        responderDante(
+            `De acuerdo. Voy a revisar la red de ${router.nombre}: estado del MikroTik, recursos y equipos wireless asociados.`
+        );
+
+        const saludRouter =
+            await obtenerSaludRouterRedDante(router);
+
+        if (
+            procesoId !==
+            procesoDanteIdRef.current
+        ) {
+            return;
+        }
+
+        if (!saludRouter.online) {
+            actualizarContextoDante({
+                tema: "MIKROTIK",
+                ultimaIntencion: "DIAGNOSTICO_RED_CRITICO",
+                esperandoRespuesta: false,
+                datoPendiente: null,
+            });
+
+            responderDante(
+                `Diagnóstico CRÍTICO de ${router.nombre}. El MikroTik no está respondiendo. ${saludRouter.error || ""} La falla puede estar en el router, el nodo, WireGuard o el enlace principal hacia ese equipo.`
+            );
+            return;
+        }
+
+        const wireless =
+            await analizarWirelessRedDante(router);
+
+        if (
+            procesoId !==
+            procesoDanteIdRef.current
+        ) {
+            return;
+        }
+
+        const recurso =
+            saludRouter.recurso || {};
+
+        const cargaCpu =
+            numeroTecnicoDante(
+                recurso?.cpuLoad ??
+                recurso?.["cpu-load"] ??
+                recurso?.load
+            );
+
+        const memoriaLibre =
+            numeroTecnicoDante(
+                recurso?.freeMemory ??
+                recurso?.["free-memory"]
+            );
+
+        const memoriaTotal =
+            numeroTecnicoDante(
+                recurso?.totalMemory ??
+                recurso?.["total-memory"]
+            );
+
+        const uptime =
+            recurso?.uptime ||
+            null;
+
+        const minutosUptime =
+            uptimeMinutosDante(uptime);
+
+        let nivel: NivelDiagnosticoRedDante =
+            "OK";
+
+        const problemas: string[] = [];
+        const detalles: string[] = [];
+
+        if (cargaCpu !== null) {
+            detalles.push(
+                `CPU ${cargaCpu} por ciento`
+            );
+
+            if (cargaCpu >= 90) {
+                nivel = "CRITICO";
+                problemas.push(
+                    `la CPU está críticamente alta en ${cargaCpu} por ciento`
+                );
+            } else if (cargaCpu >= 75) {
+                if (nivel === "OK") {
+                    nivel = "ADVERTENCIA";
+                }
+                problemas.push(
+                    `la CPU está elevada en ${cargaCpu} por ciento`
+                );
+            }
+        }
+
+        if (
+            memoriaLibre !== null &&
+            memoriaTotal !== null &&
+            memoriaTotal > 0
+        ) {
+            const porcentajeLibre =
+                (memoriaLibre / memoriaTotal) * 100;
+
+            detalles.push(
+                `memoria libre ${porcentajeLibre.toFixed(1)} por ciento`
+            );
+
+            if (porcentajeLibre < 8) {
+                nivel = "CRITICO";
+                problemas.push(
+                    `la memoria libre está críticamente baja en ${porcentajeLibre.toFixed(1)} por ciento`
+                );
+            } else if (porcentajeLibre < 15) {
+                if (nivel === "OK") {
+                    nivel = "ADVERTENCIA";
+                }
+                problemas.push(
+                    `la memoria libre está baja en ${porcentajeLibre.toFixed(1)} por ciento`
+                );
+            }
+        }
+
+        if (uptime) {
+            detalles.push(
+                `uptime ${uptime}`
+            );
+        }
+
+        if (
+            minutosUptime !== null &&
+            minutosUptime < 15
+        ) {
+            if (nivel === "OK") {
+                nivel = "ADVERTENCIA";
+            }
+            problemas.push(
+                "el router parece haberse reiniciado recientemente"
+            );
+        }
+
+        detalles.push(
+            `${wireless.totalEquipos} equipos wireless asociados`
+        );
+
+        if (wireless.estaciones > 0) {
+            detalles.push(
+                `${wireless.estaciones} estaciones detectadas`
+            );
+        }
+
+        if (wireless.senalesMalas > 0) {
+            if (nivel === "OK") {
+                nivel = "ADVERTENCIA";
+            }
+
+            problemas.push(
+                `${wireless.senalesMalas} ${wireless.senalesMalas === 1 ? "estación presenta" : "estaciones presentan"} señal mala de -83 dBm o peor`
+            );
+        }
+
+        if (wireless.senalesRegulares > 0) {
+            if (nivel === "OK") {
+                nivel = "ADVERTENCIA";
+            }
+
+            problemas.push(
+                `${wireless.senalesRegulares} ${wireless.senalesRegulares === 1 ? "estación está" : "estaciones están"} en rango regular de señal`
+            );
+        }
+
+        if (wireless.peorSenal !== null) {
+            detalles.push(
+                `peor señal ${wireless.peorSenal} dBm`
+            );
+        }
+
+        if (wireless.sinMetricas > 0) {
+            const proporcion =
+                wireless.totalEquipos > 0
+                    ? wireless.sinMetricas / wireless.totalEquipos
+                    : 0;
+
+            if (
+                wireless.totalEquipos >= 3 &&
+                proporcion >= 0.5
+            ) {
+                nivel = "CRITICO";
+                problemas.push(
+                    `${wireless.sinMetricas} de ${wireless.totalEquipos} equipos wireless no devolvieron métricas`
+                );
+            } else {
+                if (nivel === "OK") {
+                    nivel = "ADVERTENCIA";
+                }
+                problemas.push(
+                    `${wireless.sinMetricas} ${wireless.sinMetricas === 1 ? "equipo wireless no devolvió" : "equipos wireless no devolvieron"} métricas`
+                );
+            }
+        }
+
+        if (
+            saludRouter.error &&
+            saludRouter.online
+        ) {
+            if (nivel === "OK") {
+                nivel = "ADVERTENCIA";
+            }
+            problemas.push(
+                saludRouter.error
+            );
+        }
+
+        let respuesta =
+            `Diagnóstico ${nivel} de ${router.nombre}. El MikroTik está accesible.`;
+
+        if (detalles.length > 0) {
+            respuesta +=
+                ` Datos revisados: ${detalles.join(", ")}.`;
+        }
+
+        if (problemas.length === 0) {
+            respuesta +=
+                " No encontré anomalías con las comprobaciones disponibles. La red se ve estable en este momento.";
+        } else {
+            respuesta +=
+                ` Encontré ${problemas.length === 1 ? "esta observación" : "estas observaciones"}: ${problemas.join("; ")}.`;
+
+            if (nivel === "CRITICO") {
+                respuesta +=
+                    " Hay indicios de una afectación importante y conviene revisar primero el nodo o los equipos que no están respondiendo.";
+            } else {
+                respuesta +=
+                    " No parece una caída total del nodo, pero sí hay puntos que conviene revisar.";
+            }
+        }
+
+        actualizarContextoDante({
+            tema: "MIKROTIK",
+            entidadId: String(router.id),
+            entidadNombre: router.nombre,
+            ultimaIntencion:
+                `DIAGNOSTICO_RED_${nivel}`,
+            esperandoRespuesta: false,
+            datoPendiente: null,
+        });
+
+        responderDante(respuesta);
+    }
+
+    async function procesarDiagnosticoRedDante(
+        textoOriginal: string,
+        entidadInterpretada?: string | null,
+        usaContextoActual?: boolean
+    ): Promise<boolean> {
+        const routers =
+            await obtenerRoutersMikrotikDante();
+
+        if (!routers.length) {
+            responderDante(
+                "No pude obtener la lista de routers MikroTik para iniciar el diagnóstico de red."
+            );
+            return true;
+        }
+
+        let router =
+            buscarRouterMencionadoDante(
+                entidadInterpretada ||
+                textoOriginal,
+                routers
+            );
+
+        if (
+            !router &&
+            usaContextoActual &&
+            routerMikrotikDanteRef.current
+        ) {
+            router =
+                routerMikrotikDanteRef.current;
+        }
+
+        if (
+            !router &&
+            routers.length === 1
+        ) {
+            router = routers[0];
+        }
+
+        if (!router) {
+            actualizarContextoDante({
+                tema: "MIKROTIK",
+                ultimaIntencion: "DIAGNOSTICO_RED",
+                esperandoRespuesta: true,
+                datoPendiente: "ROUTER_DIAGNOSTICO_RED",
+            });
+
+            responderDante(
+                "¿Qué red o router deseas que diagnostique? Dime el nombre del MikroTik, sector o parroquia."
+            );
+            return true;
+        }
+
+        await ejecutarDiagnosticoRedDante(router);
+        return true;
+    }
+
     async function procesarComandoDante(
         comando: string
     ) {
@@ -5513,20 +13747,180 @@ export default function BotNotificaciones({
             return;
         }
 
-        console.log(
-            "COMANDO DANTE:",
-            limpio
-        );
-
-        setUltimoComando(
-            limpio
-        );
-
+        ultimoTextoUsuarioDanteRef.current =
+            limpio;
 
         const texto =
             normalizarTextoDante(
                 limpio
             );
+
+        // ========================================================
+        // DANTE - PRESENTACIÓN CONVERSACIONAL
+        // Tiene prioridad para evitar ejecutar acciones reales
+        // cuando Dante está siendo mostrado en una demostración.
+        // ========================================================
+        if (
+            procesarModoPresentacionDante(
+                limpio
+            )
+        ) {
+            return;
+        }
+
+        const textoNormalizadoAlertasPago =
+            texto;
+
+        if (
+            procesarConfirmacionAlertasPagoDante(
+                textoNormalizadoAlertasPago
+            )
+        ) {
+            return;
+        }
+
+        if (
+            (
+                alertasPagoDanteRef.current.pagos.length ||
+                alertasPagoDanteRef.current.cortes.length
+            ) &&
+            consultarNombreEnAlertasPagoDante(
+                limpio
+            )
+        ) {
+            return;
+        }
+
+        console.log(
+            "COMANDO DANTE:",
+            limpio
+        );
+
+        // ========================================================
+        // DANTE - ABRIR / CERRAR ENTRADA DE TEXTO
+        // ========================================================
+
+        const esAbrirTextoDante =
+
+            texto === "abre texto" ||
+            texto === "abrir texto" ||
+            texto === "abre el texto" ||
+            texto === "abrir el texto" ||
+            texto === "modo texto" ||
+            texto === "abre modo texto";
+
+
+        if (
+            esAbrirTextoDante
+        ) {
+
+            setMostrarEntradaTextoDante(
+                true
+            );
+
+
+            responderDante(
+                "Listo. Puedes escribir tu consulta."
+            );
+
+
+            return;
+        }
+
+
+        const esCerrarTextoDante =
+
+            texto === "cierra texto" ||
+            texto === "cerrar texto" ||
+            texto === "cierra el texto" ||
+            texto === "cerrar el texto";
+
+
+        if (
+            esCerrarTextoDante
+        ) {
+
+            setMostrarEntradaTextoDante(
+                false
+            );
+
+
+            setEntradaTextoDante(
+                ""
+            );
+
+
+            responderDante(
+                "Entrada de texto cerrada."
+            );
+
+
+            return;
+        }
+
+        // ========================================================
+        // DANTE - VOLVER A EJECUTAR ÚLTIMO COMANDO
+        // ========================================================
+
+        const esRepetirUltimoComando =
+
+            texto === "vuelve a revisar" ||
+            texto === "volver a revisar" ||
+
+            texto === "revisa de nuevo" ||
+            texto === "revisalo de nuevo" ||
+            texto === "revisala de nuevo" ||
+
+            texto === "revisa otra vez" ||
+            texto === "revisalo otra vez" ||
+            texto === "revisala otra vez" ||
+
+            texto === "hazlo de nuevo" ||
+            texto === "hazlo otra vez" ||
+
+            texto === "otra vez" ||
+            texto === "de nuevo";
+
+        if (
+            esRepetirUltimoComando
+        ) {
+
+            if (
+                !ultimoComando ||
+                normalizarTextoDante(
+                    ultimoComando
+                ) === "dante cancela"
+            ) {
+
+                responderDante(
+                    "No tengo un comando anterior para volver a ejecutar."
+                );
+
+                return;
+            }
+
+            console.log(
+                "DANTE REPITIENDO COMANDO:",
+                ultimoComando
+            );
+
+            responderDante(
+                "De acuerdo, vuelvo a revisarlo."
+            );
+
+            await procesarComandoDante(
+                ultimoComando
+            );
+
+            return;
+        }
+        // ========================================================
+        // GUARDAR ÚLTIMO COMANDO REAL
+        // ========================================================
+
+        setUltimoComando(
+            limpio
+        );
 
         // ========================================================
         // DANTE - CANCELAR TODO
@@ -5573,6 +13967,122 @@ export default function BotNotificaciones({
 
         const procesoActualDante =
             procesoDanteIdRef.current;
+
+        // ========================================================
+        // DANTE - CONFIRMACIÓN DE TICKET DE MANTENIMIENTO
+        // Tiene prioridad porque normalmente la respuesta será
+        // simplemente "sí" o "no".
+        // ========================================================
+        if (
+            ticketMantenimientoPendienteDanteRef.current
+        ) {
+            const procesadoTicket =
+                await procesarConfirmacionTicketMantenimientoDante(
+                    limpio
+                );
+
+            if (procesadoTicket) {
+                return;
+            }
+        }
+
+        // Solicitud directa de ticket con un cliente ya en contexto.
+        // Esto permite:
+        // "Dante busca a Pedro Cabezas" -> cliente queda seleccionado
+        // "créale un ticket" / "una visita de técnico" / "manda un técnico"
+        // -> reutiliza directamente a Pedro sin pedir el nombre otra vez.
+        if (
+            esSolicitudTicketMantenimientoDante(
+                limpio
+            ) &&
+            servicioClienteDanteRef.current
+        ) {
+            await prepararTicketMantenimientoDante(
+                servicioClienteDanteRef.current
+            );
+            return;
+        }
+
+        // ========================================================
+        // DANTE V3 - DIAGNÓSTICO COMPUESTO DE INTERNET
+        // Tiene prioridad antes de los comandos operativos porque
+        // una frase como "revisa por qué Juan no tiene internet"
+        // debe investigar, no ejecutar una acción de corte.
+        // ========================================================
+
+        if (flujoDiagnosticoInternetDanteRef.current) {
+            const procesado =
+                await procesarFlujoDiagnosticoInternetDante(
+                    limpio
+                );
+
+            if (procesado) return;
+        }
+
+        if (esInicioDiagnosticoInternetDante(limpio)) {
+            await iniciarDiagnosticoInternetDante(limpio);
+            return;
+        }
+
+        // ========================================================
+        // DANTE - FLUJOS CONVERSACIONALES MIKROTIK
+        // Tienen prioridad para que respuestas como "sí", "84.156",
+        // un nombre o un router continúen el diálogo actual.
+        // ========================================================
+
+        if (flujoServicioMikrotikDanteRef.current) {
+            const procesado = await procesarFlujoServicioMikrotikDante(limpio);
+            if (procesado) return;
+        }
+
+        if (flujoMorosoDanteRef.current) {
+            const procesado = await procesarFlujoMorosoDante(limpio);
+            if (procesado) return;
+        }
+
+        if (esInicioAgregarMorosoDante(limpio)) {
+            iniciarFlujoMorosoDante(limpio);
+            return;
+        }
+
+        const accionServicioMikrotik = detectarAccionServicioMikrotikDante(limpio);
+        if (accionServicioMikrotik) {
+            await iniciarFlujoServicioMikrotikDante(limpio, accionServicioMikrotik);
+            return;
+        }
+
+        // ========================================================
+        // DANTE - SELECCIÓN DE CLIENTE PENDIENTE
+        // Debe procesarse antes del intérprete central para que
+        // respuestas como "2" o un nombre completo continúen
+        // exactamente la búsqueda que Dante acaba de presentar.
+        // ========================================================
+
+        if (
+            clientesPendientesSeleccionDanteRef.current.length > 0
+        ) {
+            const seleccionProcesada =
+                await procesarSeleccionClientePendienteDante(
+                    limpio
+                );
+
+            if (seleccionProcesada) {
+                return;
+            }
+        }
+
+        // ========================================================
+        // DANTE - RESUMEN DE CLIENTES Y CONTRATOS
+        // ========================================================
+
+        const resumenProcesado =
+            await procesarConsultaResumenClientesContratosDante(
+                textoNormalizadoAlertasPago
+            );
+
+        if (resumenProcesado) {
+            return;
+        }
 
         // ========================================================
         // DANTE FASE 1H - INTÉRPRETE CENTRAL
@@ -8310,7 +16820,9 @@ export default function BotNotificaciones({
             texto === "nueva proforma" ||
             texto.includes("llevame a proformas") ||
             texto.includes("ir a proformas") ||
+            texto.includes("ir a proforma") ||
             texto.includes("abre proformas") ||
+            texto.includes("abre proforma") ||
             texto.includes("Abre proformas") ||
             texto.includes("abrir proformas") ||
             texto.includes("ver proformas") ||
@@ -9839,150 +18351,6 @@ export default function BotNotificaciones({
 
 
         // ========================================================
-        // DANTE - OBTENER ROUTERS REGISTRADOS
-        // ========================================================
-
-        async function obtenerRoutersMikrotikDante():
-            Promise<RouterMikrotikDante[]> {
-
-            try {
-
-                const token =
-                    getToken();
-
-                const res =
-                    await fetch(
-                        `${API_BASE}/mikrotik/routers`,
-                        {
-                            method:
-                                "GET",
-
-                            headers: {
-                                Authorization:
-                                    `Bearer ${token}`,
-                            },
-
-                            cache:
-                                "no-store",
-                        }
-                    );
-
-
-                const data =
-                    await res.json();
-
-
-                if (
-                    !res.ok ||
-                    data.ok === false
-                ) {
-
-                    console.error(
-                        "DANTE: error obteniendo routers:",
-                        data
-                    );
-
-                    return [];
-                }
-
-
-                return Array.isArray(
-                    data.routers
-                )
-                    ? data.routers
-                    : [];
-
-            } catch (error) {
-
-                console.error(
-                    "DANTE: error consultando routers MikroTik:",
-                    error
-                );
-
-                return [];
-            }
-        }
-
-        // ========================================================
-        // DANTE - NORMALIZAR NOMBRE / ALIAS DE ROUTER MIKROTIK
-        // ========================================================
-
-        function normalizarNombreRouterDante(
-            valor: string
-        ): string {
-
-            return String(valor || "")
-
-                // MikrotikViaAnchayacuA1
-                // -> Mikrotik Via Anchayacu A1
-                .replace(
-                    /([a-záéíóúñ])([A-ZÁÉÍÓÚÑ])/g,
-                    "$1 $2"
-                )
-
-                .toLowerCase()
-
-                // Quitar tildes
-                .normalize("NFD")
-                .replace(
-                    /[\u0300-\u036f]/g,
-                    ""
-                )
-
-                // Quitar palabra MikroTik
-                .replace(
-                    /\bmikrotik\b/g,
-                    " "
-                )
-
-
-                // ============================================
-                // ALIAS NATURALES DE ROUTERS
-                // ============================================
-
-                // Via Anchayacu -> Anchayacu
-                .replace(
-                    /\bvia\s+anchayacu\b/g,
-                    "anchayacu"
-                )
-                .replace(
-                    /\bvia\s+anchayaco\b/g,
-                    "anchayacu"
-                )
-                .replace(
-                    /\bvia\s+chayaco\b/g,
-                    "anchayacu"
-                )
-                .replace(
-                    /\bvia\s+ancha Yaco\b/g,
-                    "anchayacu"
-                )
-                .replace(
-                    /\bvia\s+ancha yaco\b/g,
-                    "anchayacu"
-                )
-                // Quitar códigos finales:
-                // A1, T1, S1, etc.
-                .replace(
-                    /\b[a-z]\s*\d+\b/g,
-                    " "
-                )
-
-                // Quitar caracteres especiales
-                .replace(
-                    /[^a-z0-9\s]/g,
-                    " "
-                )
-
-                // Espacios
-                .replace(
-                    /\s+/g,
-                    " "
-                )
-
-                .trim();
-        }
-        // ========================================================
         // DANTE - DISTANCIA LEVENSHTEIN
         // ========================================================
 
@@ -10209,679 +18577,6 @@ export default function BotNotificaciones({
                 )
                 .trim();
         }
-
-        // ========================================================
-        // DANTE - TEXTO COMPACTO PARA COMPARACIÓN
-        // ========================================================
-
-        function compactarTextoRouterDante(
-            valor: string
-        ) {
-
-            return normalizarNombreRouterDante(
-                valor
-            )
-                .replace(
-                    /\s+/g,
-                    ""
-                );
-        }
-
-        // ========================================================
-        // DANTE - DISTANCIA LEVENSHTEIN PARA ROUTERS
-        // ========================================================
-
-        function distanciaRouterDante(
-            a: string,
-            b: string
-        ): number {
-
-            const matriz: number[][] =
-                Array.from(
-                    {
-                        length: b.length + 1
-                    },
-                    () =>
-                        Array(
-                            a.length + 1
-                        ).fill(0)
-                );
-
-
-            for (
-                let i = 0;
-                i <= b.length;
-                i++
-            ) {
-                matriz[i][0] = i;
-            }
-
-
-            for (
-                let j = 0;
-                j <= a.length;
-                j++
-            ) {
-                matriz[0][j] = j;
-            }
-
-
-            for (
-                let i = 1;
-                i <= b.length;
-                i++
-            ) {
-
-                for (
-                    let j = 1;
-                    j <= a.length;
-                    j++
-                ) {
-
-                    const costo =
-                        b[i - 1] === a[j - 1]
-                            ? 0
-                            : 1;
-
-
-                    matriz[i][j] =
-                        Math.min(
-
-                            matriz[i - 1][j] + 1,
-
-                            matriz[i][j - 1] + 1,
-
-                            matriz[i - 1][j - 1] + costo
-                        );
-                }
-            }
-
-
-            return matriz[b.length][a.length];
-        }
-
-
-        // ========================================================
-        // DANTE - PORCENTAJE DE SIMILITUD
-        // ========================================================
-
-        function similitudRouterDante(
-            texto1: string,
-            texto2: string
-        ): number {
-
-            const a =
-                compactarTextoRouterDante(
-                    texto1
-                );
-
-            const b =
-                compactarTextoRouterDante(
-                    texto2
-                );
-
-
-            if (
-                !a ||
-                !b
-            ) {
-                return 0;
-            }
-
-
-            if (
-                a === b
-            ) {
-                return 1;
-            }
-
-
-            // Si uno contiene gran parte del otro,
-            // lo consideramos una coincidencia fuerte.
-
-            if (
-                a.includes(b) ||
-                b.includes(a)
-            ) {
-
-                const menor =
-                    Math.min(
-                        a.length,
-                        b.length
-                    );
-
-                const mayor =
-                    Math.max(
-                        a.length,
-                        b.length
-                    );
-
-                return menor / mayor;
-            }
-
-
-            const distancia =
-                distanciaRouterDante(
-                    a,
-                    b
-                );
-
-
-            const longitud =
-                Math.max(
-                    a.length,
-                    b.length
-                );
-
-
-            return (
-                1 -
-                distancia / longitud
-            );
-        }
-
-        // ========================================================
-        // DANTE - EXTRAER REFERENCIA DEL ROUTER DEL COMANDO
-        // ========================================================
-
-        function limpiarBusquedaRouterDante(
-            textoOriginal: string
-        ): string {
-
-            return normalizarNombreRouterDante(
-                textoOriginal
-            )
-
-                .replace(
-                    /\bdante\b/g,
-                    " "
-                )
-
-                .replace(
-                    /\brevisa\b/g,
-                    " "
-                )
-
-                .replace(
-                    /\brevisar\b/g,
-                    " "
-                )
-
-                .replace(
-                    /\bconsulta\b/g,
-                    " "
-                )
-
-                .replace(
-                    /\bconsultar\b/g,
-                    " "
-                )
-
-                .replace(
-                    /\bverifica\b/g,
-                    " "
-                )
-
-                .replace(
-                    /\bverificar\b/g,
-                    " "
-                )
-
-                .replace(
-                    /\brouter\b/g,
-                    " "
-                )
-
-                .replace(
-                    /\bestado\b/g,
-                    " "
-                )
-
-                .replace(
-                    /\bconexion\b/g,
-                    " "
-                )
-
-                .replace(
-                    /\bconectado\b/g,
-                    " "
-                )
-
-                .replace(
-                    /\bactivo\b/g,
-                    " "
-                )
-
-                .replace(
-                    /\bel\b/g,
-                    " "
-                )
-
-                .replace(
-                    /\bla\b/g,
-                    " "
-                )
-
-                .replace(
-                    /\bde\b/g,
-                    " "
-                )
-
-                .replace(
-                    /\s+/g,
-                    " "
-                )
-
-                .trim();
-        }
-
-        // ========================================================
-        // DANTE - BUSCAR ROUTER MIKROTIK
-        //
-        // PRIORIDAD:
-        // 1. NOMBRE EXACTO
-        // 2. NOMBRE APROXIMADO >= 80%
-        // 3. SECTOR
-        // 4. PARROQUIA
-        // 5. IP WIREGUARD
-        //
-        // IMPORTANTE:
-        // El sector NUNCA debe ganar a un nombre parecido.
-        // ========================================================
-
-        function buscarRouterMencionadoDante(
-            textoOriginal: string,
-            routers: RouterMikrotikDante[]
-        ): RouterMikrotikDante | null {
-
-            const texto =
-                normalizarNombreRouterDante(
-                    textoOriginal
-                );
-
-
-            const busqueda =
-                limpiarBusquedaRouterDante(
-                    textoOriginal
-                );
-
-
-            const busquedaCompacta =
-                compactarTextoRouterDante(
-                    busqueda
-                );
-
-
-            console.log(
-                "DANTE BUSCANDO ROUTER:",
-                {
-                    original:
-                        textoOriginal,
-
-                    normalizado:
-                        texto,
-
-                    busqueda,
-
-                    busquedaCompacta
-                }
-            );
-
-
-            // ====================================================
-            // 1. NOMBRE EXACTO
-            // ====================================================
-
-            for (
-                const router
-                of routers
-            ) {
-
-                const nombre =
-                    normalizarNombreRouterDante(
-                        router.nombre || ""
-                    );
-
-
-                const nombreCompacto =
-                    compactarTextoRouterDante(
-                        router.nombre || ""
-                    );
-
-
-                if (
-                    nombre &&
-                    (
-                        busqueda === nombre ||
-
-                        busquedaCompacta ===
-                        nombreCompacto ||
-
-                        (
-                            nombreCompacto.length >= 4 &&
-                            busquedaCompacta.includes(
-                                nombreCompacto
-                            )
-                        )
-                    )
-                ) {
-
-                    console.log(
-                        "✅ DANTE ROUTER EXACTO POR NOMBRE:",
-                        router.nombre
-                    );
-
-
-                    return router;
-                }
-            }
-
-
-            // ====================================================
-            // 2. NOMBRE APROXIMADO
-            //
-            // ESTO SE HACE ANTES DE MIRAR SECTOR.
-            // ====================================================
-
-            let mejorRouterNombre: RouterMikrotikDante | null = null;
-
-
-            let mejorPuntajeNombre =
-                0;
-
-
-            for (
-                const router
-                of routers
-            ) {
-
-                const nombre =
-                    router.nombre || "";
-
-
-                if (
-                    !nombre
-                ) {
-                    continue;
-                }
-
-
-                const similitud =
-                    similitudRouterDante(
-                        busqueda,
-                        nombre
-                    );
-
-
-                console.log(
-                    "DANTE SIMILITUD NOMBRE:",
-                    {
-                        busqueda,
-
-                        router:
-                            router.nombre,
-
-                        nombreNormalizado:
-                            normalizarNombreRouterDante(
-                                nombre
-                            ),
-
-                        similitud:
-                            Math.round(
-                                similitud * 100
-                            ) + "%"
-                    }
-                );
-
-
-                if (
-                    similitud >
-                    mejorPuntajeNombre
-                ) {
-
-                    mejorPuntajeNombre =
-                        similitud;
-
-                    mejorRouterNombre =
-                        router;
-                }
-            }
-
-
-            // ====================================================
-            // SI UN NOMBRE SUPERA 80%, ESE GANA.
-            //
-            // NO SEGUIMOS BUSCANDO POR SECTOR.
-            // ====================================================
-
-            if (
-                mejorRouterNombre &&
-                mejorPuntajeNombre >= 0.80
-            ) {
-
-                console.log(
-                    "✅ DANTE ROUTER POR NOMBRE APROXIMADO:",
-                    {
-                        router:
-                            mejorRouterNombre.nombre,
-
-                        similitud:
-                            Math.round(
-                                mejorPuntajeNombre *
-                                100
-                            ) + "%"
-                    }
-                );
-
-
-                return mejorRouterNombre;
-            }
-
-
-            // ====================================================
-            // 3. SECTOR
-            //
-            // SOLO LLEGAMOS AQUÍ SI NO HUBO
-            // UN NOMBRE CON 80% O MÁS.
-            // ====================================================
-
-            for (
-                const router
-                of routers
-            ) {
-
-                const sector =
-                    normalizarNombreRouterDante(
-                        router.sector || ""
-                    );
-
-
-                if (
-                    sector.length >= 3 &&
-                    (
-                        texto.includes(
-                            sector
-                        ) ||
-
-                        sector.includes(
-                            busqueda
-                        ) ||
-
-                        busqueda.includes(
-                            sector
-                        )
-                    )
-                ) {
-
-                    console.log(
-                        "⚠️ DANTE ROUTER ENCONTRADO POR SECTOR:",
-                        {
-                            router:
-                                router.nombre,
-
-                            sector:
-                                router.sector
-                        }
-                    );
-
-
-                    return router;
-                }
-            }
-
-
-            // ====================================================
-            // 4. PARROQUIA
-            // ====================================================
-
-            for (
-                const router
-                of routers
-            ) {
-
-                const parroquia =
-                    normalizarNombreRouterDante(
-                        router.parroquia || ""
-                    );
-
-
-                if (
-                    parroquia.length >= 3 &&
-                    (
-                        texto.includes(
-                            parroquia
-                        ) ||
-
-                        parroquia.includes(
-                            busqueda
-                        )
-                    )
-                ) {
-
-                    console.log(
-                        "⚠️ DANTE ROUTER ENCONTRADO POR PARROQUIA:",
-                        {
-                            router:
-                                router.nombre,
-
-                            parroquia:
-                                router.parroquia
-                        }
-                    );
-
-
-                    return router;
-                }
-            }
-
-
-            // ====================================================
-            // 5. IP WIREGUARD
-            // ====================================================
-
-            for (
-                const router
-                of routers
-            ) {
-
-                const ipWG =
-                    String(
-                        router.IpWireGuard ||
-                        router.ip_wireguard ||
-                        ""
-                    ).trim();
-
-
-                if (
-                    ipWG &&
-                    textoOriginal.includes(
-                        ipWG
-                    )
-                ) {
-
-                    console.log(
-                        "✅ DANTE ROUTER POR IP WIREGUARD:",
-                        router.nombre,
-                        ipWG
-                    );
-
-
-                    return router;
-                }
-            }
-
-
-            // ====================================================
-            // NO ENCONTRADO
-            // ====================================================
-
-            console.log(
-                "❌ DANTE: NO SE IDENTIFICÓ ROUTER",
-                {
-                    busqueda,
-
-                    mejorNombre:
-                        mejorRouterNombre
-                            ? mejorRouterNombre.nombre
-                            : null,
-
-                    mejorSimilitudNombre:
-                        Math.round(
-                            mejorPuntajeNombre *
-                            100
-                        ) + "%"
-                }
-            );
-
-
-            return null;
-        }
-
-
-        // ========================================================
-        // DANTE - GUARDAR ROUTER EN CONTEXTO
-        // ========================================================
-
-        function seleccionarRouterMikrotikDante(
-            router: RouterMikrotikDante,
-            intencion: string
-        ) {
-
-            routerMikrotikDanteRef.current =
-                router;
-
-
-            actualizarContextoDante({
-
-                tema:
-                    "MIKROTIK",
-
-                entidadId:
-                    String(
-                        router.id
-                    ),
-
-                entidadNombre:
-                    router.nombre,
-
-                ultimaIntencion:
-                    intencion,
-
-                esperandoRespuesta:
-                    false,
-
-                datoPendiente:
-                    null,
-
-            });
-
-
-            console.log(
-                "DANTE ROUTER ACTUAL:",
-                router
-            );
-        }
-
 
         // ========================================================
         // DANTE - LISTAR ROUTERS
@@ -12112,6 +19807,12 @@ export default function BotNotificaciones({
                     "revisa "
                 ) ||
                 texto.includes(
+                    "revisan "
+                ) ||
+                texto.includes(
+                    "revisar "
+                ) ||
+                texto.includes(
                     "esta conectado"
                 ) ||
                 texto.includes(
@@ -12777,7 +20478,7 @@ export default function BotNotificaciones({
             texto.includes("dante ahi estas")
         ) {
 
-            return "Sí, aquí estoy. ¿Qué vamos a hacer?";
+            return personalizarSaludoDante("Sí, aquí estoy. ¿Qué vamos a hacer?");
         }
 
 
@@ -12790,7 +20491,7 @@ export default function BotNotificaciones({
             texto.includes("dante escuchas")
         ) {
 
-            return "Sí, te escucho. Dime.";
+            return personalizarSaludoDante("Sí, te escucho. Dime.");
         }
 
 
@@ -12804,7 +20505,7 @@ export default function BotNotificaciones({
             texto.includes("buen dia dante")
         ) {
 
-            return "Hola, aquí estoy. ¿Qué vamos a hacer?";
+            return personalizarSaludoDante("Hola, aquí estoy. ¿Qué vamos a hacer?");
         }
 
 
@@ -12818,7 +20519,7 @@ export default function BotNotificaciones({
             texto.includes("dante necesito ayuda")
         ) {
 
-            return "Claro, dime qué necesitas.";
+            return personalizarSaludoDante("Claro, dime qué necesitas.");
         }
 
 
@@ -12832,7 +20533,7 @@ export default function BotNotificaciones({
             texto.includes("dante vamos a comenzar")
         ) {
 
-            return "Listo, dime por dónde empezamos.";
+            return personalizarSaludoDante("Listo, dime por dónde empezamos.");
         }
 
 
@@ -12844,7 +20545,7 @@ export default function BotNotificaciones({
             texto === "dante"
         ) {
 
-            return "Sí, dime. Aquí estoy, te escucho.";
+            return personalizarSaludoDante("Sí, dime. Aquí estoy, te escucho.");
         }
 
 
@@ -12852,7 +20553,7 @@ export default function BotNotificaciones({
         // RESPUESTA GENERAL
         // ====================================================
 
-        return "Sí, aquí estoy. Te escucho.";
+        return personalizarSaludoDante("Sí, aquí estoy. Te escucho.");
     }
 
     // ========================================================
@@ -13036,6 +20737,9 @@ export default function BotNotificaciones({
         const puedeContinuarSinDante =
 
             contexto.esperandoRespuesta === true ||
+
+            esperandoConfirmacionAlertasPagoDanteRef.current === true ||
+
             esContinuacionCliente;
 
 
@@ -13153,7 +20857,6 @@ export default function BotNotificaciones({
 
         if (
             normalizado.includes("quien eres") ||
-            normalizado.includes("preséntate") ||
             normalizado.includes("dime quien eres")
         ) {
 
@@ -13171,20 +20874,6 @@ export default function BotNotificaciones({
 
             return;
         }
-        if (
-            normalizado === "presentate" ||
-            normalizado === "presentarte" ||
-            normalizado.includes("presentate") ||
-            normalizado.includes("puedes presentarte")
-        ) {
-
-            responderDante(
-                "Hola, soy Dante V1, el asistente inteligente de NETCOMP RF. Fui creado por el Ing. Jose Zambrano para ayudarte a interactuar de forma más rápida y sencilla con el sistema. Actualmente estoy en modo de desarrollo, aprendiendo nuevas funciones y ampliando mis capacidades. Puedo interpretar tus instrucciones y ayudarte con las herramientas que estén habilitadas para tu usuario. Soy Dante. Dime qué necesitas y comenzamos."
-            );
-
-            return;
-        }
-
 
         // ====================================================
         // DANTE + COMANDO REAL
@@ -13473,6 +21162,63 @@ export default function BotNotificaciones({
             setErrorMicrofono(
                 "No se pudo obtener audio del micrófono."
             );
+        }
+    }
+
+    function pausarMicrofonoParaAnalisisDante() {
+        reactivarMicrofonoTrasAnalisisDanteRef.current =
+            microfonoActivoRef.current === true;
+
+        pausaMicrofonoAnalisisDanteRef.current =
+            true;
+
+        microfonoActivoRef.current =
+            false;
+
+        setMicrofonoActivo(false);
+        setEscuchando(false);
+        setTextoIntermedio("");
+
+        try {
+            reconocimientoRef.current?.abort();
+        } catch {
+            // Ya estaba detenido.
+        }
+
+        console.log("🔇 DANTE: micrófono pausado durante análisis técnico");
+    }
+
+    function reanudarMicrofonoDespuesAnalisisDante() {
+        const debeReactivar =
+            reactivarMicrofonoTrasAnalisisDanteRef.current;
+
+        reactivarMicrofonoTrasAnalisisDanteRef.current =
+            false;
+
+        pausaMicrofonoAnalisisDanteRef.current =
+            false;
+
+        if (!debeReactivar || !reconocimientoRef.current) {
+            return;
+        }
+
+        microfonoActivoRef.current =
+            true;
+
+        setMicrofonoActivo(true);
+        setEstadoDante("ESPERANDO_DANTE");
+        estadoDanteRef.current = "ESPERANDO_DANTE";
+
+        try {
+            reconocimientoRef.current.start();
+            console.log("🎤 DANTE: micrófono reactivado después del análisis técnico");
+        } catch (error: any) {
+            if (error?.name !== "InvalidStateError") {
+                console.error(
+                    "DANTE: error reactivando micrófono después del análisis:",
+                    error
+                );
+            }
         }
     }
 
@@ -13900,6 +21646,7 @@ export default function BotNotificaciones({
                 if (
                     microfonoActivoRef.current &&
                     !pausaReconocimientoPorVozDanteRef.current &&
+                    !pausaMicrofonoAnalisisDanteRef.current &&
                     !danteHablandoRef.current
                 ) {
 
@@ -14236,17 +21983,28 @@ export default function BotNotificaciones({
             });
 
 
-            setNotificaciones(
-
+            const ultimasNotificaciones =
                 Array.isArray(
                     data.ultimas
                 )
-
                     ? data.ultimas.map(
                         normalizarNotificacion
                     )
+                    : [];
 
-                    : []
+
+            setNotificaciones(
+                ultimasNotificaciones
+            );
+
+
+            // ====================================================
+            // DANTE - AVISAR CUALQUIER NOTIFICACIÓN NUEVA
+            // INFO / ADVERTENCIA / CRITICA
+            // ====================================================
+
+            avisarNotificacionesNuevasDante(
+                ultimasNotificaciones
             );
 
         } catch (error) {
@@ -14335,7 +22093,42 @@ export default function BotNotificaciones({
         }
 
 
+        // ====================================================
+        // DANTE - IDENTIFICAR USUARIO ACTUAL
+        // Usa isp_usuario y, si hace falta, /perfil.
+        // ====================================================
+
+        void cargarUsuarioActualDante();
+
+
+        // ====================================================
+        // DANTE - RECUPERAR HISTORIAL LOCAL ANTES DE CONSULTAR
+        // ====================================================
+
+        cargarNotificacionesConocidasDante();
+
+
+        // ====================================================
+        // CARGA INICIAL DE NOTIFICACIONES
+        // ESTA MISMA FUNCIÓN AVISA A DANTE SI HAY NUEVAS
+        // ====================================================
+
         cargarNotificaciones();
+        void revisarAlertasPagoDante();
+        void cargarResumenClientesContratosDante();
+
+        // ====================================================
+        // DANTE - MICRÓFONO ACTIVO AL INICIAR
+        // ====================================================
+        // Intentamos iniciar automáticamente el reconocimiento.
+        // Si el navegador todavía no tiene permiso, mostrará su
+        // solicitud normal de acceso al micrófono.
+        const timeoutInicioMicrofonoDante =
+            setTimeout(() => {
+                if (!microfonoActivoRef.current) {
+                    void iniciarMicrofono();
+                }
+            }, 700);
 
 
         const intervalo =
@@ -14343,6 +22136,8 @@ export default function BotNotificaciones({
                 () => {
 
                     cargarNotificaciones();
+                    void revisarAlertasPagoDante();
+                    void cargarResumenClientesContratosDante();
 
                 },
                 60000
@@ -14353,6 +22148,10 @@ export default function BotNotificaciones({
 
             clearInterval(
                 intervalo
+            );
+
+            clearTimeout(
+                timeoutInicioMicrofonoDante
             );
 
 
@@ -15315,7 +23114,128 @@ export default function BotNotificaciones({
 
                                             </div>
                                         )}
+                                    {/* =====================================================
+                                     DANTE - ENTRADA DE TEXTO
+                                    ===================================================== */}
 
+                                    {mostrarEntradaTextoDante && (
+
+                                        <div
+                                            className="
+            mt-3
+            rounded-xl
+            border
+            border-cyan-500/30
+            bg-slate-950/40
+            p-3
+        "
+                                        >
+
+                                            <p
+                                                className="
+                mb-2
+                text-[10px]
+                font-bold
+                uppercase
+                tracking-wide
+                text-cyan-400
+            "
+                                            >
+                                                Consultar a Dante
+                                            </p>
+
+
+                                            <div
+                                                className="
+                flex
+                items-center
+                gap-2
+            "
+                                            >
+
+                                                <input
+
+                                                    type={
+                                                        flujoDiagnosticoInternetDanteRef.current?.etapa === "ESPERAR_CLAVE_CPE"
+                                                            ? "password"
+                                                            : "text"
+                                                    }
+
+                                                    value={
+                                                        entradaTextoDante
+                                                    }
+
+                                                    onChange={
+                                                        (e) =>
+                                                            setEntradaTextoDante(
+                                                                e.target.value
+                                                            )
+                                                    }
+
+                                                    onKeyDown={
+                                                        (e) => {
+
+                                                            if (
+                                                                e.key ===
+                                                                "Enter"
+                                                            ) {
+
+                                                                e.preventDefault();
+
+                                                                void enviarTextoDante();
+                                                            }
+                                                        }
+                                                    }
+
+                                                    placeholder="Escribe una consulta..."
+
+                                                    autoFocus
+
+                                                    className="
+                    flex-1
+                    rounded-lg
+                    border
+                    border-slate-700
+                    bg-slate-900
+                    px-3
+                    py-2
+                    text-sm
+                    text-white
+                    outline-none
+                    placeholder:text-slate-500
+                    focus:border-cyan-500
+                "
+                                                />
+
+
+                                                <button
+
+                                                    type="button"
+
+                                                    onClick={
+                                                        () =>
+                                                            void enviarTextoDante()
+                                                    }
+
+                                                    className="
+                    rounded-lg
+                    bg-cyan-600
+                    px-4
+                    py-2
+                    text-sm
+                    font-semibold
+                    text-white
+                    transition
+                    hover:bg-cyan-500
+                "
+                                                >
+                                                    Enviar
+                                                </button>
+
+                                            </div>
+
+                                        </div>
+                                    )}
 
                                     {/* ÚLTIMO COMANDO */}
 
