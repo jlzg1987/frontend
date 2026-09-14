@@ -21384,17 +21384,19 @@ export default function BotNotificaciones({
             new SpeechRecognitionAPI();
 
 
+        const esMovilDante =
+            /Android|iPhone|iPad|iPod/i.test(
+                navigator.userAgent
+            );
+
         recognition.continuous =
-            true;
+            !esMovilDante;
 
         recognition.interimResults =
             true;
 
-        recognition.lang = "es-EC";
-
-        recognition.continuous = true;
-        recognition.interimResults = true;
-
+        recognition.lang =
+            "es-EC";
         // ====================================================
         // INICIO REAL
         // ====================================================
@@ -21660,36 +21662,23 @@ export default function BotNotificaciones({
 
                             try {
 
-                                // Volvemos a verificar después del delay
                                 if (
+                                    !microfonoActivoRef.current ||
                                     pausaReconocimientoPorVozDanteRef.current ||
+                                    pausaMicrofonoAnalisisDanteRef.current ||
                                     danteHablandoRef.current
                                 ) {
-
-                                    console.log(
-                                        "🔇 Dante está hablando. No se reinicia reconocimiento."
-                                    );
-
                                     return;
                                 }
-
 
                                 setEstadoDante(
                                     "ESPERANDO_DANTE"
                                 );
 
-
                                 estadoDanteRef.current =
                                     "ESPERANDO_DANTE";
 
-
-                                setRespuestaDante(
-                                    'Micrófono activo. Esperando "Dante"...'
-                                );
-
-
                                 recognition.start();
-
 
                             } catch (error: any) {
 
@@ -21706,7 +21695,7 @@ export default function BotNotificaciones({
                             }
 
                         },
-                        500
+                        150
                     );
                 }
             };
