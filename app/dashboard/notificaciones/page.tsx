@@ -767,6 +767,15 @@ export default function BotNotificaciones({
         useRef(0);
 
     // ========================================================
+    // DANTE - INTERRUPCIÓN DE VOZ POR PALABRA DE ACTIVACIÓN
+    // Mientras Dante habla, solo una frase que comience con
+    // "Dante" puede interrumpir su voz.
+    // Durante análisis técnico esta escucha queda desactivada.
+    // ========================================================
+    const interrupcionVozDanteRef =
+        useRef(false);
+
+    // ========================================================
     // DANTE - CONTROL DE PROCESOS / CANCELACIÓN GLOBAL
     // ========================================================
 
@@ -1076,7 +1085,6 @@ export default function BotNotificaciones({
             // Ya estaba detenido
         }
 
-
         // ====================================================
         // CANCELAR CONTINUIDADES
         // ====================================================
@@ -1089,6 +1097,10 @@ export default function BotNotificaciones({
 
         perfilClienteDanteRef.current =
             null;
+
+        // Selecciones de clientes pendientes
+        clientesPendientesSeleccionDanteRef.current =
+            [];
 
         routerMikrotikDanteRef.current =
             null;
@@ -1117,6 +1129,9 @@ export default function BotNotificaciones({
         ticketMantenimientoPendienteDanteRef.current =
             null;
 
+        // Cancelar cualquier confirmación de alertas y su timeout
+        cerrarConfirmacionAlertasPagoDante();
+
         pausaMicrofonoAnalisisDanteRef.current =
             false;
 
@@ -1125,7 +1140,6 @@ export default function BotNotificaciones({
 
         modoPresentacionDanteRef.current =
             false;
-
 
         // ====================================================
         // REINICIAR CONTEXTO
@@ -1182,6 +1196,9 @@ export default function BotNotificaciones({
             false;
 
         pausaReconocimientoPorVozDanteRef.current =
+            false;
+
+        interrupcionVozDanteRef.current =
             false;
 
 
@@ -1525,17 +1542,53 @@ export default function BotNotificaciones({
                 .replace(/\s+/g, " ")
                 .trim();
 
-        return (
-            texto === "termina la presentacion" ||
-            texto === "terminar presentacion" ||
+        // ========================================================
+        // DANTE - SALIDA NATURAL DEL MODO PRESENTACIÓN
+        // ========================================================
+        // Ejemplos:
+        // "termina presentación"
+        // "termina la presentación"
+        // "cierra presentación"
+        // "cierra la presentación"
+        // "Dante cierra presentación"
+        // "Dante, termina la presentación"
+        // "finaliza presentación"
+        // "sal de la presentación"
+        // ========================================================
+
+        const accionCerrar =
+            /\b(cierra|cerrar|termina|terminar|finaliza|finalizar|acaba|acabar|deten|detener|cancela|cancelar)\b/.test(
+                texto
+            );
+
+        const mencionaPresentacion =
+            /\bpresentacion\b/.test(
+                texto
+            );
+
+        if (
+            accionCerrar &&
+            mencionaPresentacion
+        ) {
+            return true;
+        }
+
+        // Formas naturales de salida
+        if (
             texto === "fin de la presentacion" ||
-            texto === "finaliza la presentacion" ||
-            texto === "salir de presentacion" ||
+            texto === "fin presentacion" ||
             texto === "sal de presentacion" ||
-            texto === "cerrar presentacion" ||
+            texto === "sal de la presentacion" ||
+            texto === "salir de presentacion" ||
+            texto === "salir de la presentacion" ||
             texto === "gracias eso es todo" ||
-            texto === "gracias dante eso es todo"
-        );
+            texto === "eso es todo" ||
+            texto === "hasta aqui la presentacion"
+        ) {
+            return true;
+        }
+
+        return false;
     }
 
     function iniciarPresentacionDante(): void {
@@ -10811,27 +10864,57 @@ export default function BotNotificaciones({
             try {
 
                 // ====================================================
-                // BLOQUEAR AUTOESCUCHA INMEDIATAMENTE
+                // DANTE HABLANDO
                 // ====================================================
-
-                pausaReconocimientoPorVozDanteRef.current =
-                    true;
+                // En conversación normal NO apagamos el reconocimiento:
+                // queda disponible únicamente para detectar una frase
+                // que comience por "Dante" y permitir interrupciones.
+                //
+                // En análisis técnico sí mantenemos el comportamiento
+                // anterior: reconocimiento completamente apagado.
+                // ====================================================
 
                 danteHablandoRef.current =
                     true;
 
+                interrupcionVozDanteRef.current =
+                    false;
 
-                // ====================================================
-                // DETENER RECONOCIMIENTO
-                // ====================================================
+                pausaReconocimientoPorVozDanteRef.current =
+                    pausaMicrofonoAnalisisDanteRef.current;
 
-                try {
+                if (
+                    pausaMicrofonoAnalisisDanteRef.current
+                ) {
 
-                    reconocimientoRef.current?.abort();
+                    try {
+                        reconocimientoRef.current?.abort();
+                    } catch {
+                        // Ya estaba detenido.
+                    }
 
-                } catch {
+                    console.log(
+                        "🔇 DANTE HABLA DURANTE ANÁLISIS - MICRÓFONO APAGADO"
+                    );
 
-                    // Ya estaba detenido.
+                } else if (
+                    microfonoActivoRef.current &&
+                    reconocimientoRef.current
+                ) {
+
+                    try {
+                        reconocimientoRef.current.start();
+                    } catch (error: any) {
+                        if (
+                            error?.name !==
+                            "InvalidStateError"
+                        ) {
+                            console.error(
+                                "DANTE: error manteniendo escucha de interrupción:",
+                                error
+                            );
+                        }
+                    }
                 }
 
 
@@ -10902,12 +10985,40 @@ export default function BotNotificaciones({
                         danteHablandoRef.current =
                             true;
 
+                        // Solo se bloquea por completo durante análisis.
                         pausaReconocimientoPorVozDanteRef.current =
-                            true;
+                            pausaMicrofonoAnalisisDanteRef.current;
 
-                        console.log(
-                            "🔊 DANTE ESTÁ HABLANDO - MICRÓFONO PAUSADO"
-                        );
+                        if (
+                            pausaMicrofonoAnalisisDanteRef.current
+                        ) {
+                            console.log(
+                                "🔊 DANTE ESTÁ HABLANDO - MICRÓFONO APAGADO POR ANÁLISIS"
+                            );
+                        } else {
+                            console.log(
+                                "🔊 DANTE ESTÁ HABLANDO - ESCUCHA ESPECIAL ACTIVA PARA 'DANTE'"
+                            );
+
+                            if (
+                                microfonoActivoRef.current &&
+                                reconocimientoRef.current
+                            ) {
+                                try {
+                                    reconocimientoRef.current.start();
+                                } catch (error: any) {
+                                    if (
+                                        error?.name !==
+                                        "InvalidStateError"
+                                    ) {
+                                        console.error(
+                                            "DANTE: error activando escucha especial:",
+                                            error
+                                        );
+                                    }
+                                }
+                            }
+                        }
                     };
 
 
@@ -13736,6 +13847,60 @@ export default function BotNotificaciones({
         return true;
     }
 
+    // ========================================================
+    // DANTE - CANCELACIÓN GLOBAL ABSOLUTA
+    // ========================================================
+    function esCancelacionGlobalDante(
+        textoOriginal: string
+    ): boolean {
+
+        const texto =
+            normalizarTextoDante(
+                textoOriginal
+            )
+                .replace(/\bdante\b/g, " ")
+                .replace(/\s+/g, " ")
+                .trim();
+
+        // ====================================================
+        // COMANDOS DIRECTOS
+        // ====================================================
+
+        if (
+            texto === "cancela" ||
+            texto === "cancelar" ||
+            texto === "cancelalo" ||
+
+            texto === "detente" ||
+            texto === "deten" ||
+            texto === "detener" ||
+
+            texto === "para" ||
+
+            texto === "olvida eso" ||
+            texto === "olvida lo anterior"
+        ) {
+            return true;
+        }
+
+        // ====================================================
+        // CANCELAR COMANDO / PROCESO / OPERACIÓN ACTUAL
+        // ====================================================
+
+        if (
+            /\b(cancela|cancelar|cancelalo|deten|detener|para)\b/.test(
+                texto
+            ) &&
+            /\b(comando|proceso|operacion|accion|consulta|diagnostico|tarea|eso|esto|anterior)\b/.test(
+                texto
+            )
+        ) {
+            return true;
+        }
+
+        return false;
+    }
+
     async function procesarComandoDante(
         comando: string
     ) {
@@ -13754,6 +13919,24 @@ export default function BotNotificaciones({
             normalizarTextoDante(
                 limpio
             );
+
+        // ========================================================
+        // DANTE - CANCELACIÓN GLOBAL ABSOLUTA
+        // ========================================================
+        // ESTE BLOQUE DEBE SER EL PRIMER INTÉRPRETE DE COMANDOS.
+        // Nada tiene prioridad sobre "cancelar".
+        // ========================================================
+
+        if (
+            esCancelacionGlobalDante(
+                limpio
+            )
+        ) {
+
+            cancelarTodoDante();
+
+            return;
+        }
 
         // ========================================================
         // DANTE - PRESENTACIÓN CONVERSACIONAL
@@ -13922,43 +14105,6 @@ export default function BotNotificaciones({
             limpio
         );
 
-        // ========================================================
-        // DANTE - CANCELAR TODO
-        // TIENE PRIORIDAD SOBRE CUALQUIER OTRO COMANDO
-        // ========================================================
-
-        const esCancelarDante =
-
-            texto === "cancela" ||
-            texto === "cancelar" ||
-            texto === "cancelalo" ||
-
-            texto === "dante cancela" ||
-            texto === "dante cancelar" ||
-            texto === "dante cancelalo" ||
-
-            texto === "detente" ||
-            texto === "dante detente" ||
-
-            texto === "para" ||
-            texto === "dante para" ||
-
-            texto === "olvida eso" ||
-            texto === "dante olvida eso" ||
-
-            texto === "cancelar proceso" ||
-            texto === "cancela el proceso" ||
-            texto === "dante cancela el proceso";
-
-
-        if (
-            esCancelarDante
-        ) {
-
-            cancelarTodoDante();
-
-            return;
-        }
         // ========================================================
         // NUEVO CICLO DE TRABAJO DE DANTE
         // ========================================================
@@ -21441,22 +21587,6 @@ export default function BotNotificaciones({
             event: SpeechRecognitionEventLike
         ) => {
 
-            // ====================================================
-            // NO PROCESAR LA PROPIA VOZ DE DANTE
-            // ====================================================
-
-            if (
-                danteHablandoRef.current
-            ) {
-
-                console.log(
-                    "🔇 IGNORADO: Dante estaba hablando"
-                );
-
-                return;
-            }
-
-
             console.log(
                 "🔥 ONRESULT DISPARADO",
                 event.results.length
@@ -21478,6 +21608,16 @@ export default function BotNotificaciones({
                         .transcript
                         .trim();
 
+                const normalizado =
+                    normalizarTextoDante(
+                        texto
+                    );
+
+                const empiezaConDante =
+                    /^dante\b/.test(
+                        normalizado
+                    );
+
 
                 console.log(
                     resultado.isFinal
@@ -21488,6 +21628,177 @@ export default function BotNotificaciones({
                     resultado[0].confidence
                 );
 
+
+                // ====================================================
+                // ANÁLISIS TÉCNICO
+                // ====================================================
+                // Aquí Dante queda completamente sordo.
+                // Ni siquiera "Dante" debe interrumpir este estado.
+                // ====================================================
+
+                if (
+                    pausaMicrofonoAnalisisDanteRef.current
+                ) {
+
+                    console.log(
+                        "🔇 IGNORADO: análisis técnico en curso"
+                    );
+
+                    continue;
+                }
+
+
+                // ====================================================
+                // INTERRUPCIÓN MIENTRAS DANTE HABLA
+                // ====================================================
+                // Solo aceptamos frases que COMIENCEN por "Dante".
+                // Cualquier otra conversación se ignora.
+                // ====================================================
+
+                if (
+                    danteHablandoRef.current
+                ) {
+
+                    if (
+                        !empiezaConDante
+                    ) {
+
+                        console.log(
+                            "🔇 IGNORADO MIENTRAS DANTE HABLA:",
+                            texto
+                        );
+
+                        continue;
+                    }
+
+
+                    // Cortar la voz en cuanto detectamos "Dante",
+                    // incluso si el resultado todavía es intermedio.
+                    if (
+                        !interrupcionVozDanteRef.current
+                    ) {
+
+                        interrupcionVozDanteRef.current =
+                            true;
+
+                        vozDanteIdRef.current += 1;
+
+                        try {
+                            if (
+                                typeof window !== "undefined" &&
+                                "speechSynthesis" in window
+                            ) {
+                                window.speechSynthesis.cancel();
+                            }
+                        } catch {
+                            // No había voz que cancelar.
+                        }
+
+                        danteHablandoRef.current =
+                            false;
+
+                        pausaReconocimientoPorVozDanteRef.current =
+                            false;
+
+                        console.log(
+                            "🛑 DANTE INTERRUMPIDO POR EL USUARIO:",
+                            texto
+                        );
+                    }
+
+
+                    // Esperamos el resultado final para procesar
+                    // la orden completa después de la palabra Dante.
+                    if (
+                        resultado.isFinal
+                    ) {
+
+                        interrupcionVozDanteRef.current =
+                            false;
+
+                        setTextoEscuchado(
+                            texto
+                        );
+
+                        setTextoIntermedio(
+                            ""
+                        );
+
+                        setTimeout(
+                            () => {
+                                void analizarTextoDante(
+                                    texto
+                                );
+                            },
+                            50
+                        );
+
+                    } else {
+
+                        setTextoIntermedio(
+                            texto
+                        );
+                    }
+
+                    continue;
+                }
+
+
+                // ====================================================
+                // LA VOZ YA FUE CORTADA POR "DANTE"
+                // ====================================================
+                // El resultado final puede llegar después de que
+                // danteHablandoRef ya pasó a false.
+                // ====================================================
+
+                if (
+                    interrupcionVozDanteRef.current
+                ) {
+
+                    if (
+                        !empiezaConDante
+                    ) {
+                        continue;
+                    }
+
+                    if (
+                        resultado.isFinal
+                    ) {
+
+                        interrupcionVozDanteRef.current =
+                            false;
+
+                        setTextoEscuchado(
+                            texto
+                        );
+
+                        setTextoIntermedio(
+                            ""
+                        );
+
+                        setTimeout(
+                            () => {
+                                void analizarTextoDante(
+                                    texto
+                                );
+                            },
+                            50
+                        );
+
+                    } else {
+
+                        setTextoIntermedio(
+                            texto
+                        );
+                    }
+
+                    continue;
+                }
+
+
+                // ====================================================
+                // FLUJO NORMAL
+                // ====================================================
 
                 if (
                     resultado.isFinal
@@ -21642,14 +21953,17 @@ export default function BotNotificaciones({
 
 
                 // ====================================================
-                // SOLO REINICIAR SI DANTE NO ESTÁ HABLANDO
+                // REINICIAR RECONOCIMIENTO
+                // ====================================================
+                // También puede reiniciarse mientras Dante habla,
+                // porque esa escucha queda limitada a "Dante + orden".
+                // Durante análisis técnico permanece apagado.
                 // ====================================================
 
                 if (
                     microfonoActivoRef.current &&
                     !pausaReconocimientoPorVozDanteRef.current &&
-                    !pausaMicrofonoAnalisisDanteRef.current &&
-                    !danteHablandoRef.current
+                    !pausaMicrofonoAnalisisDanteRef.current
                 ) {
 
                     console.log(
@@ -21665,8 +21979,7 @@ export default function BotNotificaciones({
                                 if (
                                     !microfonoActivoRef.current ||
                                     pausaReconocimientoPorVozDanteRef.current ||
-                                    pausaMicrofonoAnalisisDanteRef.current ||
-                                    danteHablandoRef.current
+                                    pausaMicrofonoAnalisisDanteRef.current
                                 ) {
                                     return;
                                 }

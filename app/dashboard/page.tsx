@@ -115,6 +115,17 @@ import {
     TicketCheck,
 } from 'lucide-react';
 
+import {
+    ResponsiveContainer,
+    AreaChart,
+    Area,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    Legend,
+} from 'recharts';
+
 import PagosPage from '../pagos-mensuales/app-pagos/page';
 import CategoriasGastosPage from '../gastos/categorias/page';
 import GastosMensualesPage from '../gastos/mensuales/page';
@@ -302,6 +313,22 @@ export default function DashboardPage() {
         proximasVencer: 0,
     });
 
+    const [finanzasDashboard, setFinanzasDashboard] = useState<{
+        rangoDias: number;
+        totalCobradoPeriodo: number;
+        totalPorCobrarPeriodo: number;
+        diario: {
+            fecha: string;
+            cobrado: number;
+            porCobrar: number;
+        }[];
+    }>({
+        rangoDias: 30,
+        totalCobradoPeriodo: 0,
+        totalPorCobrarPeriodo: 0,
+        diario: [],
+    });
+
     async function cargarDashboardMensualidades() {
         try {
             const token = getToken();
@@ -318,9 +345,14 @@ export default function DashboardPage() {
             const data = await res.json();
 
             if (data.ok) {
-                setDashboardMensualidades(data.dashboard);
-            }
 
+                setDashboardMensualidades(data.dashboard);
+
+                if (data.finanzas) {
+                    setFinanzasDashboard(data.finanzas);
+                }
+
+            }
         } catch (error) {
             console.error(
                 'Error cargando dashboard mensualidades:',
@@ -328,6 +360,8 @@ export default function DashboardPage() {
             );
         }
     }
+
+
 
     const cargarDashboard = async () => {
         try {
@@ -1076,7 +1110,7 @@ export default function DashboardPage() {
                 onAbrirConfiguracionFacturacion={() => setVistaActual('confg')}
             />
             <div className="flex min-h-screen">
-                <aside className="hidden md:flex w-72 bg-slate-900 border-r border-slate-800 p-6 flex-col">
+                <aside className="hidden md:flex w-56 bg-slate-900 border-r border-slate-800 p-4 flex-col">
                     <div className="mb-10">
                         <h1 className="text-2xl font-black text-white">Netcomp RF</h1>
                         <p className="text-slate-400 text-sm mt-1">
@@ -1173,7 +1207,9 @@ export default function DashboardPage() {
                             </button>
                         </div>
                     </header>
-                    <div className="p-5 md:p-8">
+
+                    {/* INDICADORES PEQUEÑOS */}
+                    <div className="p-4 md:p-5">
                         {vistaActual === 'dashboard' && (
                             <>
                                 <div
@@ -1257,7 +1293,254 @@ export default function DashboardPage() {
                                         tone="cyan"
                                     />
                                 </div>
+                                {/* NUEVA GRÁFICA FINANCIERA */}
+                                {esAdmin && (
+                                    <div
+                                        className="
+            mb-6
+            rounded-2xl
+            border
+            border-cyan-500/20
+            bg-slate-900/95
+            p-5
+            shadow-xl
+            shadow-cyan-500/5
+        "
+                                    >
 
+                                        {/* CABECERA */}
+                                        <div
+                                            className="
+                flex
+                flex-col
+                md:flex-row
+                md:items-center
+                md:justify-between
+                gap-4
+                mb-5
+            "
+                                        >
+
+                                            <div>
+                                                <h2 className="text-lg font-black text-white">
+                                                    Resumen financiero
+                                                </h2>
+
+                                                <p className="text-xs text-slate-400 mt-1">
+                                                    Movimiento de los últimos {finanzasDashboard.rangoDias} días
+                                                </p>
+                                            </div>
+
+
+                                            {/* TOTALES */}
+                                            <div className="flex gap-3">
+
+                                                <div
+                                                    className="
+                        rounded-xl
+                        border
+                        border-emerald-500/20
+                        bg-emerald-500/5
+                        px-4
+                        py-2
+                        text-center
+                    "
+                                                >
+                                                    <p className="text-[10px] text-slate-400">
+                                                        Cobrado
+                                                    </p>
+
+                                                    <p className="text-base font-black text-emerald-300">
+                                                        $
+                                                        {Number(
+                                                            finanzasDashboard.totalCobradoPeriodo
+                                                        ).toFixed(2)}
+                                                    </p>
+                                                </div>
+
+
+                                                <div
+                                                    className="
+                        rounded-xl
+                        border
+                        border-violet-500/20
+                        bg-violet-500/5
+                        px-4
+                        py-2
+                        text-center
+                    "
+                                                >
+                                                    <p className="text-[10px] text-slate-400">
+                                                        Por cobrar
+                                                    </p>
+
+                                                    <p className="text-base font-black text-violet-300">
+                                                        $
+                                                        {Number(
+                                                            finanzasDashboard.totalPorCobrarPeriodo
+                                                        ).toFixed(2)}
+                                                    </p>
+                                                </div>
+
+                                            </div>
+                                        </div>
+
+
+                                        {/* GRÁFICA */}
+                                        <div className="w-full h-[260px]">
+
+                                            {finanzasDashboard.diario.length > 0 ? (
+
+                                                <ResponsiveContainer
+                                                    width="100%"
+                                                    height="100%"
+                                                >
+
+                                                    <AreaChart
+                                                        data={finanzasDashboard.diario.map(
+                                                            (item) => ({
+                                                                ...item,
+
+                                                                fechaMostrar:
+                                                                    new Date(
+                                                                        `${item.fecha}T00:00:00`
+                                                                    ).toLocaleDateString(
+                                                                        'es-EC',
+                                                                        {
+                                                                            day: '2-digit',
+                                                                            month: 'short',
+                                                                        }
+                                                                    ),
+                                                            })
+                                                        )}
+                                                        margin={{
+                                                            top: 10,
+                                                            right: 15,
+                                                            left: 0,
+                                                            bottom: 0,
+                                                        }}
+                                                    >
+
+                                                        <CartesianGrid
+                                                            strokeDasharray="3 3"
+                                                            stroke="#334155"
+                                                            vertical={false}
+                                                        />
+
+                                                        <XAxis
+                                                            dataKey="fechaMostrar"
+                                                            stroke="#64748b"
+                                                            tick={{
+                                                                fill: '#94a3b8',
+                                                                fontSize: 10,
+                                                            }}
+                                                            tickLine={false}
+                                                            axisLine={false}
+                                                            minTickGap={25}
+                                                        />
+
+                                                        <YAxis
+                                                            stroke="#64748b"
+                                                            tick={{
+                                                                fill: '#94a3b8',
+                                                                fontSize: 10,
+                                                            }}
+                                                            tickLine={false}
+                                                            axisLine={false}
+                                                            tickFormatter={(valor) =>
+                                                                `$${Number(valor).toLocaleString(
+                                                                    'es-EC'
+                                                                )}`
+                                                            }
+                                                        />
+
+                                                        <Tooltip
+                                                            formatter={(
+                                                                value: any,
+                                                                name: any
+                                                            ) => {
+
+                                                                const nombre =
+                                                                    name === 'cobrado'
+                                                                        ? 'Cobrado'
+                                                                        : 'Por cobrar';
+
+                                                                return [
+                                                                    `$${Number(
+                                                                        value
+                                                                    ).toFixed(2)}`,
+                                                                    nombre,
+                                                                ];
+                                                            }}
+                                                            labelFormatter={(label) =>
+                                                                `Fecha: ${label}`
+                                                            }
+                                                            contentStyle={{
+                                                                backgroundColor: '#0f172a',
+                                                                border: '1px solid #334155',
+                                                                borderRadius: '12px',
+                                                                fontSize: '12px',
+                                                            }}
+                                                            labelStyle={{
+                                                                color: '#cbd5e1',
+                                                            }}
+                                                        />
+
+                                                        <Legend
+                                                            formatter={(value) =>
+                                                                value === 'cobrado'
+                                                                    ? 'Cobrado'
+                                                                    : 'Por cobrar'
+                                                            }
+                                                            wrapperStyle={{
+                                                                fontSize: '11px',
+                                                            }}
+                                                        />
+
+                                                        <Area
+                                                            type="monotone"
+                                                            dataKey="cobrado"
+                                                            stroke="#34d399"
+                                                            fill="#34d399"
+                                                            fillOpacity={0.12}
+                                                            strokeWidth={2}
+                                                        />
+
+                                                        <Area
+                                                            type="monotone"
+                                                            dataKey="porCobrar"
+                                                            stroke="#a78bfa"
+                                                            fill="#a78bfa"
+                                                            fillOpacity={0.08}
+                                                            strokeWidth={2}
+                                                        />
+
+                                                    </AreaChart>
+
+                                                </ResponsiveContainer>
+
+                                            ) : (
+
+                                                <div
+                                                    className="
+                        h-full
+                        flex
+                        items-center
+                        justify-center
+                        text-sm
+                        text-slate-500
+                    "
+                                                >
+                                                    No hay información financiera disponible.
+                                                </div>
+
+                                            )}
+
+                                        </div>
+
+                                    </div>
+                                )}
+                                {/* CARDS DE LOS MÓDULOS */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                                     {cards
                                         .filter((item) => tienePermiso(item.permiso))
@@ -2004,67 +2287,70 @@ function StatCard({
 
     return (
         <div
-            className={`
-                ${color.border}
-                ${color.background}
-                border
-                rounded-2xl
-                px-4
-                py-3
-                min-w-[155px]
-                flex-1
-                transition-all
-                duration-200
-                hover:-translate-y-0.5
-                hover:bg-slate-800/70
-            `}
-            style={{ marginTop: 10 }}
+            className={` 
+            ${color.border} 
+            ${color.background} 
+            border 
+            rounded-xl 
+            px-3 
+            py-2 
+            min-w-[125px] 
+            flex-1 
+            transition-all 
+            duration-200 
+            hover:-translate-y-0.5 
+            hover:bg-slate-800/70 
+        `}
+            style={{ marginTop: 6 }}
         >
-            <div className="flex items-center gap-3">
 
+            <div className="flex flex-col items-center text-center">
+
+                {/* ICONO CENTRADO ARRIBA */}
                 <div
-                    className={`
-                        ${color.iconBg}
-                        ${color.icon}
-                        w-9
-                        h-9
-                        rounded-xl
-                        flex
-                        items-center
-                        justify-center
-                        shrink-0
-                    `}
+                    className={` 
+                    ${color.iconBg} 
+                    ${color.icon} 
+                    w-10 
+                    h-10 
+                    rounded-lg 
+                    flex 
+                    items-center 
+                    justify-center 
+                    mb-2
+                `}
                 >
-                    <Icon size={18} />
+                    <Icon size={15} />
                 </div>
 
-                <div className="min-w-0">
+                {/* TITULO CENTRADO */}
+                <p
+                    className="
+                    text-[10px] 
+                    text-slate-400 
+                    font-medium 
+                    whitespace-nowrap 
+                    text-center
+                "
+                >
+                    {title}
+                </p>
 
-                    <p
-                        className="
-                            text-[11px]
-                            text-slate-400
-                            font-medium
-                            whitespace-nowrap
-                        "
-                    >
-                        {title}
-                    </p>
+                {/* VALOR CENTRADO */}
+                <p
+                    className={` 
+                    ${color.value} 
+                    text-base 
+                    font-black 
+                    leading-tight 
+                    mt-0.5 
+                    whitespace-nowrap 
+                    text-center
+                `}
+                >
+                    {value}
+                </p>
 
-                    <p
-                        className={`
-                            ${color.value}
-                            text-xl
-                            font-black
-                            leading-tight
-                            mt-0.5
-                            whitespace-nowrap
-                        `}
-                    >
-                        {value}
-                    </p>
-
-                </div>
             </div>
         </div>
     );
