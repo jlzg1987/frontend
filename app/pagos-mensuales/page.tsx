@@ -320,7 +320,6 @@ export default function MensualidadesPage({
         console.log('ROUTER ID PARA SOCIOS:', routerId);
 
         if (!routerId) return;
-
         try {
             const data = await requestApi(
                 `/mensualidades/socios-por-router/${routerId}`
