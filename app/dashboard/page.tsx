@@ -63,6 +63,7 @@ import ReportesTecnicosAdminPage from '../dashboard-tecnicos/reportes-admin/page
 import MikrotikCortesPage from '../mikrotik/mikrotik-cortes/page';
 import ConfiguracionMikrotikPage from '../mikrotik/configuracionMikrotik/page';
 import MensualidadesPage from '../pagos-mensuales/page';
+import PromesasPagoPage from '../pagos-mensuales/promesas-pago/page';
 import EquiposWirelessPage from '../infraestructura/wireless-equipos/page';
 import SectorialesWirelessPage from '../infraestructura/wireless/sectoriales/page';
 import EnlacesWirelessPage from '../infraestructura/wireless/enlaces/page';
@@ -130,6 +131,9 @@ import PagosPage from '../pagos-mensuales/app-pagos/page';
 import CategoriasGastosPage from '../gastos/categorias/page';
 import GastosMensualesPage from '../gastos/mensuales/page';
 import ConfiguracionSedesPage from '../gastos/sedes/page';
+import FinanzasIspPage from '../finanzas-isp/page';
+import ContabilidadIspPage from '../contabilidad-isp/page';
+import CrmClientesPage from '../crm-clientes/page';
 
 
 type DashboardResponse = {
@@ -263,7 +267,7 @@ export default function DashboardPage() {
         | 'DETALLE' | 'EDITAR_SOLICITUD' | 'SOLICITUDES' | 'EN_PROCESO' | 'PENDIENTES_CLIENTE' | 'RESPONSABLES'
         | 'ENTREGADOS' | 'PROFORMAS' | 'usuarios' | 'ListdoUsuario' | 'PermisosUsuarios' | 'Administrarroles'
         | 'Menulateral' | 'Portalcliente' | 'Crearusuario' | 'monitoreoCliente' | 'AppPagos' | 'ConfiguracionSedes'
-        | 'CategoriasGastos' | 'GastosMensuales'
+        | 'CategoriasGastos' | 'GastosMensuales' | 'FinanzasISP' | 'ContabilidadISP' | 'CRMClientes' | 'PromesasPago'
     >('dashboard');
 
     function normalizarCodigo(codigo: string) {
@@ -553,6 +557,10 @@ export default function DashboardPage() {
             color: 'bg-cyan-700',
             permiso: 'FACTURACION',
         },
+        { title: 'Finanzas ISP', desc: 'Ingresos, gastos, utilidad y socios por sede.', icon: CircleDollarSign, color: 'bg-emerald-700', permiso: 'ADMINISTRACION' },
+        { title: 'Contabilidad ISP', desc: 'Asientos, plan de cuentas y estados financieros.', icon: WalletCards, color: 'bg-violet-700', permiso: 'ADMINISTRACION' },
+        { title: 'CRM Clientes', desc: 'Seguimiento comercial y perfil 360° del cliente.', icon: Users, color: 'bg-sky-700', permiso: 'GESTION_ISP' },
+        { title: 'Promesas de Pago', desc: 'Acuerdos de pago, reactivación temporal y control de incumplimientos.', icon: Clock3, color: 'bg-amber-700', permiso: 'GESTION_ISP' },
     ];
 
     function cerrarSesion() {
@@ -563,6 +571,11 @@ export default function DashboardPage() {
 
     function getHeaderInfo() {
 
+
+        if (vistaActual === 'FinanzasISP') { return { titulo: 'Finanzas ISP', subtitulo: 'Ingresos, cartera, gastos, utilidad y socios por sede/router.' }; }
+        if (vistaActual === 'ContabilidadISP') { return { titulo: 'Contabilidad ISP', subtitulo: 'Plan de cuentas, asientos y estados financieros.' }; }
+        if (vistaActual === 'CRMClientes') { return { titulo: 'CRM de Clientes', subtitulo: 'Perfil 360°, seguimiento, tareas y oportunidades.' }; }
+        if (vistaActual === 'PromesasPago') { return { titulo: 'Promesas de Pago', subtitulo: 'Acuerdos, reactivaciones temporales y vencimientos.' }; }
 
         if (vistaActual === 'ConfiguracionSedes') {
             return {
@@ -1592,6 +1605,10 @@ export default function DashboardPage() {
                                                             setVistaActual('facturasinternas');
                                                             return;
                                                         }
+                                                        if (item.title === 'Finanzas ISP') { setVistaActual('FinanzasISP'); return; }
+                                                        if (item.title === 'Contabilidad ISP') { setVistaActual('ContabilidadISP'); return; }
+                                                        if (item.title === 'CRM Clientes') { setVistaActual('CRMClientes'); return; }
+                                                        if (item.title === 'Promesas de Pago') { setVistaActual('PromesasPago'); return; }
 
                                                     }}
                                                     className="text-left rounded-3xl bg-slate-900/95 p-6 shadow-xl shadow-cyan-500/10 hover:scale-[1.02] transition border border-cyan-500/25 hover:border-cyan-400/60"
@@ -1664,6 +1681,9 @@ export default function DashboardPage() {
                         )}
                         {vistaActual === 'AppPagos' && (
                             <PagosPage />
+                        )}
+                        {vistaActual === 'PromesasPago' && (
+                            <PromesasPagoPage />
                         )}
 
                         {vistaActual === 'DesarrolloSistema' && (
@@ -1892,6 +1912,9 @@ export default function DashboardPage() {
                                 onAbrirGastosMensuales={() => setVistaActual('GastosMensuales')}
                             />
                         )}
+                        {vistaActual === 'FinanzasISP' && (<FinanzasIspPage />)}
+                        {vistaActual === 'ContabilidadISP' && (<ContabilidadIspPage />)}
+                        {vistaActual === 'CRMClientes' && (<CrmClientesPage />)}
                         {vistaActual === 'ConfiguracionSedes' && (
                             <ConfiguracionSedesPage />
                         )}

@@ -65,6 +65,8 @@ export default function MensualidadesPage({
     const [valorPagado, setValorPagado] = useState('');
     const [formaPago, setFormaPago] = useState('EFECTIVO');
     const [referenciaPago, setReferenciaPago] = useState('');
+    const [socioId, setSocioId] = useState('');
+    const [sociosPago, setSociosPago] = useState<Array<{ socioId: string; nombre: string }>>([]);
 
     const [modalManual, setModalManual] = useState(false);
     const [servicioIdManual, setServicioIdManual] = useState('');
@@ -311,6 +313,29 @@ export default function MensualidadesPage({
         return formasPago[forma] || 7;
     }
 
+    async function cargarSociosPago(routerId?: number | string | null) {
+        setSocioId('');
+        setSociosPago([]);
+
+        console.log('ROUTER ID PARA SOCIOS:', routerId);
+
+        if (!routerId) return;
+
+        try {
+            const data = await requestApi(
+                `/mensualidades/socios-por-router/${routerId}`
+            );
+
+            console.log('RESPUESTA SOCIOS:', data);
+
+            setSociosPago(Array.isArray(data?.data) ? data.data : []);
+
+        } catch (error) {
+            console.error('ERROR CARGANDO SOCIOS:', error);
+            setSociosPago([]);
+        }
+    }
+
     async function registrarPago() {
         if (!pagoSeleccionado || loading) return;
 
@@ -355,6 +380,8 @@ export default function MensualidadesPage({
 
                         observacion:
                             `Forma de pago: ${formaPago}`,
+
+                        socioId: socioId || null,
                     }),
                 }
             );
@@ -816,6 +843,9 @@ export default function MensualidadesPage({
                                                         setValorPagado(Number(m.valorMensual).toFixed(2));
                                                         setFormaPago('EFECTIVO');
                                                         setReferenciaPago('PAGO EN EFECTIVO');
+                                                        setSocioId('');
+                                                        setSociosPago([]);
+                                                        void cargarSociosPago(m.routerId);
                                                         setMensaje('');
                                                     }}
                                                     className="bg-green-600 hover:bg-green-700 px-3 py-2 rounded-lg font-semibold"
@@ -907,6 +937,19 @@ export default function MensualidadesPage({
                             disabled={loading}
                             className="w-full mb-4 rounded-xl bg-slate-800 border border-slate-700 px-4 py-2 outline-none disabled:opacity-50"
                         />
+                        <label className="block text-sm mb-1">Socio que recibió el pago (opcional)</label>
+                        <select
+                            value={socioId}
+                            onChange={(e) => setSocioId(e.target.value)}
+                            disabled={loading}
+                            className="w-full mb-4 rounded-xl bg-slate-800 border border-slate-700 px-4 py-2 outline-none disabled:opacity-50"
+                        >
+                            <option value="">Empresa / caja normal</option>
+                            {sociosPago.map((s) => (
+                                <option key={s.socioId} value={s.socioId}>{s.nombre}</option>
+                            ))}
+                        </select>
+
                         <label className="block text-sm mb-1">Forma de pago</label>
                         <select
                             value={formaPago}
@@ -941,6 +984,8 @@ export default function MensualidadesPage({
                                     setValorPagado('');
                                     setFormaPago('EFECTIVO');
                                     setReferenciaPago('');
+                                    setSocioId('');
+                                    setSociosPago([]);
                                 }}
                                 disabled={loading}
                                 className="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-xl disabled:opacity-50"
