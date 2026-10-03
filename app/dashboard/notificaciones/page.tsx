@@ -83,6 +83,14 @@ interface SpeechRecognitionConstructor {
 
 
 // ========================================================
+// DANTE V10 - GESTION ISP: FINANZAS / CONTABILIDAD / CRM / PROMESAS
+// ========================================================
+type GestionIspPendienteDante =
+    | { tipo: "CREAR_PROMESA"; mensualidadId: string; fechaPromesaPago: string; observacion: string | null; clienteNombre: string }
+    | { tipo: "CANCELAR_PROMESA"; promesaId: string; clienteNombre: string }
+    | null;
+
+// ========================================================
 // DANTE FASE 1H - MOTOR CENTRAL DE INTENCIONES
 // ========================================================
 // Esta capa NO reemplaza los comandos anteriores.
@@ -339,6 +347,8 @@ type ContextoConversacionDante = {
     | "WIRELESS"
     | "MIKROTIK"
     | "AGENDA"
+    | "MEMORIA"
+    | "TRABAJO"
     | "PAGOS"
     | "GENERAL";
 
@@ -353,6 +363,33 @@ type ContextoConversacionDante = {
     datoPendiente?: string | null;
 
     actualizadoEn: number;
+};
+
+type EntradaSesionTrabajoDante = {
+    actor: "USUARIO" | "DANTE";
+    texto: string;
+    fecha: string;
+};
+
+type TipoSesionTrabajoDante = "SOPORTE" | "ATENCION_CLIENTE" | "ADMINISTRACION" | "TRABAJO";
+
+type SesionTrabajoDante = {
+    tipo: TipoSesionTrabajoDante;
+    titulo: string;
+    iniciadaEn: string;
+    entradas: EntradaSesionTrabajoDante[];
+    memoriaOrigenId?: string | null;
+};
+
+type MemoriaRecuperadaDante = {
+    memoriaId: string;
+    tipoMemoria: string;
+    categoria: string;
+    titulo: string;
+    contenido: string;
+    fechaCreacion: string | null;
+    datosJson: any;
+    entradas: EntradaSesionTrabajoDante[];
 };
 
 type ResultadoFechaAgendaDante = {
@@ -485,6 +522,13 @@ type TicketMantenimientoPendienteDante = {
     descripcion: string;
     categoria: "INTERNET" | "EQUIPO";
     prioridad: "BAJA" | "MEDIA" | "ALTA" | "CRITICA";
+};
+
+// DANTE V9.5 - contexto para conversar sobre las notificaciones ya cargadas.
+type ContextoNotificacionesDante = {
+    lista: Notificacion[];
+    indiceActual: number;
+    filtro: "TODAS" | "CRITICAS" | "MANTENIMIENTO" | "EQUIPOS_NUEVOS";
 };
 
 
@@ -720,6 +764,40 @@ export default function BotNotificaciones({
     const microfonoActivoRef =
         useRef(false);
 
+    // Evita que dos inicializaciones asíncronas de SpeechRecognition
+    // (por ejemplo React StrictMode/Fast Refresh) queden vivas a la vez.
+    const inicioMicrofonoIdRef = useRef(0);
+
+    // Punto único y seguro para arrancar/reanudar SpeechRecognition.
+    // Evita que alertas, análisis técnico y onend compitan entre sí.
+    function iniciarReconocimientoSeguro(
+        recognitionEsperado?: SpeechRecognitionLike | null,
+        inicioEsperado?: number
+    ) {
+        const recognition = reconocimientoRef.current;
+
+        if (!recognition) return false;
+        if (recognitionEsperado && recognition !== recognitionEsperado) return false;
+        if (inicioEsperado !== undefined && inicioEsperado !== inicioMicrofonoIdRef.current) return false;
+        if (!microfonoActivoRef.current) return false;
+        if (pausaReconocimientoPorVozDanteRef.current) return false;
+        if (pausaMicrofonoAnalisisDanteRef.current) return false;
+
+        try {
+            recognition.start();
+            return true;
+        } catch (error: any) {
+            // Si ya está escuchando no es un fallo funcional.
+            if (error?.name !== "InvalidStateError") {
+                console.error(
+                    "DANTE: error iniciando reconocimiento de voz:",
+                    error
+                );
+            }
+            return false;
+        }
+    }
+
 
     const estadoDanteRef =
         useRef<EstadoDante>(
@@ -747,6 +825,15 @@ export default function BotNotificaciones({
         useRef<AgendaPendienteDante | null>(
             null
         );
+    // ========================================================
+    // DANTE V6 - MEMORIA DE TRABAJO / NOTAS
+    // ========================================================
+    const notaPendienteDanteRef = useRef(false);
+    const sesionTrabajoDanteRef = useRef<SesionTrabajoDante | null>(null);
+    // V7: memoria/sesión recuperada para conversar sobre ella.
+    const memoriaRecuperadaDanteRef = useRef<MemoriaRecuperadaDante | null>(null);
+    const memoriasPendientesSeleccionDanteRef = useRef<MemoriaRecuperadaDante[]>([]);
+
     const pausaReconocimientoPorVozDanteRef =
         useRef(false);
 
@@ -1005,6 +1092,17 @@ export default function BotNotificaciones({
     const primeraRevisionNotificacionesDanteRef =
         useRef(true);
 
+    const contextoNotificacionesDanteRef =
+        useRef<ContextoNotificacionesDante | null>(null);
+
+    // V9.6: puerta automática hacia LOS MISMOS flujos conversacionales
+    // de notificaciones. No crea un flujo paralelo ni modifica la
+    // notificación en backend si el usuario responde que no.
+    const entradaAutomaticaNotificacionDanteRef =
+        useRef<Notificacion | null>(null);
+
+    const gestionIspPendienteDanteRef = useRef<GestionIspPendienteDante>(null);
+
     const DANTE_NOTIFICACIONES_STORAGE_KEY =
         "dante_notificaciones_conocidas";
 
@@ -1092,6 +1190,12 @@ export default function BotNotificaciones({
         agendaPendienteDanteRef.current =
             null;
 
+        // Dante V7: cancelar notas, sesiones no guardadas y memorias abiertas.
+        notaPendienteDanteRef.current = false;
+        sesionTrabajoDanteRef.current = null;
+        memoriaRecuperadaDanteRef.current = null;
+        memoriasPendientesSeleccionDanteRef.current = [];
+
         servicioClienteDanteRef.current =
             null;
 
@@ -1127,6 +1231,12 @@ export default function BotNotificaciones({
             "";
 
         ticketMantenimientoPendienteDanteRef.current =
+            null;
+
+        contextoNotificacionesDanteRef.current =
+            null;
+
+        entradaAutomaticaNotificacionDanteRef.current =
             null;
 
         // Cancelar cualquier confirmación de alertas y su timeout
@@ -1958,6 +2068,26 @@ export default function BotNotificaciones({
         }
 
         if (
+            t === 'ok' ||
+            t === 'okay' ||
+            t === 'listo' ||
+            t === 'perfecto' ||
+            t === 'bien' ||
+            t === 'entendido' ||
+            t === 'ya entiendo'
+        ) {
+            return 'Perfecto. Seguimos; dime qué quieres revisar ahora.';
+        }
+
+        if (
+            t === 'si' ||
+            t === 'claro' ||
+            t === 'dale'
+        ) {
+            return 'Claro. Continúa, te escucho.';
+        }
+
+        if (
             t.includes('estas cansado') ||
             t.includes('te cansas')
         ) {
@@ -2318,6 +2448,293 @@ export default function BotNotificaciones({
 
 
     // ========================================================
+    // DANTE V9.5 - NOTIFICACIONES CONVERSACIONALES
+    // Trabaja con las notificaciones YA cargadas. No reescanea la red.
+    // ========================================================
+    function textoNotificacionDante(item: Notificacion): string {
+        return normalizarTextoDante(
+            `${item.modulo || ""} ${item.tipo || ""} ${item.titulo || ""} ${item.mensaje || ""}`
+        );
+    }
+
+    function esNotificacionMantenimientoDante(item: Notificacion): boolean {
+        return /\b(mantenimiento|mantencion|revision tecnica|visita tecnica|revisar equipo|requiere revision|requiere mantenimiento|orden de trabajo)\b/.test(
+            textoNotificacionDante(item)
+        );
+    }
+
+    function esNotificacionEquipoNuevoDante(item: Notificacion): boolean {
+        const t = textoNotificacionDante(item);
+        return /\b(equipo|antena|radio|cpe|dispositivo)\b/.test(t) &&
+            /\b(nuevo|nueva|detectado|detectada|no registrado|no registrada|sin registrar|desconocido|desconocida)\b/.test(t);
+    }
+
+    function esNotificacionDeHoyDante(item: Notificacion): boolean {
+        if (!item.creadoEn) return false;
+        const fecha = new Date(item.creadoEn);
+        if (Number.isNaN(fecha.getTime())) return false;
+        const hoy = new Date();
+        return fecha.getFullYear() === hoy.getFullYear() &&
+            fecha.getMonth() === hoy.getMonth() &&
+            fecha.getDate() === hoy.getDate();
+    }
+
+    function descripcionNotificacionDante(item: Notificacion): string {
+        const titulo = String(item.titulo || "Notificación").trim();
+        const mensaje = String(item.mensaje || "").trim();
+        return mensaje ? `${titulo}. ${mensaje}` : titulo;
+    }
+
+    function guardarContextoNotificacionesDante(
+        lista: Notificacion[],
+        filtro: ContextoNotificacionesDante["filtro"]
+    ) {
+        contextoNotificacionesDanteRef.current = { lista, indiceActual: 0, filtro };
+        actualizarContextoDante({
+            tema: "WIRELESS",
+            ultimaIntencion: "NOTIFICACIONES_CONVERSACIONALES_V9_5",
+            esperandoRespuesta: lista.length > 0,
+            datoPendiente: lista.length > 0 ? "SELECCIONAR_NOTIFICACION" : null,
+        });
+    }
+
+    function responderListaNotificacionesDante(
+        lista: Notificacion[],
+        filtro: ContextoNotificacionesDante["filtro"],
+        introduccion: string
+    ) {
+        guardarContextoNotificacionesDante(lista, filtro);
+        if (!lista.length) {
+            responderDante(introduccion);
+            return;
+        }
+
+        const lectura = lista.slice(0, 5).map((item, index) => {
+            const nivel = item.nivel === "CRITICA" ? " crítica" : "";
+            return `${index + 1}. ${String(item.titulo || "Notificación").trim()}${nivel}.`;
+        }).join(" ");
+
+        const resto = lista.length > 5 ? ` Hay ${lista.length - 5} más.` : "";
+        responderDante(
+            `${introduccion} ${lectura}${resto} Puedes decirme la primera, la segunda, el crítico, siguiente o preguntarme qué pasa con una de ellas.`
+        );
+    }
+
+    function detectarConsultaNotificacionesConversacionalDante(textoOriginal: string):
+        | { filtro: ContextoNotificacionesDante["filtro"]; soloHoy: boolean }
+        | null {
+        const t = normalizarTextoDante(textoOriginal);
+        const soloHoy = /\b(hoy|para hoy|de hoy)\b/.test(t);
+
+        if (
+            /\b(mantenimiento|mantenimientos|revision tecnica|revisiones tecnicas)\b/.test(t) &&
+            /\b(equipo|equipos|antena|antenas|radio|radios|cpe|tenemos|hay|pendiente|pendientes|toca|atender)\b/.test(t)
+        ) return { filtro: "MANTENIMIENTO", soloHoy };
+
+        if (
+            /\b(equipo|equipos|antena|antenas|radio|radios|cpe|dispositivo|dispositivos)\b/.test(t) &&
+            /\b(nuevo|nuevos|nueva|nuevas|no registrado|no registrados|sin registrar|detectado|detectados|agregar|registrar)\b/.test(t) &&
+            /\b(notificacion|notificaciones|tenemos|hay|aparecio|aparecieron|pendiente|pendientes|hoy|agregar|registrar)\b/.test(t)
+        ) return { filtro: "EQUIPOS_NUEVOS", soloHoy };
+
+        if (
+            /\b(critico|criticos|critica|criticas|urgente|urgentes)\b/.test(t) &&
+            /\b(equipo|equipos|notificacion|notificaciones|alerta|alertas|tenemos|hay|problema|problemas|atender)\b/.test(t)
+        ) return { filtro: "CRITICAS", soloHoy };
+
+        if (
+            soloHoy &&
+            /\b(que|cual|cuales|tenemos|hay|atender|revisar|pendiente|pendientes)\b/.test(t) &&
+            /\b(equipo|equipos|notificacion|notificaciones|alerta|alertas|trabajo|trabajos)\b/.test(t)
+        ) return { filtro: "TODAS", soloHoy: true };
+
+        return null;
+    }
+
+    function procesarConsultaNotificacionesConversacionalDante(textoOriginal: string): boolean {
+        const consulta = detectarConsultaNotificacionesConversacionalDante(textoOriginal);
+        if (!consulta) return false;
+
+        let lista = [...notificaciones];
+        if (consulta.soloHoy) lista = lista.filter(esNotificacionDeHoyDante);
+
+        if (consulta.filtro === "MANTENIMIENTO") {
+            lista = lista.filter(esNotificacionMantenimientoDante);
+            responderListaNotificacionesDante(
+                lista, "MANTENIMIENTO",
+                lista.length
+                    ? `${consulta.soloHoy ? "Para hoy" : "En mantenimiento"} tengo ${lista.length} ${lista.length === 1 ? "equipo o aviso que requiere atención" : "equipos o avisos que requieren atención"}.`
+                    : `No encuentro notificaciones${consulta.soloHoy ? " de hoy" : ""} marcadas como mantenimiento.`
+            );
+            return true;
+        }
+
+        if (consulta.filtro === "EQUIPOS_NUEVOS") {
+            lista = lista.filter(esNotificacionEquipoNuevoDante);
+            responderListaNotificacionesDante(
+                lista, "EQUIPOS_NUEVOS",
+                lista.length
+                    ? `Encontré ${lista.length} ${lista.length === 1 ? "notificación de equipo nuevo o no registrado" : "notificaciones de equipos nuevos o no registrados"}.`
+                    : `No encuentro notificaciones${consulta.soloHoy ? " de hoy" : ""} de equipos nuevos o sin registrar.`
+            );
+            return true;
+        }
+
+        if (consulta.filtro === "CRITICAS") {
+            lista = lista.filter((item) => item.nivel === "CRITICA");
+            responderListaNotificacionesDante(
+                lista, "CRITICAS",
+                lista.length
+                    ? `Tengo ${lista.length} ${lista.length === 1 ? "notificación crítica" : "notificaciones críticas"}${consulta.soloHoy ? " de hoy" : ""}.`
+                    : `No encuentro notificaciones críticas${consulta.soloHoy ? " de hoy" : ""}.`
+            );
+            return true;
+        }
+
+        responderListaNotificacionesDante(
+            lista, "TODAS",
+            lista.length
+                ? `Para hoy encontré ${lista.length} ${lista.length === 1 ? "notificación para revisar" : "notificaciones para revisar"}.`
+                : "No encuentro notificaciones de hoy pendientes de revisión."
+        );
+        return true;
+    }
+
+    function procesarSeguimientoNotificacionesDante(textoOriginal: string): boolean {
+        const contexto = contextoNotificacionesDanteRef.current;
+        if (!contexto || !contexto.lista.length) return false;
+
+        // Si otro flujo tomó el control (diagnóstico, memoria, etc.),
+        // no dejamos que una lista vieja de notificaciones robe la respuesta.
+        if (
+            contextoDanteRef.current.ultimaIntencion !==
+            "NOTIFICACIONES_CONVERSACIONALES_V9_5"
+        ) {
+            return false;
+        }
+
+        const t = normalizarTextoDante(textoOriginal);
+        let indice: number | null = null;
+        const ordinales: Array<[RegExp, number]> = [
+            [/\b(primera|primero|numero 1|opcion 1|la 1|el 1)\b/, 0],
+            [/\b(segunda|segundo|numero 2|opcion 2|la 2|el 2)\b/, 1],
+            [/\b(tercera|tercero|numero 3|opcion 3|la 3|el 3)\b/, 2],
+            [/\b(cuarta|cuarto|numero 4|opcion 4|la 4|el 4)\b/, 3],
+            [/\b(quinta|quinto|numero 5|opcion 5|la 5|el 5)\b/, 4],
+        ];
+        for (const [patron, valor] of ordinales) {
+            if (patron.test(t)) { indice = valor; break; }
+        }
+
+        if (/\b(el critico|la critica|el mas critico|la mas critica|critico|critica)\b/.test(t)) {
+            const encontrado = contexto.lista.findIndex((item) => item.nivel === "CRITICA");
+            if (encontrado >= 0) indice = encontrado;
+        }
+        if (/\b(siguiente|la siguiente|el siguiente|otro|otra)\b/.test(t)) {
+            indice = Math.min(contexto.indiceActual + 1, contexto.lista.length - 1);
+        }
+        if (
+            indice === null &&
+            /\b(esa|ese|esta|este|esa notificacion|ese aviso|que pasa con esa|que pasa con ese|dame detalles|mas detalles|explicame esa|explicame ese)\b/.test(t)
+        ) indice = contexto.indiceActual;
+
+        const actual = contexto.lista[contexto.indiceActual];
+        if (
+            /\b(agregalo|agregarlo|registralo|registrarlo|vamos a agregar|vamos a registrar)\b/.test(t) &&
+            actual && esNotificacionEquipoNuevoDante(actual)
+        ) {
+            responderDante(`De acuerdo. Mantengo como referencia ${String(actual.titulo || "ese equipo").trim()} y abro Equipos Wireless para registrarlo.`);
+            setAbierto(false);
+            setTimeout(() => onAbrirEquiposWireless(), 500);
+            return true;
+        }
+
+        if (
+            /\b(abrir mantenimiento|vamos con mantenimiento|revisemos mantenimiento|atender mantenimiento|vamos a revisarlo)\b/.test(t) &&
+            actual && esNotificacionMantenimientoDante(actual)
+        ) {
+            responderDante("De acuerdo. Mantengo esta notificación en contexto y abro las alertas Wireless para continuar con el mantenimiento.");
+            setAbierto(false);
+            setTimeout(() => onAbrirAlertasWireless(), 500);
+            return true;
+        }
+
+        if (indice === null) return false;
+        if (indice < 0 || indice >= contexto.lista.length) {
+            responderDante(`Esa opción no está dentro de las ${contexto.lista.length} notificaciones que acabamos de revisar.`);
+            return true;
+        }
+
+        contexto.indiceActual = indice;
+        const seleccionada = contexto.lista[indice];
+        let cierre = "Puedo seguir revisando esta notificación contigo.";
+        if (esNotificacionEquipoNuevoDante(seleccionada)) {
+            cierre = "Si quieres, dime agrégalo o regístralo y abriré Equipos Wireless conservando esta referencia.";
+        } else if (esNotificacionMantenimientoDante(seleccionada)) {
+            cierre = "Si quieres, podemos continuar con este mantenimiento o revisar la siguiente notificación.";
+        } else if (seleccionada.nivel === "CRITICA") {
+            cierre = "Esta está marcada como crítica. Puedo darte la siguiente o abrir las alertas para continuar la revisión.";
+        }
+        responderDante(`${descripcionNotificacionDante(seleccionada)} ${cierre}`);
+        return true;
+    }
+
+    // ========================================================
+    // DANTE V9.6 - ENTRADA AUTOMÁTICA A FLUJOS EXISTENTES
+    // ========================================================
+
+    function describirTipoEntradaAutomaticaDante(item: Notificacion): string {
+        if (esNotificacionEquipoNuevoDante(item)) return "de un equipo nuevo";
+        if (esNotificacionMantenimientoDante(item)) return "de mantenimiento";
+        if (item.nivel === "CRITICA") return "crítica";
+        return "nueva";
+    }
+
+    function entrarFlujoExistenteDesdeNotificacionDante(item: Notificacion): void {
+        entradaAutomaticaNotificacionDanteRef.current = null;
+
+        let filtro: ContextoNotificacionesDante["filtro"] = "TODAS";
+        if (esNotificacionEquipoNuevoDante(item)) filtro = "EQUIPOS_NUEVOS";
+        else if (esNotificacionMantenimientoDante(item)) filtro = "MANTENIMIENTO";
+        else if (item.nivel === "CRITICA") filtro = "CRITICAS";
+
+        // Reutilizamos exactamente el contexto y seguimiento V9.5.
+        guardarContextoNotificacionesDante([item], filtro);
+        contextoNotificacionesDanteRef.current!.indiceActual = 0;
+
+        let continuidad = "Puedo seguir revisando esta notificación contigo.";
+        if (esNotificacionEquipoNuevoDante(item)) {
+            continuidad = "Entramos al flujo de equipos nuevos. Si quieres, dime agrégalo o regístralo para continuar con este mismo equipo.";
+        } else if (esNotificacionMantenimientoDante(item)) {
+            continuidad = "Entramos al flujo de mantenimiento. Si quieres, dime vamos a revisarlo para continuar con esta misma notificación.";
+        } else if (item.nivel === "CRITICA") {
+            continuidad = "Entramos a la revisión de esta notificación crítica. Puedo continuar con ella o abrir las alertas para atenderla.";
+        }
+
+        responderDante(`${descripcionNotificacionDante(item)} ${continuidad}`);
+    }
+
+    function procesarEntradaAutomaticaNotificacionDante(textoOriginal: string): boolean {
+        const pendiente = entradaAutomaticaNotificacionDanteRef.current;
+        if (!pendiente) return false;
+
+        if (esSiDante(textoOriginal)) {
+            entrarFlujoExistenteDesdeNotificacionDante(pendiente);
+            return true;
+        }
+
+        if (esNoDante(textoOriginal)) {
+            // Solo abandonamos esta puerta conversacional. La notificación
+            // queda intacta en la bandeja: no VISTA, no RESUELTA, no borrada.
+            entradaAutomaticaNotificacionDanteRef.current = null;
+            responderDante("De acuerdo. La dejo pendiente en la bandeja y no hago ningún cambio.");
+            return true;
+        }
+
+        return false;
+    }
+
+    // ========================================================
     // DANTE - AVISAR NOTIFICACIONES NUEVAS
     // ========================================================
 
@@ -2445,76 +2862,28 @@ export default function BotNotificaciones({
 
 
         // ====================================================
-        // GENERAR MENSAJE DE DANTE
+        // ELEGIR LA NOTIFICACIÓN PRIORITARIA PARA LA ENTRADA
+        // CONVERSACIONAL. No se modifica su estado en backend.
         // ====================================================
-
-        const mensajes =
-            ordenadas
-                .slice(0, 3)
-                .map(
-                    (notificacion) => {
-
-                        const titulo =
-                            String(
-                                notificacion.titulo ||
-                                "Notificación"
-                            ).trim();
-
-                        const mensaje =
-                            String(
-                                notificacion.mensaje ||
-                                ""
-                            ).trim();
-
-                        let encabezado =
-                            "Nueva notificación.";
-
-                        if (
-                            notificacion.nivel === "CRITICA"
-                        ) {
-                            encabezado =
-                                "Atención. Nueva notificación crítica.";
-                        } else if (
-                            notificacion.nivel === "ADVERTENCIA"
-                        ) {
-                            encabezado =
-                                "Aviso. Nueva advertencia.";
-                        } else if (
-                            notificacion.nivel === "INFO"
-                        ) {
-                            encabezado =
-                                "Nueva notificación informativa.";
-                        }
-
-                        return (
-                            `${encabezado} ${titulo}.` +
-                            (
-                                mensaje
-                                    ? ` ${mensaje}.`
-                                    : ""
-                            )
-                        );
-                    }
-                );
-
-
-        if (
-            ordenadas.length > 3
-        ) {
-
-            mensajes.push(
-                `Además tienes ${ordenadas.length - 3} notificaciones nuevas adicionales.`
-            );
-        }
-
 
         console.log(
             "DANTE: NUEVAS NOTIFICACIONES:",
             ordenadas
         );
 
+        // V9.6: una notificación nueva es solamente otra puerta de entrada.
+        // Guardamos la prioritaria como pendiente y preguntamos si se desea
+        // revisarla. Si responde sí, se deriva al flujo V9.5 correspondiente.
+        const prioritaria = ordenadas[0];
+        entradaAutomaticaNotificacionDanteRef.current = prioritaria;
+
+        const nombre = obtenerNombreUsuarioDante();
+        const saludo = nombre ? `${nombre}, ` : "";
+        const tipoEntrada = describirTipoEntradaAutomaticaDante(prioritaria);
+        const titulo = String(prioritaria.titulo || "Notificación").trim();
+
         responderDante(
-            mensajes.join(" ")
+            `${saludo}llegó una notificación ${tipoEntrada}. ${titulo}. ¿Quieres revisarla?`
         );
     }
 
@@ -3224,6 +3593,27 @@ export default function BotNotificaciones({
     function esNoDante(textoOriginal: string): boolean {
         const texto = normalizarTextoDante(textoOriginal);
         return /^(no|cancelar|cancela|cancelalo|no gracias|mejor no|dejalo|déjalo)$/.test(texto);
+    }
+
+    // ========================================================
+    // DANTE - CONFIRMACIÓN NATURAL PARA REVISAR CPE
+    // Se usa únicamente cuando el flujo ya está esperando
+    // autorización para entrar al equipo de enlace del cliente.
+    // No modifica las confirmaciones de reinicio, corte u otras
+    // operaciones sensibles.
+    // ========================================================
+    function esConfirmacionRevisionCpeDante(textoOriginal: string): boolean {
+        const texto = normalizarTextoDante(textoOriginal)
+            .replace(/\bdante\b/g, " ")
+            .replace(/[.,;:!?¿¡]+/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        if (esSiDante(texto)) {
+            return true;
+        }
+
+        return /^(revisa|revisalo|revisala|revisemos|continua|continuar|continua revisando|sigue|sigue revisando|adelante|puedes revisar|puedes revisarlo|si revisa|si revisalo|si continua|si sigue|claro revisa|dale revisa|dale revisalo|correcto revisa|ok revisa|de acuerdo revisa|procede con la revision|procede a revisar)$/.test(texto);
     }
 
     function extraerIpParcialDante(textoOriginal: string): string | null {
@@ -4446,6 +4836,9 @@ export default function BotNotificaciones({
         );
 
         if (!coincidencias.length) {
+            // Mantener vivo el flujo conversacional. La siguiente frase del
+            // usuario se interpreta como un nuevo dato para localizar al
+            // cliente, sin obligarlo a repetir "Dante busca...".
             flujoDiagnosticoInternetDanteRef.current = {
                 etapa: "BUSCAR_CLIENTE",
                 candidatos: [],
@@ -4453,8 +4846,15 @@ export default function BotNotificaciones({
                 router: null,
             };
 
+            actualizarContextoDante({
+                tema: "CLIENTE",
+                ultimaIntencion: "DIAGNOSTICO_INTERNET_V3",
+                esperandoRespuesta: true,
+                datoPendiente: "BUSCAR_CLIENTE_DIAGNOSTICO",
+            });
+
             responderDante(
-                "No encontré ese cliente. Dime su nombre, cédula, teléfono o IP para continuar el diagnóstico."
+                "No encontré ese cliente. Seguimos con la búsqueda. Dime su nombre, cédula, teléfono o IP y lo buscaré automáticamente para continuar el diagnóstico."
             );
             return;
         }
@@ -4545,8 +4945,15 @@ export default function BotNotificaciones({
         };
 
         if (!termino || termino.length < 2) {
+            actualizarContextoDante({
+                tema: "CLIENTE",
+                ultimaIntencion: "DIAGNOSTICO_INTERNET_V3",
+                esperandoRespuesta: true,
+                datoPendiente: "BUSCAR_CLIENTE_DIAGNOSTICO",
+            });
+
             responderDante(
-                "¿Qué cliente deseas diagnosticar? Dime su nombre, cédula, teléfono o IP."
+                "¿Qué cliente deseas diagnosticar? Dime su nombre, cédula, teléfono o IP. Quedo esperando ese dato para continuar."
             );
             return true;
         }
@@ -6566,7 +6973,7 @@ export default function BotNotificaciones({
                     ? `Diagnóstico técnico: ${diagnosticoHumano} `
                     : ""
             ) +
-            "Ya estoy dentro de la revisión técnica del equipo de enlace. Puedes preguntarme por señal, ruido, TX y RX, diagnóstico, CPU, RAM, firmware, Ethernet, frecuencia, DNS, gateway, consumo, escanear sectoriales o pedirme reiniciar el equipo."
+            "Ya estoy dentro de la revisión técnica del equipo de enlace. Puedes hablarme normalmente: pregúntame por señal, ruido, TX y RX, diagnóstico, CPU, RAM, firmware, Ethernet, frecuencia, DNS, gateway o consumo; también puedes pedirme escanear sectoriales, reiniciar el equipo, guardar el reporte o guardar una nota. Cuando termine de hablar quedaré esperando tu siguiente comando."
         );
     }
 
@@ -7381,6 +7788,100 @@ export default function BotNotificaciones({
         return false;
     }
 
+    function esSolicitudGuardarReporteCpeDante(textoOriginal: string): boolean {
+        const texto = normalizarTextoDante(textoOriginal).replace(/^dante\s+/, "").trim();
+        const guardar = /\b(guarda|guardar|guarde|registra|registrar|crea|crear|genera|generar)\b/.test(texto);
+        const reporte = /\b(reporte|informe|diagnostico|revision|resultado|resultados)\b/.test(texto);
+        return guardar && reporte;
+    }
+
+    async function guardarReporteCpeDante(): Promise<void> {
+        const contexto = cpeDiagnosticoDanteRef.current;
+        const flujo = flujoDiagnosticoInternetDanteRef.current;
+        const servicio = flujo?.seleccionado || servicioClienteDanteRef.current;
+
+        if (!contexto || !servicio) {
+            responderDante(
+                "No tengo un diagnóstico CPE activo para guardar. Primero debemos revisar el equipo del cliente."
+            );
+            return;
+        }
+
+        const nombreCliente =
+            `${servicio.nombres || ""} ${servicio.apellidos || ""}`.trim() ||
+            "Cliente";
+        const diagnostico =
+            diagnosticoHumanoCpeDanteRef.current ||
+            "Sin conclusión adicional de experiencia de campo.";
+        const resumen = construirResumenCpeDante(contexto);
+        const ahora = new Date();
+        const titulo = `Reporte diagnóstico CPE - ${nombreCliente} - ${ahora.toLocaleDateString("es-EC")}`;
+        const contenido = [
+            `Cliente: ${nombreCliente}`,
+            `IP CPE: ${contexto.ipCliente || "sin dato"}`,
+            `Equipo: ${contexto.equipo?.nombre || contexto.equipo?.modelo || "sin dato"}`,
+            `Resumen técnico: ${resumen}`,
+            `Diagnóstico: ${diagnostico}`,
+            `Fecha: ${ahora.toLocaleString("es-EC")}`,
+        ].join("\n");
+
+        try {
+            responderDante("De acuerdo. Voy a guardar el reporte de este diagnóstico CPE.");
+
+            const token = getToken();
+            const res = await fetch(`${API_BASE}/dante/memorias`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    tipoMemoria: "SESION_TRABAJO",
+                    categoria: "TRABAJO",
+                    clave: titulo,
+                    contenido,
+                    importancia: 8,
+                    entidadTipo: "CLIENTE",
+                    entidadId: servicio.clienteId || null,
+                    datosJson: {
+                        origen: "DANTE_V9_CPE",
+                        tipoRegistro: "REPORTE_DIAGNOSTICO_CPE",
+                        clienteId: servicio.clienteId || null,
+                        cliente: nombreCliente,
+                        ipCpe: contexto.ipCliente || null,
+                        diagnostico,
+                        resumen,
+                        guardadoEn: ahora.toISOString(),
+                    },
+                }),
+            });
+
+            const data = await res.json();
+            if (!res.ok || data.ok === false) {
+                throw new Error(data.message || "No se pudo guardar el reporte CPE");
+            }
+
+            // Seguimos dentro del CPE después de guardar.
+            actualizarContextoDante({
+                tema: "WIRELESS",
+                entidadId: servicio.clienteId,
+                entidadNombre: nombreCliente,
+                ultimaIntencion: "REPORTE_CPE_GUARDADO",
+                esperandoRespuesta: true,
+                datoPendiente: "COMANDOS_CPE",
+            });
+
+            responderDante(
+                `Listo. Guardé el reporte técnico del CPE de ${nombreCliente}. Seguimos dentro de la revisión; puedes pedirme otra comprobación, guardar una nota o terminar.`
+            );
+        } catch (error) {
+            console.error("DANTE: error guardando reporte CPE:", error);
+            responderDante(
+                "No pude guardar el reporte en este momento, pero mantengo abierto el diagnóstico para que podamos continuar."
+            );
+        }
+    }
+
     async function procesarComandosCpeDante(
         textoOriginal: string
     ): Promise<boolean> {
@@ -7399,6 +7900,12 @@ export default function BotNotificaciones({
             normalizarTextoDante(
                 textoOriginal
             );
+
+        // Guardar el diagnóstico actual sin salir del contexto CPE.
+        if (esSolicitudGuardarReporteCpeDante(textoOriginal)) {
+            await guardarReporteCpeDante();
+            return true;
+        }
 
         if (
             texto === "salir" ||
@@ -7621,7 +8128,7 @@ export default function BotNotificaciones({
         if (!flujo) return false;
 
         if (flujo.etapa === "CONFIRMAR_CPE") {
-            if (esSiDante(textoOriginal)) {
+            if (esConfirmacionRevisionCpeDante(textoOriginal)) {
                 if (!flujo.seleccionado) {
                     flujoDiagnosticoInternetDanteRef.current = null;
 
@@ -7804,6 +8311,22 @@ export default function BotNotificaciones({
             return true;
         }
 
+        if (flujo.etapa === "BUSCAR_CLIENTE") {
+            const nuevoTermino = String(textoOriginal || "").trim();
+
+            if (!nuevoTermino) {
+                responderDante(
+                    "Sigo esperando el cliente. Dime su nombre, cédula, teléfono o IP para continuar el diagnóstico."
+                );
+                return true;
+            }
+
+            // Conservamos el mismo diagnóstico (lentitud, pérdida de servicio,
+            // intermitencia, etc.) y usamos esta respuesta como dato de búsqueda.
+            await buscarClienteParaDiagnosticoDante(nuevoTermino);
+            return true;
+        }
+
         if (flujo.etapa === "SELECCIONAR_CLIENTE") {
             const numero = extraerNumeroSeleccionClienteDante(
                 textoOriginal
@@ -7939,24 +8462,7 @@ export default function BotNotificaciones({
             // ASEGURAR QUE SPEECH RECOGNITION ESTÉ ACTIVO
             // ================================================
 
-            try {
-
-                reconocimientoRef.current?.start();
-
-            } catch (error: any) {
-
-                // InvalidStateError significa que ya estaba escuchando.
-                if (
-                    error?.name !==
-                    "InvalidStateError"
-                ) {
-
-                    console.error(
-                        "DANTE: error reactivando escucha después de alertas:",
-                        error
-                    );
-                }
-            }
+            iniciarReconocimientoSeguro();
         }
     }
 
@@ -9447,6 +9953,397 @@ export default function BotNotificaciones({
     }
 
     // ========================================================
+    // DANTE V6 - NOTAS Y MEMORIA DE TRABAJO
+    // ========================================================
+    function fraseHumanaBusquedaDante(tipo: "MEMORIA" | "AGENDA" | "GUARDAR") {
+        const opciones = tipo === "AGENDA"
+            ? ["Déjame revisar qué tenemos en agenda.", "A ver qué tenemos agendado.", "Un momento, reviso la agenda."]
+            : tipo === "GUARDAR"
+                ? ["Claro, lo voy a guardar.", "De acuerdo, lo registro en mi memoria.", "Perfecto, tomo nota."]
+                : ["Déjame revisar qué encuentro.", "Un momento, reviso mi memoria.", "A ver qué tenemos guardado."];
+        return opciones[Math.floor(Math.random() * opciones.length)];
+    }
+
+    function tituloNaturalNotaDante(contenido: string) {
+        const limpioTitulo = contenido
+            .replace(/\s+/g, " ")
+            .trim()
+            .replace(/[.?!]+$/, "");
+        if (!limpioTitulo) return "Nota de Dante";
+        return limpioTitulo.length > 72
+            ? `${limpioTitulo.slice(0, 69).trim()}...`
+            : limpioTitulo;
+    }
+
+    async function guardarNotaNaturalDante(contenido: string) {
+        const textoNota = contenido.trim();
+        if (!textoNota) {
+            notaPendienteDanteRef.current = true;
+            actualizarContextoDante({
+                tema: "MEMORIA",
+                ultimaIntencion: "GUARDAR_NOTA",
+                esperandoRespuesta: true,
+                datoPendiente: "CONTENIDO_NOTA",
+            });
+            responderDante("Claro. Dime qué quieres que guarde y lo dejo anotado.");
+            return;
+        }
+
+        try {
+            responderDante(fraseHumanaBusquedaDante("GUARDAR"));
+            const token = getToken();
+            const titulo = tituloNaturalNotaDante(textoNota);
+            const res = await fetch(`${API_BASE}/dante/memorias`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    tipoMemoria: "NOTA",
+                    categoria: "NOTA",
+                    clave: titulo,
+                    contenido: textoNota,
+                    importancia: 6,
+                    datosJson: {
+                        origen: "DANTE_V6",
+                        tipoRegistro: "NOTA",
+                        guardadoPorConversacion: true,
+                    },
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok || data.ok === false) throw new Error(data.message || "No se pudo guardar la nota");
+            notaPendienteDanteRef.current = false;
+            actualizarContextoDante({
+                tema: "MEMORIA",
+                ultimaIntencion: "NOTA_GUARDADA",
+                esperandoRespuesta: false,
+                datoPendiente: null,
+            });
+            responderDante(`Listo. Guardé la nota con el título ${titulo}.`);
+        } catch (error) {
+            console.error("DANTE: Error guardando nota natural:", error);
+            responderDante("No pude guardar la nota en este momento.");
+        }
+    }
+
+    function esInicioSesionTrabajoDante(textoOriginal: string) {
+        const texto = normalizarTextoDante(textoOriginal).replace(/\bdante\b/g, " ").replace(/\s+/g, " ").trim();
+        const hablaDeGuardar = /\b(guarda|guarde|guardar|guardes|guardemos|recuerda|recordar|registra|registrar|anota|anotar|conserva|conservar)\b/.test(texto);
+        const hablaDeTrabajo = /\b(soporte|trabajo|revision|diagnostico|prueba|pruebas|datos|resultados|conversacion|atencion|cliente|administracion|administrativo|reunion|gestion|reclamo|acuerdos|decisiones)\b/.test(texto);
+        const continuidad = /\b(vamos|vayamos|durante|lo que|esta conversacion|todo lo que)\b/.test(texto);
+        return hablaDeGuardar && hablaDeTrabajo && continuidad;
+    }
+
+    function esFinSesionTrabajoDante(textoOriginal: string) {
+        const texto = normalizarTextoDante(textoOriginal).replace(/\bdante\b/g, " ").replace(/\s+/g, " ").trim();
+        return /\b(terminamos|terminado|finaliza|finalizar|cierra el soporte|cerrar el soporte|fin del soporte|termina la atencion|terminamos la atencion|guarda la atencion|guarda esta gestion|guarda la gestion|guarda esta conversacion|guarda la conversacion|guarda los resultados|guarda lo que hicimos|guarda todo lo que hicimos)\b/.test(texto);
+    }
+
+    function registrarUsuarioEnSesionDante(textoOriginal: string) {
+        const sesion = sesionTrabajoDanteRef.current;
+        const texto = textoOriginal.trim();
+        if (!sesion || !texto) return;
+        sesion.entradas.push({ actor: "USUARIO", texto, fecha: new Date().toISOString() });
+    }
+
+    async function iniciarSesionTrabajoDante(textoOriginal: string) {
+        const texto = normalizarTextoDante(textoOriginal);
+        let tipo: TipoSesionTrabajoDante = "TRABAJO";
+        if (/\b(soporte|diagnostico|tecnico|falla)\b/.test(texto)) tipo = "SOPORTE";
+        else if (/\b(atencion|cliente|reclamo|consulta del cliente|servicio al cliente)\b/.test(texto)) tipo = "ATENCION_CLIENTE";
+        else if (/\b(administracion|administrativo|reunion|gestion administrativa|oficina)\b/.test(texto)) tipo = "ADMINISTRACION";
+        const ahora = new Date();
+        const prefijoTitulo = tipo === "SOPORTE" ? "Soporte"
+            : tipo === "ATENCION_CLIENTE" ? "Atención al cliente"
+                : tipo === "ADMINISTRACION" ? "Gestión administrativa"
+                    : "Sesión de trabajo";
+        const titulo = `${prefijoTitulo} ${ahora.toLocaleDateString("es-EC")} ${ahora.toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}`;
+        sesionTrabajoDanteRef.current = {
+            tipo,
+            titulo,
+            iniciadaEn: ahora.toISOString(),
+            entradas: [{ actor: "USUARIO", texto: textoOriginal.trim(), fecha: ahora.toISOString() }],
+        };
+        actualizarContextoDante({
+            tema: "TRABAJO",
+            ultimaIntencion: "SESION_TRABAJO_ACTIVA",
+            esperandoRespuesta: false,
+            datoPendiente: tipo,
+        });
+        responderDante(
+            tipo === "SOPORTE"
+                ? "Entendido. Desde ahora voy a conservar los datos y resultados importantes de este soporte. Cuando terminemos, dime que guarde la conversación o que terminamos el soporte."
+                : tipo === "ATENCION_CLIENTE"
+                    ? "Claro. Voy a conservar los datos, acuerdos y resultados importantes de esta atención al cliente. Cuando terminemos, dime que guarde la atención."
+                    : tipo === "ADMINISTRACION"
+                        ? "Entendido. Voy a conservar las decisiones, datos y pendientes importantes de esta gestión administrativa. Cuando terminemos, dime que guarde la conversación o los resultados."
+                        : "Entendido. Voy a conservar los datos y resultados de esta sesión de trabajo. Cuando terminemos, dime que guarde la conversación o los resultados."
+        );
+    }
+
+    async function finalizarSesionTrabajoDante() {
+        const sesion = sesionTrabajoDanteRef.current;
+        if (!sesion) {
+            responderDante("No tengo una sesión de trabajo activa para guardar.");
+            return;
+        }
+        try {
+            responderDante("Perfecto. Déjame organizar lo que obtuvimos y guardarlo.");
+            const token = getToken();
+            const entradasUtiles = sesion.entradas.filter((e) => e.texto.trim()).slice(-80);
+            const contenido = entradasUtiles
+                .map((e) => `${e.actor === "USUARIO" ? "Usuario" : "Dante"}: ${e.texto}`)
+                .join("\n");
+            const res = await fetch(`${API_BASE}/dante/memorias`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    tipoMemoria: "SESION_TRABAJO",
+                    categoria: sesion.tipo,
+                    clave: sesion.titulo,
+                    contenido,
+                    importancia: sesion.tipo === "SOPORTE" || sesion.tipo === "ATENCION_CLIENTE" ? 8 : 7,
+                    datosJson: {
+                        origen: "DANTE_V7",
+                        tipoRegistro: "SESION_TRABAJO",
+                        tipoSesion: sesion.tipo,
+                        iniciadaEn: sesion.iniciadaEn,
+                        finalizadaEn: new Date().toISOString(),
+                        totalEntradas: entradasUtiles.length,
+                        memoriaOrigenId: sesion.memoriaOrigenId || null,
+                        entradas: entradasUtiles,
+                    },
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok || data.ok === false) throw new Error(data.message || "No se pudo guardar la sesión");
+            const titulo = sesion.titulo;
+            const total = entradasUtiles.length;
+            sesionTrabajoDanteRef.current = null;
+            actualizarContextoDante({
+                tema: "MEMORIA",
+                ultimaIntencion: "SESION_TRABAJO_GUARDADA",
+                esperandoRespuesta: false,
+                datoPendiente: null,
+            });
+            responderDante(`Listo. Guardé ${titulo}, con ${total} elementos de la conversación y los resultados obtenidos.`);
+        } catch (error) {
+            console.error("DANTE: Error guardando sesión de trabajo:", error);
+            responderDante("No pude guardar la sesión todavía. La mantengo activa para que podamos intentarlo nuevamente.");
+        }
+    }
+
+    function extraerContenidoNotaNaturalDante(textoOriginal: string) {
+        const original = textoOriginal.trim();
+        const normalizado = normalizarTextoDante(original).replace(/^dante\s+/, "");
+        const patrones = [
+            "guarda esta nota ", "guardar esta nota ", "guarda la nota ", "anota esto ",
+            "anota que ", "toma nota de que ", "toma nota ", "guarda esto ",
+            "recuerda esto ", "recuerda que ", "necesito que guardes que ",
+        ];
+        for (const prefijo of patrones) {
+            if (normalizado.startsWith(prefijo)) {
+                const palabrasPrefijo = prefijo.trim().split(/\s+/).length;
+                const palabrasOriginal = original.replace(/^dante\s+/i, "").trim().split(/\s+/);
+                return palabrasOriginal.slice(palabrasPrefijo).join(" ").trim();
+            }
+        }
+        return "";
+    }
+
+    function esSolicitudNotaDante(textoOriginal: string) {
+        const texto = normalizarTextoDante(textoOriginal).replace(/^dante\s+/, "");
+        return /^(guarda|guardar|anota|anotar|recuerda|recordar|toma nota|necesito que guardes|quiero que guardes)/.test(texto) &&
+            /\b(nota|esto|algo|informacion|dato|datos|que)\b/.test(texto);
+    }
+
+    // ========================================================
+    // DANTE V7 - RECUPERAR Y CONVERSAR CON MEMORIAS / SESIONES
+    // ========================================================
+
+    function parseDatosJsonMemoriaDante(valor: any) {
+        if (!valor) return {};
+        if (typeof valor === "object") return valor;
+        try { return JSON.parse(String(valor)); } catch { return {}; }
+    }
+
+    function normalizarMemoriaRecuperadaDante(memoria: any): MemoriaRecuperadaDante {
+        const datosJson = parseDatosJsonMemoriaDante(memoria?.datosJson ?? memoria?.datos_json);
+        const entradasRaw = Array.isArray(datosJson?.entradas) ? datosJson.entradas : [];
+        const entradas: EntradaSesionTrabajoDante[] = entradasRaw
+            .filter((e: any) => e && e.texto)
+            .map((e: any) => ({
+                actor: String(e.actor || "USUARIO").toUpperCase() === "DANTE" ? "DANTE" : "USUARIO",
+                texto: String(e.texto || "").trim(),
+                fecha: String(e.fecha || memoria?.fechaCreacion || new Date().toISOString()),
+            }));
+        return {
+            memoriaId: String(memoria?.memoriaId || memoria?.memoria_id || ""),
+            tipoMemoria: String(memoria?.tipoMemoria || memoria?.tipo_memoria || "MEMORIA"),
+            categoria: String(memoria?.categoria || datosJson?.tipoSesion || "GENERAL"),
+            titulo: String(memoria?.clave || "Registro de Dante"),
+            contenido: String(memoria?.contenido || ""),
+            fechaCreacion: memoria?.fechaCreacion || memoria?.fecha_creacion || null,
+            datosJson,
+            entradas,
+        };
+    }
+
+    function esSolicitudRecuperarSesionDante(textoOriginal: string) {
+        const texto = normalizarTextoDante(textoOriginal).replace(/^dante\s+/, "");
+        const busca = /\b(busca|buscar|recupera|recuperar|abre|abrir|revisa|revisar|encuentra|encontrar|que hicimos|que paso|que acordamos|que vimos)\b/.test(texto);
+        const sesion = /\b(soporte|atencion|cliente|sesion|conversacion|reunion|administracion|administrativa|gestion|trabajo|nota|guardado|guardada)\b/.test(texto);
+        return busca && sesion;
+    }
+
+    function extraerTerminoRecuperacionDante(textoOriginal: string) {
+        let texto = normalizarTextoDante(textoOriginal).replace(/^dante\s+/, " ");
+        texto = texto
+            .replace(/\b(busca|buscar|recupera|recuperar|abre|abrir|revisa|revisar|encuentra|encontrar|memoria|guardado|guardada|sesion|conversacion)\b/g, " ")
+            .replace(/\b(el|la|los|las|un|una|de|del|que|hicimos|paso|con)\b/g, " ")
+            .replace(/\s+/g, " ").trim();
+        return texto || normalizarTextoDante(textoOriginal).replace(/^dante\s+/, "").trim();
+    }
+
+    function fechaCortaMemoriaDante(memoria: MemoriaRecuperadaDante) {
+        const fecha = memoria.fechaCreacion ? new Date(memoria.fechaCreacion) : null;
+        if (!fecha || Number.isNaN(fecha.getTime())) return "sin fecha";
+        return fecha.toLocaleDateString("es-EC", { day: "2-digit", month: "long", year: "numeric" });
+    }
+
+    async function buscarSesionGuardadaDante(textoOriginal: string) {
+        const termino = extraerTerminoRecuperacionDante(textoOriginal);
+        try {
+            responderDante("Déjame revisar lo que tenemos guardado sobre eso.");
+            const token = getToken();
+            const res = await fetch(`${API_BASE}/dante/memorias/buscar?q=${encodeURIComponent(termino)}`, {
+                method: "GET", headers: { Authorization: `Bearer ${token}` }, cache: "no-store",
+            });
+            const data = await res.json();
+            if (!res.ok || data.ok === false) throw new Error(data.message || "No se pudo buscar la memoria");
+            const candidatas = (Array.isArray(data.memorias) ? data.memorias : [])
+                .map(normalizarMemoriaRecuperadaDante)
+                .filter((m: MemoriaRecuperadaDante) =>
+                    m.tipoMemoria === "SESION_TRABAJO" ||
+                    ["SOPORTE", "ATENCION_CLIENTE", "ADMINISTRACION", "TRABAJO"].includes(m.categoria.toUpperCase())
+                )
+                .slice(0, 8);
+            if (!candidatas.length) {
+                responderDante(`No encontré una sesión guardada relacionada con ${termino}.`);
+                return;
+            }
+            if (candidatas.length === 1) {
+                abrirMemoriaRecuperadaDante(candidatas[0]);
+                return;
+            }
+            memoriasPendientesSeleccionDanteRef.current = candidatas;
+
+            memoriasPendientesSeleccionDanteRef.current = candidatas;
+
+            const opciones = candidatas
+                .slice(0, 5)
+                .map((m: any, i: number) =>
+                    `${i + 1}, ${m.titulo}, del ${fechaCortaMemoriaDante(m)}`
+                )
+                .join(". ");
+            responderDante(`Encontré ${candidatas.length} sesiones relacionadas. ${opciones}. Dime cuál quieres revisar, por ejemplo la primera o la segunda.`);
+        } catch (error) {
+            console.error("DANTE V7: error recuperando sesión:", error);
+            responderDante("No pude recuperar esa sesión en este momento.");
+        }
+    }
+
+    function abrirMemoriaRecuperadaDante(memoria: MemoriaRecuperadaDante) {
+        memoriaRecuperadaDanteRef.current = memoria;
+        memoriasPendientesSeleccionDanteRef.current = [];
+        actualizarContextoDante({ tema: "MEMORIA", ultimaIntencion: "MEMORIA_RECUPERADA", esperandoRespuesta: false, datoPendiente: memoria.memoriaId });
+        responderDante(`Listo. Abrí ${memoria.titulo}, del ${fechaCortaMemoriaDante(memoria)}. Puedes preguntarme qué pasó, qué encontramos, qué acordamos, qué quedó pendiente o pedirme continuar esta sesión.`);
+    }
+
+    function seleccionarMemoriaPendienteDante(textoOriginal: string) {
+        const pendientes = memoriasPendientesSeleccionDanteRef.current;
+        if (!pendientes.length) return false;
+        const texto = normalizarTextoDante(textoOriginal);
+        const numeros: Record<string, number> = { "1": 0, primera: 0, primero: 0, "2": 1, segunda: 1, segundo: 1, "3": 2, tercera: 2, tercero: 2, "4": 3, cuarta: 3, cuarto: 3, "5": 4, quinta: 4, quinto: 4 };
+        for (const [clave, indice] of Object.entries(numeros)) {
+            if ((texto === clave || texto.includes(`la ${clave}`) || texto.includes(`el ${clave}`)) && pendientes[indice]) {
+                abrirMemoriaRecuperadaDante(pendientes[indice]); return true;
+            }
+        }
+        const porTitulo = pendientes.find(m => normalizarTextoDante(m.titulo).split(" ").some(p => p.length > 4 && texto.includes(p)));
+        if (porTitulo) { abrirMemoriaRecuperadaDante(porTitulo); return true; }
+        return false;
+    }
+
+    function esPreguntaSobreMemoriaActivaDante(textoOriginal: string) {
+        if (!memoriaRecuperadaDanteRef.current) return false;
+        const texto = normalizarTextoDante(textoOriginal);
+        if (/\b(continua|continuar|retoma|retomar|sigamos|seguimos)\b/.test(texto)) return false;
+        return /\b(que|cual|cuales|como|cuando|quien|quienes|problema|encontramos|resultado|resultados|pendiente|pendientes|acordamos|acuerdo|acuerdos|hicimos|paso|termino|quedo|pago|pagos|ip|equipo|cliente|decision|decisiones)\b/.test(texto);
+    }
+
+    function responderDesdeMemoriaActivaDante(textoOriginal: string) {
+        const memoria = memoriaRecuperadaDanteRef.current;
+        if (!memoria) return false;
+        const consulta = normalizarTextoDante(textoOriginal);
+        const grupos: Record<string, string[]> = {
+            problema: ["problema", "falla", "inconveniente", "error", "reporta", "reclamo"],
+            resultado: ["resultado", "encontramos", "encontro", "diagnostico", "quedo", "termino", "solucion"],
+            pendiente: ["pendiente", "falta", "despues", "proximo", "seguimiento"],
+            acuerdo: ["acuerdo", "acordamos", "compromiso", "decision", "decidimos"],
+            pago: ["pago", "pagos", "debe", "deuda", "mensualidad", "factura"],
+            ip: [" ip ", "direccion ip", "ipv4"],
+            equipo: ["equipo", "antena", "router", "mikrotik", "radio", "onu"],
+            cliente: ["cliente", "abonado", "usuario"],
+        };
+        let claves = normalizarTextoDante(textoOriginal).split(/\s+/).filter(p => p.length >= 4);
+        for (const [nombre, palabras] of Object.entries(grupos)) {
+            if (palabras.some(p => consulta.includes(p.trim()))) claves = [...claves, ...palabras.map(p => p.trim())];
+        }
+        const fuente = memoria.entradas.length ? memoria.entradas : memoria.contenido.split(/\n+/).map(t => ({ actor: "USUARIO" as const, texto: t, fecha: memoria.fechaCreacion || "" }));
+        const encontrados = fuente.filter(e => {
+            const t = ` ${normalizarTextoDante(e.texto)} `;
+            return claves.some(k => k.length >= 3 && t.includes(k));
+        }).slice(-6);
+        if (!encontrados.length) {
+            responderDante(`Revisé ${memoria.titulo}, pero ese dato no aparece claramente registrado en esta sesión.`);
+            return true;
+        }
+        const lectura = encontrados.map(e => e.texto.trim()).filter(Boolean).join(". ");
+        responderDante(`Según ${memoria.titulo}, tengo registrado lo siguiente: ${lectura}`);
+        return true;
+    }
+
+    function esContinuarMemoriaRecuperadaDante(textoOriginal: string) {
+        return !!memoriaRecuperadaDanteRef.current && /\b(continua|continuar|retoma|retomar|sigamos|seguimos|continua esta|retoma esta)\b/.test(normalizarTextoDante(textoOriginal));
+    }
+
+    function continuarMemoriaRecuperadaDante() {
+        const memoria = memoriaRecuperadaDanteRef.current;
+        if (!memoria) return;
+        const categoria = memoria.categoria.toUpperCase();
+        const tipo: TipoSesionTrabajoDante = ["SOPORTE", "ATENCION_CLIENTE", "ADMINISTRACION", "TRABAJO"].includes(categoria)
+            ? categoria as TipoSesionTrabajoDante : "TRABAJO";
+        sesionTrabajoDanteRef.current = {
+            tipo,
+            titulo: `Continuación - ${memoria.titulo}`,
+            iniciadaEn: new Date().toISOString(),
+            entradas: [
+                ...memoria.entradas.slice(-40),
+                { actor: "DANTE", texto: `Sesión recuperada desde ${memoria.titulo}.`, fecha: new Date().toISOString() },
+            ],
+            memoriaOrigenId: memoria.memoriaId,
+        };
+        actualizarContextoDante({ tema: "TRABAJO", ultimaIntencion: "SESION_RECUPERADA_CONTINUADA", esperandoRespuesta: false, datoPendiente: tipo });
+        responderDante(`Perfecto. Retomamos ${memoria.titulo}. Desde ahora volveré a guardar los nuevos datos y resultados hasta que me indiques que terminamos o que guarde la conversación.`);
+    }
+
+    // ========================================================
     // DANTE - OBTENER CONTEXTO HISTÓRICO DE SU MEMORIA
     // ========================================================
 
@@ -9613,7 +10510,7 @@ export default function BotNotificaciones({
 
 
             responderDante(
-                `Consultando lo que recuerdo sobre ${terminoBusqueda}.`
+                fraseHumanaBusquedaDante("MEMORIA")
             );
 
 
@@ -9699,7 +10596,9 @@ export default function BotNotificaciones({
 
                             return (
                                 `Recuerdo ${index + 1}. ` +
-                                `${memoria.contenido}.`
+                                `${String(memoria.contenido || "").length > 500
+                                    ? `${String(memoria.contenido || "").slice(0, 497).trim()}...`
+                                    : String(memoria.contenido || "")}.`
                             );
                         }
                     )
@@ -9742,6 +10641,192 @@ export default function BotNotificaciones({
                 "No pude consultar mi memoria en este momento."
             );
         }
+    }
+
+    // ========================================================
+    // DANTE V5 - CONSULTA GENERAL DE MEMORIA Y AGENDA
+    // ========================================================
+
+    function fechaMemoriaDante(valor: any): Date | null {
+        if (!valor) return null;
+        const fecha = new Date(valor);
+        return Number.isNaN(fecha.getTime()) ? null : fecha;
+    }
+
+    function tituloMemoriaDante(memoria: any): string {
+        const titulo = String(memoria?.clave || memoria?.contenido || "Registro").trim();
+        return titulo.length > 90 ? `${titulo.slice(0, 87)}...` : titulo;
+    }
+
+    function descripcionFechaMemoriaDante(fecha: Date | null, incluirHora = false): string {
+        if (!fecha) return "sin fecha registrada";
+        const opciones: Intl.DateTimeFormatOptions = {
+            day: "2-digit",
+            month: "long",
+            year: "numeric",
+        };
+        if (incluirHora) {
+            opciones.hour = "2-digit";
+            opciones.minute = "2-digit";
+            opciones.hour12 = true;
+        }
+        return fecha.toLocaleString("es-EC", opciones);
+    }
+
+    function rangoTemporalMemoriaDante(textoOriginal: string): "HOY" | "MANANA" | "FUTURO" | "PASADO" | "TODO" {
+        const texto = normalizarTextoDante(textoOriginal);
+        if (/\bmanana\b/.test(texto)) return "MANANA";
+        if (/\b(hoy|para hoy|este dia)\b/.test(texto)) return "HOY";
+        if (/\b(futuro|proximos|proximas|pendiente|pendientes|agenda|agendado|agendados|recordatorio|recordatorios)\b/.test(texto)) return "FUTURO";
+        if (/\b(antes|anterior|anteriores|pasado|pasados|teniamos|guardamos|almacenado|almacenados|historico|historial)\b/.test(texto)) return "PASADO";
+        return "TODO";
+    }
+
+    async function consultarResumenMemoriaDante(textoOriginal: string) {
+        try {
+            const token = getToken();
+            const rangoSolicitado = rangoTemporalMemoriaDante(textoOriginal);
+            responderDante(
+                rangoSolicitado === "HOY" || rangoSolicitado === "MANANA" || rangoSolicitado === "FUTURO"
+                    ? fraseHumanaBusquedaDante("AGENDA")
+                    : fraseHumanaBusquedaDante("MEMORIA")
+            );
+            const res = await fetch(`${API_BASE}/dante/memorias?activa=1`, {
+                method: "GET",
+                headers: { Authorization: `Bearer ${token}` },
+                cache: "no-store",
+            });
+            const data = await res.json();
+            if (!res.ok || data.ok === false) {
+                throw new Error(data.message || "No se pudo consultar la memoria");
+            }
+
+            const todas = Array.isArray(data.memorias) ? data.memorias : [];
+            const ahora = new Date();
+            const inicioHoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+            const inicioManana = new Date(inicioHoy);
+            inicioManana.setDate(inicioManana.getDate() + 1);
+            const finManana = new Date(inicioManana);
+            finManana.setDate(finManana.getDate() + 1);
+            const rango = rangoTemporalMemoriaDante(textoOriginal);
+
+            let memorias = [...todas];
+            if (rango === "HOY") {
+                memorias = todas.filter((m: any) => {
+                    const f = fechaMemoriaDante(m.recordarEn || m.recordar_en);
+                    return !!f && f >= inicioHoy && f < inicioManana;
+                });
+            } else if (rango === "MANANA") {
+                memorias = todas.filter((m: any) => {
+                    const f = fechaMemoriaDante(m.recordarEn || m.recordar_en);
+                    return !!f && f >= inicioManana && f < finManana;
+                });
+            } else if (rango === "FUTURO") {
+                memorias = todas.filter((m: any) => {
+                    const f = fechaMemoriaDante(m.recordarEn || m.recordar_en);
+                    return !!f && f >= ahora;
+                });
+            } else if (rango === "PASADO") {
+                memorias = todas.filter((m: any) => {
+                    const f = fechaMemoriaDante(m.fechaCreacion || m.fecha_creacion);
+                    return !!f && f <= ahora;
+                });
+            }
+
+            memorias.sort((a: any, b: any) => {
+                const fa = fechaMemoriaDante(
+                    rango === "FUTURO" || rango === "HOY" || rango === "MANANA"
+                        ? (a.recordarEn || a.recordar_en)
+                        : (a.fechaCreacion || a.fecha_creacion)
+                );
+                const fb = fechaMemoriaDante(
+                    rango === "FUTURO" || rango === "HOY" || rango === "MANANA"
+                        ? (b.recordarEn || b.recordar_en)
+                        : (b.fechaCreacion || b.fecha_creacion)
+                );
+                if (!fa && !fb) return 0;
+                if (!fa) return 1;
+                if (!fb) return -1;
+                return rango === "FUTURO" || rango === "HOY" || rango === "MANANA"
+                    ? fa.getTime() - fb.getTime()
+                    : fb.getTime() - fa.getTime();
+            });
+
+            actualizarContextoDante({
+                tema: "MEMORIA",
+                ultimaIntencion: `CONSULTAR_MEMORIA_${rango}`,
+                esperandoRespuesta: false,
+                datoPendiente: rango,
+            });
+
+            if (!memorias.length) {
+                const vacio = rango === "HOY"
+                    ? "No tengo recordatorios agendados para hoy."
+                    : rango === "MANANA"
+                        ? "No tengo recordatorios agendados para mañana."
+                        : rango === "FUTURO"
+                            ? "No encontré recordatorios futuros pendientes en mi memoria."
+                            : rango === "PASADO"
+                                ? "No encontré registros anteriores en mi memoria."
+                                : "Mi memoria no tiene registros activos en este momento.";
+                responderDante(vacio);
+                return;
+            }
+
+            const principales = memorias.slice(0, 6);
+            const usarFechaAgenda = rango === "FUTURO" || rango === "HOY" || rango === "MANANA";
+            const lectura = principales.map((memoria: any, index: number) => {
+                const fecha = fechaMemoriaDante(
+                    usarFechaAgenda
+                        ? (memoria.recordarEn || memoria.recordar_en)
+                        : (memoria.fechaCreacion || memoria.fecha_creacion)
+                );
+                const titulo = tituloMemoriaDante(memoria);
+                const contenido = String(memoria?.contenido || "").trim();
+                const esSesionTrabajo = String(memoria?.tipoMemoria || memoria?.tipo_memoria || "").toUpperCase() === "SESION_TRABAJO";
+                const detalle = esSesionTrabajo
+                    ? `, sesión de ${String(memoria?.categoria || "trabajo").toLowerCase()} almacenada`
+                    : contenido && contenido !== titulo
+                        ? `, ${contenido.length > 240 ? `${contenido.slice(0, 237).trim()}...` : contenido}`
+                        : "";
+                return `${index + 1}. ${descripcionFechaMemoriaDante(fecha, usarFechaAgenda)}, título ${titulo}${detalle}`;
+            }).join(". ");
+
+            const introduccion = rango === "HOY"
+                ? `Para hoy encontré ${memorias.length} ${memorias.length === 1 ? "registro" : "registros"}. `
+                : rango === "MANANA"
+                    ? `Para mañana encontré ${memorias.length} ${memorias.length === 1 ? "registro" : "registros"}. `
+                    : rango === "FUTURO"
+                        ? `Tengo ${memorias.length} ${memorias.length === 1 ? "recordatorio futuro" : "recordatorios futuros"}. `
+                        : rango === "PASADO"
+                            ? `Encontré ${memorias.length} ${memorias.length === 1 ? "registro almacenado" : "registros almacenados"}. `
+                            : `Tengo ${memorias.length} ${memorias.length === 1 ? "registro activo" : "registros activos"} en memoria. `;
+
+            let respuesta = introduccion + lectura + ".";
+            if (memorias.length > principales.length) {
+                respuesta += ` Hay ${memorias.length - principales.length} registros adicionales.`;
+            }
+            responderDante(respuesta);
+        } catch (error) {
+            console.error("DANTE: Error revisando memoria general:", error);
+            responderDante("No pude revisar mi memoria en este momento.");
+        }
+    }
+
+    function esConsultaGeneralMemoriaDante(textoOriginal: string): boolean {
+        const texto = limpiarSeguimientoNaturalDante(textoOriginal);
+        const contextoMemoria = contextoDanteRef.current.tema === "MEMORIA" && contextoConversacionalVigenteDante();
+
+        if (
+            /\b(revisa|revisar|consulta|consultar|muestra|mostrar|dime|que|cuales|cuantos|busca|buscar)\b/.test(texto) &&
+            /\b(memoria|recuerdos|almacenado|almacenados|guardado|guardados|guardada|guardadas|nota|notas|agenda|agendado|agendados|agendada|agendadas|recordatorio|recordatorios)\b/.test(texto)
+        ) return true;
+
+        if (/^(que teniamos|que teniamos almacenado|que guardamos|que recuerdas|que tienes guardado|que tienes almacenado|que notas tenemos|que notas tengo|tenemos notas guardadas|que tenemos en agenda|que hay en agenda|que tenemos agendado)$/.test(texto)) return true;
+
+        if (contextoMemoria && /^(y )?(hoy|para hoy|manana|para manana|a futuro|en el futuro|los pendientes|que hay pendiente|que tenemos pendiente|los anteriores|y antes|que habia antes|cuales son|dime cuales|los ultimos|cuales son los ultimos)$/.test(texto)) return true;
+
+        return false;
     }
 
     async function leerNodoWirelessDante(
@@ -10834,6 +11919,58 @@ export default function BotNotificaciones({
             null
         );
     }
+    function dividirTextoVozDante(textoOriginal: string): string[] {
+        const texto = String(textoOriginal || "")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        if (!texto) return [];
+
+        const maximo = 190;
+        const frases = texto.match(/[^.!?;:]+[.!?;:]?|[^.!?;:]+$/g) || [texto];
+        const bloques: string[] = [];
+        let actual = "";
+
+        const guardarActual = () => {
+            const limpio = actual.trim();
+            if (limpio) bloques.push(limpio);
+            actual = "";
+        };
+
+        for (const fraseOriginal of frases) {
+            const frase = fraseOriginal.trim();
+            if (!frase) continue;
+
+            if (frase.length > maximo) {
+                guardarActual();
+                const palabras = frase.split(/\s+/);
+                let parte = "";
+                for (const palabra of palabras) {
+                    const candidato = parte ? `${parte} ${palabra}` : palabra;
+                    if (candidato.length > maximo && parte) {
+                        bloques.push(parte.trim());
+                        parte = palabra;
+                    } else {
+                        parte = candidato;
+                    }
+                }
+                if (parte.trim()) bloques.push(parte.trim());
+                continue;
+            }
+
+            const candidato = actual ? `${actual} ${frase}` : frase;
+            if (candidato.length > maximo && actual) {
+                guardarActual();
+                actual = frase;
+            } else {
+                actual = candidato;
+            }
+        }
+
+        guardarActual();
+        return bloques;
+    }
+
     function hablar(
         texto: string
     ): Promise<void> {
@@ -10841,438 +11978,173 @@ export default function BotNotificaciones({
         return new Promise((resolve) => {
 
             if (
-                typeof window === "undefined"
-            ) {
-                resolve();
-                return;
-            }
-
-            if (
+                typeof window === "undefined" ||
                 !("speechSynthesis" in window)
             ) {
                 resolve();
                 return;
             }
 
-            // ====================================================
-            // CADA VOZ TIENE UN ID
-            // ====================================================
+            const bloques = dividirTextoVozDante(texto);
+            if (!bloques.length) {
+                resolve();
+                return;
+            }
 
-            const vozId =
-                ++vozDanteIdRef.current;
+            // Una respuesta completa comparte un único ID de voz.
+            // Así una respuesta nueva o "Dante..." invalida todos los
+            // bloques pendientes de la respuesta anterior.
+            const vozId = ++vozDanteIdRef.current;
+            let finalizado = false;
+
+            const terminarVoz = () => {
+                if (finalizado) return;
+                finalizado = true;
+
+                const liberarCuandoTermine = () => {
+                    if (vozId !== vozDanteIdRef.current) {
+                        resolve();
+                        return;
+                    }
+
+                    if (
+                        window.speechSynthesis.speaking ||
+                        window.speechSynthesis.pending
+                    ) {
+                        setTimeout(liberarCuandoTermine, 150);
+                        return;
+                    }
+
+                    danteHablandoRef.current = false;
+                    pausaReconocimientoPorVozDanteRef.current = false;
+                    interrupcionVozDanteRef.current = false;
+
+                    console.log("🎤 DANTE LIBERADO PARA ESCUCHAR");
+
+                    if (
+                        microfonoActivoRef.current &&
+                        !pausaMicrofonoAnalisisDanteRef.current
+                    ) {
+                        setTimeout(() => {
+                            if (
+                                vozId === vozDanteIdRef.current &&
+                                microfonoActivoRef.current &&
+                                !pausaMicrofonoAnalisisDanteRef.current &&
+                                !danteHablandoRef.current
+                            ) {
+                                iniciarReconocimientoSeguro();
+                            }
+                        }, 150);
+                    }
+
+                    resolve();
+                };
+
+                setTimeout(liberarCuandoTermine, 150);
+            };
+
+            const hablarBloque = (indice: number) => {
+                if (vozId !== vozDanteIdRef.current) {
+                    resolve();
+                    return;
+                }
+
+                if (indice >= bloques.length) {
+                    terminarVoz();
+                    return;
+                }
+
+                const mensaje = new SpeechSynthesisUtterance(bloques[indice]);
+                const vozDante = obtenerVozMasculinaDante();
+
+                if (vozDante) mensaje.voice = vozDante;
+                mensaje.lang = vozDante?.lang || "es-EC";
+                mensaje.rate = 0.90;
+                mensaje.pitch = 0.62;
+                mensaje.volume = 1;
+
+                mensaje.onstart = () => {
+                    if (vozId !== vozDanteIdRef.current) return;
+
+                    danteHablandoRef.current = true;
+                    pausaReconocimientoPorVozDanteRef.current =
+                        pausaMicrofonoAnalisisDanteRef.current;
+
+                    if (pausaMicrofonoAnalisisDanteRef.current) {
+                        try {
+                            reconocimientoRef.current?.abort();
+                        } catch {
+                            // Ya estaba detenido.
+                        }
+                    }
+                };
+
+                mensaje.onend = () => {
+                    if (vozId !== vozDanteIdRef.current) {
+                        resolve();
+                        return;
+                    }
+
+                    // El micrófono NO se libera entre bloques.
+                    // Se reproduce inmediatamente el siguiente fragmento.
+                    hablarBloque(indice + 1);
+                };
+
+                mensaje.onerror = (event: any) => {
+                    if (vozId !== vozDanteIdRef.current) {
+                        resolve();
+                        return;
+                    }
+
+                    // "canceled" e "interrupted" aparecen al reemplazar voz.
+                    // Si esta sigue siendo la voz vigente, cerramos limpiamente.
+                    console.warn(
+                        "DANTE: error de voz en bloque",
+                        indice + 1,
+                        event?.error || event
+                    );
+                    terminarVoz();
+                };
+
+                window.speechSynthesis.speak(mensaje);
+            };
 
             try {
-
-                // ====================================================
-                // DANTE HABLANDO
-                // ====================================================
-                // En conversación normal NO apagamos el reconocimiento:
-                // queda disponible únicamente para detectar una frase
-                // que comience por "Dante" y permitir interrupciones.
-                //
-                // En análisis técnico sí mantenemos el comportamiento
-                // anterior: reconocimiento completamente apagado.
-                // ====================================================
-
-                danteHablandoRef.current =
-                    true;
-
-                interrupcionVozDanteRef.current =
-                    false;
-
+                danteHablandoRef.current = true;
+                interrupcionVozDanteRef.current = false;
                 pausaReconocimientoPorVozDanteRef.current =
                     pausaMicrofonoAnalisisDanteRef.current;
 
-                if (
-                    pausaMicrofonoAnalisisDanteRef.current
-                ) {
-
+                if (pausaMicrofonoAnalisisDanteRef.current) {
                     try {
                         reconocimientoRef.current?.abort();
                     } catch {
                         // Ya estaba detenido.
                     }
-
-                    console.log(
-                        "🔇 DANTE HABLA DURANTE ANÁLISIS - MICRÓFONO APAGADO"
-                    );
-
-                } else if (
-                    microfonoActivoRef.current &&
-                    reconocimientoRef.current
-                ) {
-
-                    try {
-                        reconocimientoRef.current.start();
-                    } catch (error: any) {
-                        if (
-                            error?.name !==
-                            "InvalidStateError"
-                        ) {
-                            console.error(
-                                "DANTE: error manteniendo escucha de interrupción:",
-                                error
-                            );
-                        }
-                    }
                 }
 
-
-                // ====================================================
-                // CANCELAR VOZ ANTERIOR
-                //
-                // IMPORTANTE:
-                // La voz anterior tendrá otro vozId.
-                // Su onerror NO podrá reactivar el micrófono.
-                // ====================================================
-
+                // Cancela cualquier respuesta anterior una sola vez.
                 window.speechSynthesis.cancel();
-
-
-                const mensaje =
-                    new SpeechSynthesisUtterance(
-                        texto
-                    );
-
-
-                // ====================================================
-                // VOZ DANTE
-                // ====================================================
-
-                const vozDante =
-                    obtenerVozMasculinaDante();
-
-
-                if (
-                    vozDante
-                ) {
-
-                    mensaje.voice =
-                        vozDante;
-                }
-
-
-                mensaje.lang =
-                    vozDante?.lang ||
-                    "es-EC";
-
-                mensaje.rate =
-                    0.90;
-
-                mensaje.pitch =
-                    0.62;
-
-                mensaje.volume =
-                    1;
-
-
-                // ====================================================
-                // INICIO DE VOZ
-                // ====================================================
-
-                mensaje.onstart =
-                    () => {
-
-                        // Si ya existe una voz más nueva,
-                        // ignoramos este evento.
-                        if (
-                            vozId !==
-                            vozDanteIdRef.current
-                        ) {
-                            return;
-                        }
-
-                        danteHablandoRef.current =
-                            true;
-
-                        // Solo se bloquea por completo durante análisis.
-                        pausaReconocimientoPorVozDanteRef.current =
-                            pausaMicrofonoAnalisisDanteRef.current;
-
-                        if (
-                            pausaMicrofonoAnalisisDanteRef.current
-                        ) {
-                            console.log(
-                                "🔊 DANTE ESTÁ HABLANDO - MICRÓFONO APAGADO POR ANÁLISIS"
-                            );
-                        } else {
-                            console.log(
-                                "🔊 DANTE ESTÁ HABLANDO - ESCUCHA ESPECIAL ACTIVA PARA 'DANTE'"
-                            );
-
-                            if (
-                                microfonoActivoRef.current &&
-                                reconocimientoRef.current
-                            ) {
-                                try {
-                                    reconocimientoRef.current.start();
-                                } catch (error: any) {
-                                    if (
-                                        error?.name !==
-                                        "InvalidStateError"
-                                    ) {
-                                        console.error(
-                                            "DANTE: error activando escucha especial:",
-                                            error
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    };
-
-
-                // ====================================================
-                // TERMINÓ LA VOZ ACTUAL
-                // ====================================================
-
-                mensaje.onend =
-                    () => {
-
-                        // =================================================
-                        // SI ESTA VOZ YA FUE REEMPLAZADA
-                        // NO PUEDE LIBERAR EL MICRÓFONO
-                        // =================================================
-
-                        if (
-                            vozId !==
-                            vozDanteIdRef.current
-                        ) {
-
-                            console.log(
-                                "🔇 DANTE: fin de voz anterior ignorado"
-                            );
-                            resolve();
-                            return;
-                        }
-
-
-                        console.log(
-                            "🔊 DANTE TERMINÓ DE HABLAR"
-                        );
-
-
-                        setTimeout(
-                            () => {
-
-                                // Otra voz pudo comenzar
-                                // durante estos milisegundos.
-                                if (
-                                    vozId !==
-                                    vozDanteIdRef.current
-                                ) {
-                                    return;
-                                }
-
-
-                                if (
-                                    window.speechSynthesis.speaking
-                                ) {
-                                    return;
-                                }
-
-
-                                danteHablandoRef.current =
-                                    false;
-
-                                pausaReconocimientoPorVozDanteRef.current =
-                                    false;
-
-
-                                console.log(
-                                    "🎤 DANTE LIBERADO PARA ESCUCHAR"
-                                );
-
-
-                                // ============================================
-                                // REACTIVAR RECONOCIMIENTO
-                                // ============================================
-
-                                if (
-                                    microfonoActivoRef.current &&
-                                    !pausaMicrofonoAnalisisDanteRef.current &&
-                                    reconocimientoRef.current
-                                ) {
-
-                                    try {
-
-                                        reconocimientoRef.current.start();
-
-                                        console.log(
-                                            "🎤 Reconocimiento reactivado después de hablar"
-                                        );
-
-                                    } catch (error: any) {
-
-                                        if (
-                                            error?.name !==
-                                            "InvalidStateError"
-                                        ) {
-
-                                            console.error(
-                                                "Error reactivando reconocimiento:",
-                                                error
-                                            );
-                                        }
-                                    }
-                                }
-
-                            },
-                            1000
-                        );
-                    };
-
-
-                // ====================================================
-                // ERROR / CANCELACIÓN
-                // ====================================================
-
-                mensaje.onerror =
-                    () => {
-
-                        // =================================================
-                        // ESTA ES LA CORRECCIÓN PRINCIPAL
-                        //
-                        // Si speechSynthesis.cancel() canceló una voz vieja,
-                        // ESA VOZ NO PUEDE REACTIVAR EL MICRÓFONO.
-                        // =================================================
-
-                        if (
-                            vozId !==
-                            vozDanteIdRef.current
-                        ) {
-                            resolve();
-                            console.log(
-                                "🔇 DANTE: cancelación de voz anterior ignorada"
-                            );
-
-                            return;
-                        }
-
-
-                        console.log(
-                            "🔊 Error en la voz actual de Dante"
-                        );
-
-
-                        setTimeout(
-                            () => {
-
-                                if (
-                                    vozId !==
-                                    vozDanteIdRef.current
-                                ) {
-                                    return;
-                                }
-
-
-                                if (
-                                    window.speechSynthesis.speaking
-                                ) {
-                                    return;
-                                }
-
-
-                                danteHablandoRef.current =
-                                    false;
-
-                                pausaReconocimientoPorVozDanteRef.current =
-                                    false;
-
-
-                                if (
-                                    microfonoActivoRef.current &&
-                                    !pausaMicrofonoAnalisisDanteRef.current &&
-                                    reconocimientoRef.current
-                                ) {
-
-                                    try {
-
-                                        reconocimientoRef.current.start();
-
-                                    } catch {
-                                        // Ya iniciado.
-                                    }
-                                }
-
-                            },
-                            1000
-                        );
-                    };
-
-
-                window.speechSynthesis.speak(
-                    mensaje
-                );
-
-
-                // ====================================================
-                // SEGURO ANTI-BLOQUEO
-                // ====================================================
-
-                const tiempoSeguro =
-                    Math.max(
-                        5000,
-                        texto.length * 100
-                    );
-
-
-                setTimeout(
-                    () => {
-
-                        // Solo la voz actualmente vigente
-                        // puede desbloquear el sistema.
-                        if (
-                            vozId !==
-                            vozDanteIdRef.current
-                        ) {
-                            return;
-                        }
-
-
-                        if (
-                            danteHablandoRef.current &&
-                            !window.speechSynthesis.speaking
-                        ) {
-
-                            console.warn(
-                                "⚠️ DANTE: desbloqueo automático de voz"
-                            );
-
-
-                            danteHablandoRef.current =
-                                false;
-
-                            pausaReconocimientoPorVozDanteRef.current =
-                                false;
-                        }
-
-                    },
-                    tiempoSeguro
-                );
-
+                hablarBloque(0);
+
+                // Seguro anti-bloqueo para navegadores que ocasionalmente
+                // pierden un evento onend en textos largos.
+                const tiempoSeguro = Math.max(12000, texto.length * 180);
+                setTimeout(() => {
+                    if (
+                        vozId === vozDanteIdRef.current &&
+                        danteHablandoRef.current &&
+                        !window.speechSynthesis.speaking &&
+                        !window.speechSynthesis.pending
+                    ) {
+                        console.warn("⚠️ DANTE: desbloqueo automático de voz larga");
+                        terminarVoz();
+                    }
+                }, tiempoSeguro);
 
             } catch (error) {
-
-                // Solamente liberamos si sigue siendo
-                // la voz actualmente vigente.
-                if (
-                    vozId ===
-                    vozDanteIdRef.current
-                ) {
-
-                    danteHablandoRef.current =
-                        false;
-
-                    pausaReconocimientoPorVozDanteRef.current =
-                        false;
-                }
-
-
-                console.error(
-                    "Error reproduciendo voz Dante:",
-                    error
-                );
+                console.error("Error reproduciendo voz Dante:", error);
+                terminarVoz();
             }
         });
     }
@@ -11290,6 +12162,14 @@ export default function BotNotificaciones({
 
         ultimaRespuestaDanteRef.current =
             respuesta;
+
+        if (respuesta && sesionTrabajoDanteRef.current) {
+            sesionTrabajoDanteRef.current.entradas.push({
+                actor: "DANTE",
+                texto: respuesta,
+                fecha: new Date().toISOString(),
+            });
+        }
 
         setRespuestaDante(
             respuesta
@@ -11546,6 +12426,237 @@ export default function BotNotificaciones({
         }
     }
 
+    // ========================================================
+    // DANTE V4 - CONTINUIDAD DE CONVERSACIÓN NATURAL
+    // ========================================================
+    // Convierte seguimientos humanos cortos ("¿y la IP?", "¿y de pagos?",
+    // "¿qué más sabes de él?") en las expresiones que los módulos existentes
+    // ya saben ejecutar. No crea rutas nuevas ni duplica lógica operativa.
+    // Las acciones que modifican estado NO se infieren aquí: siguen pasando
+    // por sus flujos y confirmaciones originales.
+
+    function contextoConversacionalVigenteDante(
+        maximoMs = 3 * 60 * 1000
+    ) {
+        const actualizadoEn =
+            Number(contextoDanteRef.current.actualizadoEn || 0);
+
+        return (
+            actualizadoEn > 0 &&
+            Date.now() - actualizadoEn <= maximoMs
+        );
+    }
+
+    function limpiarSeguimientoNaturalDante(
+        textoOriginal: string
+    ) {
+        return normalizarTextoDante(textoOriginal)
+            .replace(/^dante\s+/, "")
+            .replace(/^(y|oye|bueno|entonces|ahora|tambien|ademas)\s+/, "")
+            .replace(/\s+/g, " ")
+            .trim();
+    }
+
+    function resolverContinuacionNaturalDante(
+        textoOriginal: string
+    ): string | null {
+        if (!contextoConversacionalVigenteDante()) {
+            return null;
+        }
+
+        const texto =
+            limpiarSeguimientoNaturalDante(textoOriginal);
+
+        if (!texto) {
+            return null;
+        }
+
+        const hayCliente =
+            !!servicioClienteDanteRef.current &&
+            (
+                contextoDanteRef.current.tema === "CLIENTE" ||
+                contextoDanteRef.current.tema === "PAGOS"
+            );
+
+        const hayRouter =
+            !!routerMikrotikDanteRef.current &&
+            contextoDanteRef.current.tema === "MIKROTIK";
+
+        // --------------------------------------------------------
+        // CONTEXTO DE CLIENTE
+        // --------------------------------------------------------
+        if (hayCliente) {
+            if (
+                /^(cuanto debe|cuanto adeuda|debe algo|que debe|la deuda|su deuda|de pagos|de pagos como esta|de pagos como va|los pagos|sus pagos|como esta de pagos|como va de pagos|mensualidades|sus mensualidades|tiene algo pendiente de pago)$/.test(texto)
+            ) {
+                return "cuanto debe";
+            }
+
+            if (
+                /^(el plan|su plan|que plan|que plan tiene|cual plan tiene|la velocidad|su velocidad|que velocidad tiene|a que velocidad esta)$/.test(texto)
+            ) {
+                return "cual es su plan";
+            }
+
+            if (
+                /^(la ip|su ip|que ip|cual ip|cual es la ip|dime la ip)$/.test(texto)
+            ) {
+                return "cual es su ip";
+            }
+
+            if (
+                /^(los tickets|sus tickets|tickets|el soporte|soporte|tiene ticket|tiene algun ticket|hay tickets|que tickets tiene|problemas reportados)$/.test(texto)
+            ) {
+                return "cuantos tickets tiene";
+            }
+
+            if (
+                /^(la conexion|su conexion|el internet|su internet|como anda el internet|como va el internet|como esta el internet|como anda la conexion|como va la conexion|revisa la conexion|revisa el internet|esta en linea|esta conectado)$/.test(texto)
+            ) {
+                return "revisa su conexion";
+            }
+
+            if (
+                /^(el servicio|su servicio|como esta el servicio|como va el servicio|estado del servicio|sigue activo|esta activo)$/.test(texto)
+            ) {
+                return "estado del servicio";
+            }
+
+            if (
+                /^(que mas sabes|que mas sabes de el|que mas sabes de ella|que sabes|que sabes de el|que sabes de ella|que mas tiene|dame mas informacion|dime mas|y que mas|sus datos|dame sus datos)$/.test(texto)
+            ) {
+                return "que sabes de ese cliente";
+            }
+
+            if (
+                /^(el compromiso|su compromiso|compromiso de pago|tiene compromiso|hay compromiso|cuando paga|cuando va a pagar|cuando quedo de pagar)$/.test(texto)
+            ) {
+                return texto.includes("cuando")
+                    ? "cuando va a pagar"
+                    : "tiene compromiso de pago";
+            }
+
+            if (
+                /^(los pendientes|sus pendientes|que tiene pendiente|que pendientes tiene|hay algo pendiente|tiene algo pendiente)$/.test(texto)
+            ) {
+                return "que tiene pendiente";
+            }
+
+            if (
+                /^(su informacion|la informacion|informacion completa|sus datos completos|perfil|su perfil|dame el perfil|dame la informacion)$/.test(texto)
+            ) {
+                return "dame su informacion";
+            }
+        }
+
+        // --------------------------------------------------------
+        // CONTEXTO DE ROUTER MIKROTIK
+        // --------------------------------------------------------
+        if (hayRouter) {
+            if (
+                /^(la ip|su ip|ip publica|la ip publica|su ip publica|cual es la ip|dime la ip)$/.test(texto)
+            ) {
+                return "ip publica";
+            }
+
+            if (
+                /^(las redes|sus redes|redes|que redes tiene|dime las redes)$/.test(texto)
+            ) {
+                return "redes";
+            }
+
+            if (
+                /^(los recursos|sus recursos|recursos|cpu|memoria|como estan los recursos|como va de recursos)$/.test(texto)
+            ) {
+                return "recursos";
+            }
+
+            if (
+                /^(el estado|su estado|estado|como esta|como sigue|esta conectado|esta activo|sigue conectado)$/.test(texto)
+            ) {
+                return "estado";
+            }
+
+            if (
+                /^(pruebalo|haz una prueba|haz un test|prueba la conexion|revisa la conexion)$/.test(texto)
+            ) {
+                return "haz un test";
+            }
+        }
+
+        return null;
+    }
+
+    function esSeguimientoConversacionalNaturalDante(
+        textoOriginal: string
+    ) {
+        if (!contextoConversacionalVigenteDante()) {
+            return false;
+        }
+
+        if (resolverContinuacionNaturalDante(textoOriginal)) {
+            return true;
+        }
+
+        const texto =
+            limpiarSeguimientoNaturalDante(textoOriginal);
+
+        const hayEntidadActiva =
+            !!servicioClienteDanteRef.current ||
+            !!routerMikrotikDanteRef.current;
+
+        if (!hayEntidadActiva) {
+            return false;
+        }
+
+        // Permite una pregunta corta y claramente conversacional durante
+        // una conversación activa. No incluye verbos destructivos.
+        const parecePreguntaSeguimiento =
+            /^(que|como|cual|cuanto|cuando|donde|tiene|esta|sigue|su|sus|el|la|los|las|revisa|dime|muestra)\b/.test(texto);
+
+        const contieneAccionSensible =
+            /\b(corta|cortar|suspende|suspender|activa|activar|reconecta|reconectar|elimina|eliminar|borra|borrar|reinicia|reiniciar|agrega|agregar)\b/.test(texto);
+
+        return (
+            parecePreguntaSeguimiento &&
+            !contieneAccionSensible &&
+            texto.split(/\s+/).length <= 12
+        );
+    }
+
+    function respuestaNoEntendidaNaturalDante() {
+        const cliente =
+            servicioClienteDanteRef.current;
+
+        if (cliente && contextoConversacionalVigenteDante()) {
+            const nombre =
+                `${cliente.nombres || ""} ${cliente.apellidos || ""}`.trim();
+
+            return (
+                `No estoy seguro de haber entendido qué deseas revisar de ${nombre}. ` +
+                "Puedes decírmelo de otra forma; mantengo a este cliente en la conversación."
+            );
+        }
+
+        const router =
+            routerMikrotikDanteRef.current;
+
+        if (
+            router &&
+            contextoDanteRef.current.tema === "MIKROTIK" &&
+            contextoConversacionalVigenteDante()
+        ) {
+            return (
+                `No estoy seguro de qué deseas revisar de ${router.nombre}. ` +
+                "Puedes preguntarme de otra forma y continuaré usando este router."
+            );
+        }
+
+        return (
+            "No estoy seguro de haber entendido. Dímelo de otra forma, como lo dirías normalmente, y lo intento de nuevo."
+        );
+    }
+
     function interpretarIntencionCentralDante(
         textoOriginal: string
     ): InterpretacionCentralDante {
@@ -11784,6 +12895,196 @@ export default function BotNotificaciones({
         }
 
         return servicioClienteDanteRef.current;
+    }
+
+    // ========================================================
+    // DANTE V10 - GESTION CONVERSACIONAL DE LAS 4 AREAS ISP
+    // Reutiliza exactamente los endpoints de las paginas existentes.
+    // ========================================================
+    async function apiGestionIspDante(path: string, init: RequestInit = {}) {
+        const headers = new Headers(init.headers);
+        if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+        headers.set("Authorization", `Bearer ${getToken()}`);
+        const respuesta = await fetch(`${API_BASE}${path}`, { ...init, headers, cache: "no-store" });
+        const data = await respuesta.json().catch(() => ({}));
+        if (!respuesta.ok) throw new Error(data?.message || data?.error || "No pude completar la consulta");
+        return data;
+    }
+
+    function dineroDante(valor: any) {
+        return new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD" }).format(Number(valor || 0));
+    }
+
+    function nombreClienteGestionDante(cliente: any) {
+        return `${cliente?.nombres || cliente?.nombre || ""} ${cliente?.apellidos || cliente?.apellido || ""}`.replace(/\s+/g, " ").trim();
+    }
+
+    function extraerFechaGestionDante(textoOriginal: string): string | null {
+        const texto = normalizarTextoDante(textoOriginal);
+        const iso = textoOriginal.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
+        if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+        const latam = textoOriginal.match(/\b(\d{1,2})[\/-](\d{1,2})[\/-](20\d{2})\b/);
+        if (latam) return `${latam[3]}-${latam[2].padStart(2, "0")}-${latam[1].padStart(2, "0")}`;
+        const hoy = new Date();
+        if (/\bmanana\b/.test(texto)) {
+            hoy.setDate(hoy.getDate() + 1);
+            return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+        }
+        if (/\bhoy\b/.test(texto)) {
+            return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
+        }
+        return null;
+    }
+
+    async function obtenerClienteGestionDante(textoOriginal: string) {
+        if (servicioClienteDanteRef.current) return servicioClienteDanteRef.current;
+        const consulta = extraerEntidadClienteNaturalDante(textoOriginal);
+        if (consulta) await buscarClienteDante(consulta);
+        return servicioClienteDanteRef.current;
+    }
+
+    async function procesarConfirmacionGestionIspDante(textoOriginal: string): Promise<boolean> {
+        const pendiente = gestionIspPendienteDanteRef.current;
+        if (!pendiente) return false;
+        if (!esSiDante(textoOriginal) && !esNoDante(textoOriginal)) {
+            responderDante("Tengo una acción pendiente. Respóndeme sí para confirmarla o no para dejarla sin cambios.");
+            return true;
+        }
+        if (esNoDante(textoOriginal)) {
+            gestionIspPendienteDanteRef.current = null;
+            responderDante("De acuerdo. No hice ningún cambio.");
+            return true;
+        }
+        try {
+            if (pendiente.tipo === "CREAR_PROMESA") {
+                await apiGestionIspDante("/promesas-pago", {
+                    method: "POST",
+                    body: JSON.stringify({ mensualidadId: pendiente.mensualidadId, fechaPromesaPago: pendiente.fechaPromesaPago, observacion: pendiente.observacion }),
+                });
+                responderDante(`Listo. Registré la promesa de pago de ${pendiente.clienteNombre} para el ${pendiente.fechaPromesaPago}.`);
+            } else if (pendiente.tipo === "CANCELAR_PROMESA") {
+                await apiGestionIspDante(`/promesas-pago/${pendiente.promesaId}/cancelar`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ motivo: "Cancelada mediante Dante" }),
+                });
+                responderDante(`Listo. Cancelé la promesa de pago de ${pendiente.clienteNombre}.`);
+            }
+        } catch (error: any) {
+            responderDante(`No pude completar la acción. ${error?.message || "Revisa los datos e inténtalo nuevamente."}`);
+        } finally {
+            gestionIspPendienteDanteRef.current = null;
+        }
+        return true;
+    }
+
+    async function procesarGestionIspDante(textoOriginal: string): Promise<boolean> {
+        const texto = normalizarTextoDante(textoOriginal);
+        const mencionaFinanzas = /\b(finanza|finanzas|facturado|cobrado|cartera|utilidad|gastos|ingresos)\b/.test(texto);
+        const mencionaContabilidad = /\b(contabilidad|contable|balance|estado de resultados|asientos|cuentas contables|balance de comprobacion)\b/.test(texto);
+        const mencionaCrm = /\b(crm|seguimiento|interaccion|interacciones|tarea crm|tareas crm|oportunidad|oportunidades|perfil 360|360)\b/.test(texto);
+        const mencionaPromesa = /\b(promesa|promesas)\b.*\b(pago|pagos)\b|\b(pago|pagos)\b.*\b(promesa|promesas)\b/.test(texto);
+        if (!mencionaFinanzas && !mencionaContabilidad && !mencionaCrm && !mencionaPromesa) return false;
+
+        try {
+            // ---------------- FINANZAS ISP ----------------
+            if (mencionaFinanzas) {
+                const ahora = new Date();
+                const periodoEncontrado = textoOriginal.match(/\b(20\d{2})-(0[1-9]|1[0-2])\b/);
+                const periodo = periodoEncontrado?.[0] || `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}`;
+                const data = await apiGestionIspDante(`/finanzas-isp/resumen?periodo=${encodeURIComponent(periodo)}`);
+                responderDante(`Finanzas de ${periodo}: facturado ${dineroDante(data?.ingresos?.facturado)}, cobrado ${dineroDante(data?.ingresos?.cobrado)}, cartera ${dineroDante(data?.ingresos?.cartera)}, gastos pagados ${dineroDante(data?.gastos?.pagados)} y utilidad operativa ${dineroDante(data?.resultado?.utilidadOperativa)}.`);
+                return true;
+            }
+
+            // ---------------- CONTABILIDAD ISP ----------------
+            if (mencionaContabilidad) {
+                const ahora = new Date();
+                const desdeDefault = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-01`;
+                const hastaDefault = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")}`;
+                const fechas = [...textoOriginal.matchAll(/\b(20\d{2}-\d{2}-\d{2})\b/g)].map(m => m[1]);
+                const desde = fechas[0] || desdeDefault, hasta = fechas[1] || hastaDefault;
+                if (/balance general/.test(texto)) {
+                    const d = await apiGestionIspDante(`/contabilidad-isp/reportes/balance-general?desde=${desde}&hasta=${hasta}`);
+                    const a = d?.totales?.activo ?? d?.activo ?? d?.activos ?? 0;
+                    const p = d?.totales?.pasivo ?? d?.pasivo ?? d?.pasivos ?? 0;
+                    const pt = d?.totales?.patrimonio ?? d?.patrimonio ?? 0;
+                    responderDante(`Balance general del ${desde} al ${hasta}: activos ${dineroDante(a)}, pasivos ${dineroDante(p)} y patrimonio ${dineroDante(pt)}.`);
+                } else if (/estado de resultados|resultado/.test(texto)) {
+                    const d = await apiGestionIspDante(`/contabilidad-isp/reportes/estado-resultados?desde=${desde}&hasta=${hasta}`);
+                    responderDante(`Estado de resultados del ${desde} al ${hasta}: ingresos ${dineroDante(d?.totales?.ingresos ?? d?.ingresos)}, gastos ${dineroDante(d?.totales?.gastos ?? d?.gastos)} y resultado ${dineroDante(d?.totales?.resultado ?? d?.resultado ?? d?.utilidad)}.`);
+                } else {
+                    const [c, p, a] = await Promise.all([apiGestionIspDante("/contabilidad-isp/cuentas"), apiGestionIspDante("/contabilidad-isp/periodos"), apiGestionIspDante("/contabilidad-isp/asientos")]);
+                    responderDante(`Contabilidad: tengo ${(c?.cuentas || []).length} cuentas contables, ${(p?.periodos || []).length} períodos y ${(a?.asientos || []).length} asientos registrados. Puedes pedirme el balance general o el estado de resultados.`);
+                }
+                return true;
+            }
+
+            // ---------------- CRM CLIENTES ----------------
+            if (mencionaCrm) {
+                if (/oportunidad|oportunidades/.test(texto) && !/cliente|de /.test(texto)) {
+                    const d = await apiGestionIspDante("/crm/oportunidades");
+                    const ops = d?.oportunidades || [];
+                    if (!ops.length) responderDante("No hay oportunidades CRM registradas en este momento.");
+                    else responderDante(`Tengo ${ops.length} oportunidades CRM. ${ops.slice(0, 5).map((o: any, i: number) => `${i + 1}, ${nombreClienteGestionDante(o) || "cliente"}: ${o.nombre || "oportunidad"}, etapa ${o.etapa || "sin etapa"}, valor ${dineroDante(o.valor_estimado)}`).join(". ")}.`);
+                    return true;
+                }
+                const cliente = await obtenerClienteGestionDante(textoOriginal);
+                const clienteId = cliente?.clienteId;
+                if (!clienteId) {
+                    responderDante("Para trabajar con CRM, dime primero el nombre, cédula, teléfono o IP del cliente.");
+                    return true;
+                }
+                const nombre = nombreClienteGestionDante(cliente) || "el cliente";
+                const perfil = await apiGestionIspDante(`/crm/clientes/${clienteId}/360`);
+                const p = perfil?.perfil || perfil;
+                responderDante(`CRM de ${nombre}: ${(p?.interacciones || []).length} interacciones, ${(p?.tareas || []).filter((t: any) => normalizarTextoDante(t?.estado || "") !== "completada").length} tareas pendientes y ${(p?.oportunidades || []).length} oportunidades. Puedes pedirme sus tareas, interacciones u oportunidades.`);
+                return true;
+            }
+
+            // ---------------- PROMESAS DE PAGO ----------------
+            if (mencionaPromesa) {
+                if (/crear|crea|registrar|registra|hacer|haz/.test(texto)) {
+                    const cliente = await obtenerClienteGestionDante(textoOriginal);
+                    if (!cliente?.clienteId) {
+                        responderDante("Dime primero a qué cliente deseas registrar la promesa de pago.");
+                        return true;
+                    }
+                    const fecha = extraerFechaGestionDante(textoOriginal);
+                    if (!fecha) {
+                        responderDante("Indícame la fecha de la promesa, por ejemplo mañana o 2026-10-10.");
+                        return true;
+                    }
+                    const d = await apiGestionIspDante(`/promesas-pago/mensualidades-cliente/${cliente.clienteId}`);
+                    const mensualidades = (d?.mensualidades || []).filter((m: any) => !["PAGADA", "PAGADO", "ANULADA", "CANCELADA"].includes(String(m?.estado || "").toUpperCase()));
+                    if (!mensualidades.length) {
+                        responderDante(`${nombreClienteGestionDante(cliente)} no tiene mensualidades pendientes disponibles para crear una promesa.`);
+                        return true;
+                    }
+                    if (mensualidades.length > 1) {
+                        responderDante(`${nombreClienteGestionDante(cliente)} tiene ${mensualidades.length} mensualidades pendientes. Para evitar registrar la promesa en una mensualidad equivocada, entra a Promesas de Pago y selecciona la mensualidad correspondiente.`);
+                        return true;
+                    }
+                    const m = mensualidades[0];
+                    gestionIspPendienteDanteRef.current = { tipo: "CREAR_PROMESA", mensualidadId: String(m.mensualidadId), fechaPromesaPago: fecha, observacion: "Registrada mediante Dante", clienteNombre: nombreClienteGestionDante(cliente) };
+                    responderDante(`${nombreClienteGestionDante(cliente)} tiene la mensualidad ${m.periodo || m.mensualidadId} pendiente por ${dineroDante(m.valorMensualidad)}. Voy a registrar la promesa para el ${fecha}. ¿Confirmas?`);
+                    return true;
+                }
+
+                const d = await apiGestionIspDante("/promesas-pago");
+                let promesas = d?.promesas || [];
+                if (/incumplid/.test(texto)) promesas = promesas.filter((x: any) => String(x.estado).toUpperCase() === "INCUMPLIDA");
+                else if (/activ/.test(texto) || /pendiente/.test(texto)) promesas = promesas.filter((x: any) => String(x.estado).toUpperCase() === "ACTIVA");
+                const actual = servicioClienteDanteRef.current;
+                if (actual && /cliente|este|esta|su /.test(texto)) promesas = promesas.filter((x: any) => String(x.clienteId || x.cliente_id || "") === String(actual.clienteId));
+                if (!promesas.length) responderDante("No encontré promesas de pago que coincidan con esa consulta.");
+                else responderDante(`Encontré ${promesas.length} promesas. ${promesas.slice(0, 5).map((x: any, i: number) => `${i + 1}, ${nombreClienteGestionDante(x) || "cliente"}, ${x.periodo || "sin período"}, fecha ${String(x.fechaPromesaPago || "").slice(0, 10)}, estado ${x.estado || "sin estado"}`).join(". ")}.`);
+                return true;
+            }
+        } catch (error: any) {
+            responderDante(`No pude completar esa gestión. ${error?.message || "Inténtalo nuevamente."}`);
+            return true;
+        }
+        return false;
     }
 
     async function ejecutarIntencionCentralDante(
@@ -12200,36 +13501,111 @@ export default function BotNotificaciones({
     async function revisarAlertasPagoDante() {
         try {
             const token = getToken();
-            if (!token) return;
-            const res = await fetch(`${API_BASE}/mensualidades/todas`, { method: "GET", headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, cache: "no-store" });
-            const data = await res.json();
-            if (!res.ok || data?.ok === false) return;
-            const lista = extraerListaMensualidadesDante(data);
-            const pagos = construirAlertasPagoDante(lista, "PAGO");
-            const cortes = construirAlertasPagoDante(lista, "CORTE");
-            alertasPagoDanteRef.current = { pagos, cortes };
-            const clave = [...pagos.map(x => x.id), ...cortes.map(x => x.id)].sort().join("|");
-            const cambio = clave !== ultimaClaveAlertasPagoDanteRef.current;
-            ultimaClaveAlertasPagoDanteRef.current = clave;
-            if (!cambio || alertaPagoDanteYaAnunciadaRef.current) return;
-            alertaPagoDanteYaAnunciadaRef.current = true;
-            if (!pagos.length && !cortes.length) return;
-            const total = pagos.length + cortes.length;
-            if (total <= 5) {
-                const partes: string[] = [];
-                if (pagos.length) partes.push(pagos.length === 1 ? "Hay 1 cliente con fecha de pago próxima." : `Hay ${pagos.length} clientes con fecha de pago próxima.`, nombresAlertasPagoDante(pagos));
-                if (cortes.length) partes.push(cortes.length === 1 ? "Hay 1 cliente con límite de corte próximo." : `Hay ${cortes.length} clientes con límite de corte próximo.`, nombresAlertasPagoDante(cortes));
-                responderDante(partes.join(" "));
+
+            if (!token) {
                 return;
             }
-            let respuesta = "";
-            if (pagos.length) respuesta += pagos.length === 1 ? "Hay 1 cliente con fecha de pago próxima. " : `Hay ${pagos.length} clientes con fecha de pago próxima. `;
-            if (cortes.length) respuesta += cortes.length === 1 ? "Hay 1 cliente con límite de corte próximo. " : `Hay ${cortes.length} clientes con límite de corte próximo. `;
-            // La confirmación queda abierta máximo 20 segundos, pero
-            // durante ese tiempo Dante sigue aceptando cualquier otra orden.
-            iniciarConfirmacionAlertasPagoDante();
-            responderDante(`${respuesta}¿Deseas que te indique los nombres?`);
-        } catch (error) { console.error("DANTE: Error revisando alertas de pagos:", error); }
+
+            const res = await fetch(
+                `${API_BASE}/mensualidades/todas`,
+                {
+                    method: "GET",
+                    headers: {
+                        Accept: "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
+                    cache: "no-store",
+                }
+            );
+
+            const data = await res.json();
+
+            if (
+                !res.ok ||
+                data?.ok === false
+            ) {
+                return;
+            }
+
+            const lista =
+                extraerListaMensualidadesDante(data);
+
+            const pagos =
+                construirAlertasPagoDante(
+                    lista,
+                    "PAGO"
+                );
+
+            const cortes =
+                construirAlertasPagoDante(
+                    lista,
+                    "CORTE"
+                );
+
+            alertasPagoDanteRef.current = {
+                pagos,
+                cortes,
+            };
+
+            const clave = [
+                ...pagos.map((x) => x.id),
+                ...cortes.map((x) => x.id),
+            ]
+                .sort()
+                .join("|");
+
+            const cambio =
+                clave !==
+                ultimaClaveAlertasPagoDanteRef.current;
+
+            ultimaClaveAlertasPagoDanteRef.current =
+                clave;
+
+            if (
+                !cambio ||
+                alertaPagoDanteYaAnunciadaRef.current
+            ) {
+                return;
+            }
+
+            alertaPagoDanteYaAnunciadaRef.current =
+                true;
+
+            if (
+                !pagos.length &&
+                !cortes.length
+            ) {
+                return;
+            }
+
+            const partes: string[] = [];
+
+            if (pagos.length) {
+                partes.push(
+                    pagos.length === 1
+                        ? "Hay 1 cliente con fecha de pago próxima."
+                        : `Hay ${pagos.length} clientes con fecha de pago próxima.`
+                );
+            }
+
+            if (cortes.length) {
+                partes.push(
+                    cortes.length === 1
+                        ? "Hay 1 cliente con límite de corte próximo."
+                        : `Hay ${cortes.length} clientes con límite de corte próximo.`
+                );
+            }
+
+            responderDante(
+                partes.join(" ")
+            );
+
+        } catch (error) {
+            console.error(
+                "DANTE: Error revisando alertas de pagos:",
+                error
+            );
+        }
     }
 
 
@@ -13905,7 +15281,7 @@ export default function BotNotificaciones({
         comando: string
     ) {
 
-        const limpio =
+        let limpio =
             comando.trim();
 
         if (!limpio) {
@@ -13915,7 +15291,7 @@ export default function BotNotificaciones({
         ultimoTextoUsuarioDanteRef.current =
             limpio;
 
-        const texto =
+        let texto =
             normalizarTextoDante(
                 limpio
             );
@@ -13939,6 +15315,32 @@ export default function BotNotificaciones({
         }
 
         // ========================================================
+        // DANTE V9.2/V9.5 - PRIORIDAD DEL DIAGNÓSTICO ACTIVO
+        // ========================================================
+        if (flujoDiagnosticoInternetDanteRef.current) {
+            const procesadoDiagnosticoActivo =
+                await procesarFlujoDiagnosticoInternetDante(limpio);
+            if (procesadoDiagnosticoActivo) return;
+        }
+
+        // V9.6: respuesta sí/no a la puerta automática. No ejecuta un
+        // flujo nuevo: deriva a los mismos flujos V9.5 ya existentes.
+        if (procesarEntradaAutomaticaNotificacionDante(limpio)) {
+            return;
+        }
+
+        // DANTE V10: confirmaciones de escritura para las nuevas áreas ISP.
+        if (await procesarConfirmacionGestionIspDante(limpio)) {
+            return;
+        }
+
+        // V9.5: si acabamos de listar notificaciones, interpretar la
+        // siguiente frase dentro de ese mismo diálogo.
+        if (procesarSeguimientoNotificacionesDante(limpio)) {
+            return;
+        }
+
+        // ========================================================
         // DANTE - PRESENTACIÓN CONVERSACIONAL
         // Tiene prioridad para evitar ejecutar acciones reales
         // cuando Dante está siendo mostrado en una demostración.
@@ -13950,6 +15352,85 @@ export default function BotNotificaciones({
         ) {
             return;
         }
+
+        // ========================================================
+        // DANTE V6 - MEMORIA DE TRABAJO / NOTAS NATURALES
+        // ========================================================
+        // Si Dante pidió el contenido de una nota, la siguiente frase
+        // se guarda como contenido. La cancelación global ya tuvo prioridad.
+        if (notaPendienteDanteRef.current) {
+            notaPendienteDanteRef.current = false;
+            await guardarNotaNaturalDante(limpio);
+            return;
+        }
+
+        // Una sesión activa registra la conversación hasta que el usuario
+        // indique explícitamente que terminó o que desea guardarla.
+        if (sesionTrabajoDanteRef.current) {
+            if (esFinSesionTrabajoDante(limpio)) {
+                registrarUsuarioEnSesionDante(limpio);
+                await finalizarSesionTrabajoDante();
+                return;
+            }
+            registrarUsuarioEnSesionDante(limpio);
+        } else if (esInicioSesionTrabajoDante(limpio)) {
+            await iniciarSesionTrabajoDante(limpio);
+            return;
+        }
+
+        // Notas puntuales: acepta coincidencias naturales, no una sola frase.
+        if (!sesionTrabajoDanteRef.current && esSolicitudNotaDante(limpio)) {
+            const contenidoNota = extraerContenidoNotaNaturalDante(limpio);
+            await guardarNotaNaturalDante(contenidoNota);
+            return;
+        }
+
+        // ========================================================
+        // DANTE V7 - RECUPERAR / ABRIR / CONVERSAR / CONTINUAR SESIONES
+        // ========================================================
+        if (seleccionarMemoriaPendienteDante(limpio)) return;
+
+        if (esContinuarMemoriaRecuperadaDante(limpio)) {
+            continuarMemoriaRecuperadaDante();
+            return;
+        }
+
+        if (esSolicitudRecuperarSesionDante(limpio)) {
+            await buscarSesionGuardadaDante(limpio);
+            return;
+        }
+
+        if (esPreguntaSobreMemoriaActivaDante(limpio)) {
+            if (responderDesdeMemoriaActivaDante(limpio)) return;
+        }
+
+        // ========================================================
+        // DANTE V4 - RESOLVER SEGUIMIENTO NATURAL
+        // ========================================================
+        // Ej.: "¿y la IP?", "¿y de pagos?", "¿qué más sabes?".
+        // Se traduce a una consulta ya existente, conservando el cliente
+        // o router actual y sin tocar los flujos de acciones sensibles.
+        const continuacionNaturalDante =
+            resolverContinuacionNaturalDante(
+                limpio
+            );
+
+        if (continuacionNaturalDante) {
+            console.log(
+                "DANTE: continuación natural resuelta:",
+                limpio,
+                "=>",
+                continuacionNaturalDante
+            );
+
+            limpio =
+                continuacionNaturalDante;
+        }
+
+        texto =
+            normalizarTextoDante(
+                limpio
+            );
 
         const textoNormalizadoAlertasPago =
             texto;
@@ -14215,6 +15696,14 @@ export default function BotNotificaciones({
             if (seleccionProcesada) {
                 return;
             }
+        }
+
+        // ========================================================
+        // DANTE V10 - FINANZAS / CONTABILIDAD / CRM / PROMESAS DE PAGO
+        // ========================================================
+        const gestionIspProcesada = await procesarGestionIspDante(limpio);
+        if (gestionIspProcesada) {
+            return;
         }
 
         // ========================================================
@@ -14845,6 +16334,22 @@ export default function BotNotificaciones({
             );
 
 
+            return;
+        }
+
+        // ========================================================
+        // DANTE V5 - REVISAR MEMORIA / AGENDA COMPLETA
+        // ========================================================
+
+        if (esConsultaGeneralMemoriaDante(limpio)) {
+            await consultarResumenMemoriaDante(limpio);
+            return;
+        }
+
+        // ========================================================
+        // DANTE V9.5 - CONSULTA NATURAL DE NOTIFICACIONES
+        // ========================================================
+        if (procesarConsultaNotificacionesConversacionalDante(limpio)) {
             return;
         }
 
@@ -20246,7 +21751,7 @@ export default function BotNotificaciones({
         // ========================================================
 
         responderDante(
-            "Aún no está procesada esa información. Solicítalo a mi creador Jose. "
+            respuestaNoEntendidaNaturalDante()
         );
 
         console.log(
@@ -20880,13 +22385,20 @@ export default function BotNotificaciones({
         // 2. ES UNA CONTINUACIÓN SEGURA DEL CLIENTE ACTUAL
         // ====================================================
 
+        const esContinuacionNatural =
+            esSeguimientoConversacionalNaturalDante(
+                texto
+            );
+
         const puedeContinuarSinDante =
 
             contexto.esperandoRespuesta === true ||
 
             esperandoConfirmacionAlertasPagoDanteRef.current === true ||
 
-            esContinuacionCliente;
+            esContinuacionCliente ||
+
+            esContinuacionNatural;
 
 
         const posicion =
@@ -21355,20 +22867,17 @@ export default function BotNotificaciones({
         setEstadoDante("ESPERANDO_DANTE");
         estadoDanteRef.current = "ESPERANDO_DANTE";
 
-        try {
-            reconocimientoRef.current.start();
+        if (iniciarReconocimientoSeguro()) {
             console.log("🎤 DANTE: micrófono reactivado después del análisis técnico");
-        } catch (error: any) {
-            if (error?.name !== "InvalidStateError") {
-                console.error(
-                    "DANTE: error reactivando micrófono después del análisis:",
-                    error
-                );
-            }
         }
     }
 
     async function iniciarMicrofono() {
+
+        // Cada intento recibe un ID. Si aparece un intento más nuevo o el
+        // componente se desmonta, el anterior queda invalidado y no puede
+        // crear/reiniciar otra instancia de SpeechRecognition.
+        const inicioId = ++inicioMicrofonoIdRef.current;
 
         setErrorMicrofono("");
         // ====================================================
@@ -21438,6 +22947,11 @@ export default function BotNotificaciones({
                     (track) => track.stop()
                 );
 
+            if (inicioId !== inicioMicrofonoIdRef.current) {
+                console.log("🔇 DANTE: inicio de micrófono anterior cancelado");
+                return;
+            }
+
         } catch (error: any) {
 
             console.error(
@@ -21484,7 +22998,13 @@ export default function BotNotificaciones({
         }
 
 
-        await iniciarMedidorMicrofono();
+        // El medidor visual es independiente de SpeechRecognition.
+        // No debe bloquear el arranque del reconocimiento.
+        void iniciarMedidorMicrofono();
+
+        if (inicioId !== inicioMicrofonoIdRef.current) {
+            return;
+        }
 
         // ====================================================
         // SPEECH RECOGNITION
@@ -21554,12 +23074,8 @@ export default function BotNotificaciones({
                 );
 
 
-                // Asegurar que ninguna voz anterior
-                // deje bloqueado el reconocimiento.
-
-                danteHablandoRef.current =
-                    false;
-
+                // No modificar danteHablandoRef aquí: SpeechSynthesis
+                // es quien controla ese estado.
 
                 microfonoActivoRef.current =
                     true;
@@ -21654,6 +23170,21 @@ export default function BotNotificaciones({
                 // Solo aceptamos frases que COMIENCEN por "Dante".
                 // Cualquier otra conversación se ignora.
                 // ====================================================
+
+                // V9.5: aceptar una respuesta inmediata cuando la voz
+                // ya terminó realmente aunque el navegador aún no haya
+                // ejecutado el callback de liberación.
+                if (
+                    danteHablandoRef.current &&
+                    typeof window !== "undefined" &&
+                    "speechSynthesis" in window &&
+                    !window.speechSynthesis.speaking &&
+                    !window.speechSynthesis.pending
+                ) {
+                    danteHablandoRef.current = false;
+                    pausaReconocimientoPorVozDanteRef.current = false;
+                    interrupcionVozDanteRef.current = false;
+                }
 
                 if (
                     danteHablandoRef.current
@@ -21942,6 +23473,12 @@ export default function BotNotificaciones({
         recognition.onend =
             () => {
 
+                // Una instancia reemplazada nunca puede resucitarse.
+                if (reconocimientoRef.current !== recognition) {
+                    console.log("🔇 DANTE: fin de instancia anterior ignorado");
+                    return;
+                }
+
                 console.log(
                     "⏹️ Reconocimiento detenido"
                 );
@@ -21977,6 +23514,8 @@ export default function BotNotificaciones({
                             try {
 
                                 if (
+                                    reconocimientoRef.current !== recognition ||
+                                    inicioId !== inicioMicrofonoIdRef.current ||
                                     !microfonoActivoRef.current ||
                                     pausaReconocimientoPorVozDanteRef.current ||
                                     pausaMicrofonoAnalisisDanteRef.current
@@ -21991,7 +23530,10 @@ export default function BotNotificaciones({
                                 estadoDanteRef.current =
                                     "ESPERANDO_DANTE";
 
-                                recognition.start();
+                                iniciarReconocimientoSeguro(
+                                    recognition,
+                                    inicioId
+                                );
 
                             } catch (error: any) {
 
@@ -22027,7 +23569,10 @@ export default function BotNotificaciones({
                 true;
 
 
-            recognition.start();
+            iniciarReconocimientoSeguro(
+                recognition,
+                inicioId
+            );
 
 
         } catch (error) {
@@ -22139,8 +23684,14 @@ export default function BotNotificaciones({
 
         try {
 
-            const token =
+            const tokenGuardado =
                 getToken();
+
+            const token =
+                tokenGuardado
+                    ?.replace(/^Bearer\s+/i, "")
+                    .replace(/^"|"$/g, "")
+                    .trim();
 
 
             if (
@@ -22208,6 +23759,17 @@ export default function BotNotificaciones({
                 !res.ok ||
                 !data.ok
             ) {
+
+                console.error(
+                    "Error API notificaciones:",
+                    {
+                        status: res.status,
+                        statusText: res.statusText,
+                        message: data?.message || null,
+                        tokenPresente: true,
+                        tokenPartes: token.split(".").length,
+                    }
+                );
 
                 throw new Error(
 
@@ -22331,8 +23893,21 @@ export default function BotNotificaciones({
 
         try {
 
-            const token =
+            const tokenGuardado =
                 getToken();
+
+            const token =
+                tokenGuardado
+                    ?.replace(/^Bearer\s+/i, "")
+                    .replace(/^"|"$/g, "")
+                    .trim();
+
+            if (!token) {
+                console.warn(
+                    "No existe token para marcar notificaciones como vistas"
+                );
+                return;
+            }
 
 
             await fetch(
@@ -22457,17 +24032,17 @@ export default function BotNotificaciones({
             );
 
 
-            microfonoActivoRef.current =
-                false;
+            // Invalida cualquier iniciarMicrofono() que siga esperando
+            // getUserMedia/medidor durante desmontaje o Fast Refresh.
+            inicioMicrofonoIdRef.current += 1;
+            microfonoActivoRef.current = false;
 
+            const reconocimientoActual = reconocimientoRef.current;
+            reconocimientoRef.current = null;
 
             try {
-
-                reconocimientoRef.current
-                    ?.stop();
-
+                reconocimientoActual?.stop();
             } catch {
-
                 // Ignorar
             }
         };

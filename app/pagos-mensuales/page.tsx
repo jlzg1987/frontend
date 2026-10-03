@@ -184,6 +184,11 @@ export default function MensualidadesPage({
     } | null>(null);
 
 
+    const [resultadoPago, setResultadoPago] = useState<{
+        estado: 'ONLINE' | 'RECONECTADO' | 'SIN_VERIFICAR';
+        mensaje: string;
+    } | null>(null);
+
 
     function cambiarFormaPago(valor: string) {
 
@@ -807,19 +812,12 @@ export default function MensualidadesPage({
 
 
 
-            if (!respuesta?.ok) {
-
-                throw new Error(
-
-                    respuesta?.mensaje ||
-
-                    respuesta?.message ||
-
-                    "No se pudo registrar el pago"
-
-                );
-
-            }
+            setResultadoPago(
+                respuesta.resultadoServicio || {
+                    estado: 'SIN_VERIFICAR',
+                    mensaje: respuesta.message || 'Pago registrado correctamente',
+                }
+            );
 
 
 
@@ -2503,7 +2501,54 @@ export default function MensualidadesPage({
 
             )}
 
+            {resultadoPago && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4">
+                    <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 text-center shadow-2xl">
 
+                        <div
+                            className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full text-3xl ${resultadoPago.estado === 'RECONECTADO'
+                                    ? 'bg-emerald-500/20 text-emerald-400'
+                                    : resultadoPago.estado === 'ONLINE'
+                                        ? 'bg-cyan-500/20 text-cyan-400'
+                                        : 'bg-slate-700 text-slate-300'
+                                }`}
+                        >
+                            ✓
+                        </div>
+
+                        <h2 className="mb-2 text-xl font-bold text-white">
+                            Pago registrado correctamente
+                        </h2>
+
+                        <p
+                            className={`text-lg font-semibold ${resultadoPago.estado === 'RECONECTADO'
+                                    ? 'text-emerald-400'
+                                    : resultadoPago.estado === 'ONLINE'
+                                        ? 'text-cyan-400'
+                                        : 'text-slate-300'
+                                }`}
+                        >
+                            {resultadoPago.estado === 'RECONECTADO'
+                                ? 'Servicio reconectado'
+                                : resultadoPago.estado === 'ONLINE'
+                                    ? 'Servicio online'
+                                    : 'Pago procesado'}
+                        </p>
+
+                        <p className="mt-2 text-sm text-slate-400">
+                            {resultadoPago.mensaje}
+                        </p>
+
+                        <button
+                            type="button"
+                            onClick={() => setResultadoPago(null)}
+                            className="mt-6 w-full rounded-xl bg-emerald-600 px-4 py-3 font-bold text-white hover:bg-emerald-700"
+                        >
+                            Aceptar
+                        </button>
+                    </div>
+                </div>
+            )}
 
         </div>
 
