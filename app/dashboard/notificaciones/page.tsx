@@ -83,14 +83,6 @@ interface SpeechRecognitionConstructor {
 
 
 // ========================================================
-// DANTE V10 - GESTION ISP: FINANZAS / CONTABILIDAD / CRM / PROMESAS
-// ========================================================
-type GestionIspPendienteDante =
-    | { tipo: "CREAR_PROMESA"; mensualidadId: string; fechaPromesaPago: string; observacion: string | null; clienteNombre: string }
-    | { tipo: "CANCELAR_PROMESA"; promesaId: string; clienteNombre: string }
-    | null;
-
-// ========================================================
 // DANTE FASE 1H - MOTOR CENTRAL DE INTENCIONES
 // ========================================================
 // Esta capa NO reemplaza los comandos anteriores.
@@ -1095,16 +1087,204 @@ export default function BotNotificaciones({
     const contextoNotificacionesDanteRef =
         useRef<ContextoNotificacionesDante | null>(null);
 
-    // V9.6: puerta automática hacia LOS MISMOS flujos conversacionales
-    // de notificaciones. No crea un flujo paralelo ni modifica la
-    // notificación en backend si el usuario responde que no.
-    const entradaAutomaticaNotificacionDanteRef =
-        useRef<Notificacion | null>(null);
-
-    const gestionIspPendienteDanteRef = useRef<GestionIspPendienteDante>(null);
-
     const DANTE_NOTIFICACIONES_STORAGE_KEY =
         "dante_notificaciones_conocidas";
+
+    // ========================================================
+    // DANTE V10.1 - TIMER / CRONÓMETRO
+    // ========================================================
+
+    const timerDanteRef = useRef<{
+        timeoutId: ReturnType<typeof setTimeout> | null;
+        iniciadoEn: number;
+        terminaEn: number;
+        duracionMs: number;
+    } | null>(null);
+
+    const cronometroDanteRef = useRef<{
+        iniciadoEn: number;
+        acumuladoMs: number;
+        pausado: boolean;
+    } | null>(null);
+
+    function formatearDuracionDante(ms: number): string {
+        const totalSegundos = Math.max(0, Math.round(ms / 1000));
+        const horas = Math.floor(totalSegundos / 3600);
+        const minutos = Math.floor((totalSegundos % 3600) / 60);
+        const segundos = totalSegundos % 60;
+        const partes: string[] = [];
+
+        if (horas) partes.push(`${horas} ${horas === 1 ? "hora" : "horas"}`);
+        if (minutos) partes.push(`${minutos} ${minutos === 1 ? "minuto" : "minutos"}`);
+        if (segundos || !partes.length) partes.push(`${segundos} ${segundos === 1 ? "segundo" : "segundos"}`);
+
+        return partes.join(" y ");
+    }
+
+    function extraerDuracionTimerDante(textoOriginal: string): number | null {
+        const texto = normalizarTextoDante(textoOriginal)
+            .replace(/\b(un|una)\b/g, "1")
+            .replace(/\b(dos)\b/g, "2")
+            .replace(/\b(tres)\b/g, "3")
+            .replace(/\b(cinco)\b/g, "5")
+            .replace(/\b(diez)\b/g, "10");
+
+        let totalMs = 0;
+        let encontro = false;
+        const regex = /(\d+(?:[.,]\d+)?)\s*(horas?|hrs?|h|minutos?|mins?|min|segundos?|segs?|seg|s)\b/g;
+        let match: RegExpExecArray | null;
+
+        while ((match = regex.exec(texto)) !== null) {
+            const valor = Number(match[1].replace(",", "."));
+            const unidad = match[2];
+            if (!Number.isFinite(valor) || valor <= 0) continue;
+            encontro = true;
+            if (/^(hora|horas|hr|hrs|h)$/.test(unidad)) totalMs += valor * 3600000;
+            else if (/^(minuto|minutos|min|min|mins)$/.test(unidad)) totalMs += valor * 60000;
+            else totalMs += valor * 1000;
+        }
+
+        if (!encontro && /media hora/.test(texto)) return 30 * 60000;
+        if (!encontro && /medio minuto/.test(texto)) return 30 * 1000;
+        return encontro && totalMs > 0 ? Math.round(totalMs) : null;
+    }
+
+    function cancelarTimerDante(responder = true): boolean {
+        const timer = timerDanteRef.current;
+        if (!timer) {
+            if (responder) responderDante("No hay ningún timer activo.");
+            return false;
+        }
+        if (timer.timeoutId) clearTimeout(timer.timeoutId);
+        timerDanteRef.current = null;
+        if (responder) responderDante("Timer cancelado.");
+        return true;
+    }
+
+    function cancelarCronometroDante(responder = true): boolean {
+        const cronometro = cronometroDanteRef.current;
+        if (!cronometro) {
+            if (responder) responderDante("No hay ningún cronómetro activo.");
+            return false;
+        }
+        cronometroDanteRef.current = null;
+        if (responder) responderDante("Cronómetro cancelado.");
+        return true;
+    }
+
+    function iniciarTimerDante(duracionMs: number) {
+        cancelarTimerDante(false);
+        const ahora = Date.now();
+        const timeoutId = setTimeout(() => {
+            timerDanteRef.current = null;
+            const nombre = obtenerNombreUsuarioDante();
+            responderDante(`${nombre ? `${nombre}, ` : ""}terminó el timer de ${formatearDuracionDante(duracionMs)}.`);
+        }, duracionMs);
+
+        timerDanteRef.current = {
+            timeoutId,
+            iniciadoEn: ahora,
+            terminaEn: ahora + duracionMs,
+            duracionMs,
+        };
+        responderDante(`Listo. Timer de ${formatearDuracionDante(duracionMs)} iniciado. Te aviso cuando termine.`);
+    }
+
+    function tiempoCronometroDante(): number {
+        const cronometro = cronometroDanteRef.current;
+        if (!cronometro) return 0;
+        return cronometro.acumuladoMs + (cronometro.pausado ? 0 : Date.now() - cronometro.iniciadoEn);
+    }
+
+    function esComandoEspecificoTimerCronometroDante(textoOriginal: string): boolean {
+        const texto = normalizarTextoDante(textoOriginal).replace(/\bdante\b/g, " ").replace(/\s+/g, " ").trim();
+        return /\b(timer|temporizador|cronometro)\b/.test(texto);
+    }
+
+    function procesarTimerCronometroDante(textoOriginal: string): boolean {
+        const texto = normalizarTextoDante(textoOriginal).replace(/\bdante\b/g, " ").replace(/\s+/g, " ").trim();
+        const hablaTimer = /\b(timer|temporizador)\b/.test(texto);
+        const hablaCronometro = /\bcronometro\b/.test(texto);
+
+        // Cancelación específica: NO debe disparar la cancelación global.
+        if (hablaTimer && /\b(cancela|cancelar|cancelalo|elimina|quita|deten|detener|para)\b/.test(texto)) {
+            cancelarTimerDante(true);
+            return true;
+        }
+        if (hablaCronometro && /\b(cancela|cancelar|cancelalo|elimina|quita)\b/.test(texto)) {
+            cancelarCronometroDante(true);
+            return true;
+        }
+
+        // Timer / cuenta regresiva.
+        const pareceInicioTimer = hablaTimer || /\b(avisame|avisa me)\s+(en|dentro de)\b/.test(texto);
+        if (pareceInicioTimer && /\b(pon|poner|inicia|iniciar|activa|activar|empieza|empezar|avisame|avisa)\b/.test(texto)) {
+            const duracionMs = extraerDuracionTimerDante(texto);
+            if (!duracionMs) {
+                responderDante("Claro. ¿De cuánto tiempo quieres el timer? Puedes decir, por ejemplo, 10 minutos o 30 segundos.");
+                return true;
+            }
+            iniciarTimerDante(duracionMs);
+            return true;
+        }
+
+        if ((hablaTimer || /cuanto falta/.test(texto)) && /\b(cuanto|falta|queda|resta|tiempo)\b/.test(texto)) {
+            const timer = timerDanteRef.current;
+            if (!timer) responderDante("No hay ningún timer activo.");
+            else responderDante(`Al timer le quedan ${formatearDuracionDante(timer.terminaEn - Date.now())}.`);
+            return true;
+        }
+
+        // Cronómetro.
+        if (hablaCronometro && /\b(inicia|iniciar|arranca|arrancar|empieza|empezar|activa|activar)\b/.test(texto)) {
+            cronometroDanteRef.current = { iniciadoEn: Date.now(), acumuladoMs: 0, pausado: false };
+            responderDante("Cronómetro iniciado.");
+            return true;
+        }
+
+        if (hablaCronometro && /\b(pausa|pausar)\b/.test(texto)) {
+            const cronometro = cronometroDanteRef.current;
+            if (!cronometro) responderDante("No hay ningún cronómetro activo.");
+            else if (cronometro.pausado) responderDante("El cronómetro ya está pausado.");
+            else {
+                cronometro.acumuladoMs += Date.now() - cronometro.iniciadoEn;
+                cronometro.pausado = true;
+                responderDante(`Cronómetro pausado en ${formatearDuracionDante(cronometro.acumuladoMs)}.`);
+            }
+            return true;
+        }
+
+        if (hablaCronometro && /\b(continua|continuar|reanuda|reanudar|sigue|seguir)\b/.test(texto)) {
+            const cronometro = cronometroDanteRef.current;
+            if (!cronometro) responderDante("No hay ningún cronómetro para continuar.");
+            else if (!cronometro.pausado) responderDante("El cronómetro ya está corriendo.");
+            else {
+                cronometro.iniciadoEn = Date.now();
+                cronometro.pausado = false;
+                responderDante("Cronómetro reanudado.");
+            }
+            return true;
+        }
+
+        if (hablaCronometro && /\b(deten|detener|para|parar|finaliza|finalizar)\b/.test(texto)) {
+            const cronometro = cronometroDanteRef.current;
+            if (!cronometro) responderDante("No hay ningún cronómetro activo.");
+            else {
+                const transcurrido = tiempoCronometroDante();
+                cronometroDanteRef.current = null;
+                responderDante(`Cronómetro detenido. Tiempo final: ${formatearDuracionDante(transcurrido)}.`);
+            }
+            return true;
+        }
+
+        if (hablaCronometro && /\b(cuanto|lleva|tiempo|marca|va)\b/.test(texto)) {
+            if (!cronometroDanteRef.current) responderDante("No hay ningún cronómetro activo.");
+            else responderDante(`El cronómetro lleva ${formatearDuracionDante(tiempoCronometroDante())}.`);
+            return true;
+        }
+
+        return false;
+    }
 
 
     async function enviarTextoDante() {
@@ -1143,6 +1323,10 @@ export default function BotNotificaciones({
         // ====================================================
 
         procesoDanteIdRef.current += 1;
+
+        // V10.1: la cancelación global también detiene timer y cronómetro.
+        cancelarTimerDante(false);
+        cancelarCronometroDante(false);
 
 
         // ====================================================
@@ -1234,9 +1418,6 @@ export default function BotNotificaciones({
             null;
 
         contextoNotificacionesDanteRef.current =
-            null;
-
-        entradaAutomaticaNotificacionDanteRef.current =
             null;
 
         // Cancelar cualquier confirmación de alertas y su timeout
@@ -2680,61 +2861,6 @@ export default function BotNotificaciones({
     }
 
     // ========================================================
-    // DANTE V9.6 - ENTRADA AUTOMÁTICA A FLUJOS EXISTENTES
-    // ========================================================
-
-    function describirTipoEntradaAutomaticaDante(item: Notificacion): string {
-        if (esNotificacionEquipoNuevoDante(item)) return "de un equipo nuevo";
-        if (esNotificacionMantenimientoDante(item)) return "de mantenimiento";
-        if (item.nivel === "CRITICA") return "crítica";
-        return "nueva";
-    }
-
-    function entrarFlujoExistenteDesdeNotificacionDante(item: Notificacion): void {
-        entradaAutomaticaNotificacionDanteRef.current = null;
-
-        let filtro: ContextoNotificacionesDante["filtro"] = "TODAS";
-        if (esNotificacionEquipoNuevoDante(item)) filtro = "EQUIPOS_NUEVOS";
-        else if (esNotificacionMantenimientoDante(item)) filtro = "MANTENIMIENTO";
-        else if (item.nivel === "CRITICA") filtro = "CRITICAS";
-
-        // Reutilizamos exactamente el contexto y seguimiento V9.5.
-        guardarContextoNotificacionesDante([item], filtro);
-        contextoNotificacionesDanteRef.current!.indiceActual = 0;
-
-        let continuidad = "Puedo seguir revisando esta notificación contigo.";
-        if (esNotificacionEquipoNuevoDante(item)) {
-            continuidad = "Entramos al flujo de equipos nuevos. Si quieres, dime agrégalo o regístralo para continuar con este mismo equipo.";
-        } else if (esNotificacionMantenimientoDante(item)) {
-            continuidad = "Entramos al flujo de mantenimiento. Si quieres, dime vamos a revisarlo para continuar con esta misma notificación.";
-        } else if (item.nivel === "CRITICA") {
-            continuidad = "Entramos a la revisión de esta notificación crítica. Puedo continuar con ella o abrir las alertas para atenderla.";
-        }
-
-        responderDante(`${descripcionNotificacionDante(item)} ${continuidad}`);
-    }
-
-    function procesarEntradaAutomaticaNotificacionDante(textoOriginal: string): boolean {
-        const pendiente = entradaAutomaticaNotificacionDanteRef.current;
-        if (!pendiente) return false;
-
-        if (esSiDante(textoOriginal)) {
-            entrarFlujoExistenteDesdeNotificacionDante(pendiente);
-            return true;
-        }
-
-        if (esNoDante(textoOriginal)) {
-            // Solo abandonamos esta puerta conversacional. La notificación
-            // queda intacta en la bandeja: no VISTA, no RESUELTA, no borrada.
-            entradaAutomaticaNotificacionDanteRef.current = null;
-            responderDante("De acuerdo. La dejo pendiente en la bandeja y no hago ningún cambio.");
-            return true;
-        }
-
-        return false;
-    }
-
-    // ========================================================
     // DANTE - AVISAR NOTIFICACIONES NUEVAS
     // ========================================================
 
@@ -2862,28 +2988,76 @@ export default function BotNotificaciones({
 
 
         // ====================================================
-        // ELEGIR LA NOTIFICACIÓN PRIORITARIA PARA LA ENTRADA
-        // CONVERSACIONAL. No se modifica su estado en backend.
+        // GENERAR MENSAJE DE DANTE
         // ====================================================
+
+        const mensajes =
+            ordenadas
+                .slice(0, 3)
+                .map(
+                    (notificacion) => {
+
+                        const titulo =
+                            String(
+                                notificacion.titulo ||
+                                "Notificación"
+                            ).trim();
+
+                        const mensaje =
+                            String(
+                                notificacion.mensaje ||
+                                ""
+                            ).trim();
+
+                        let encabezado =
+                            "Nueva notificación.";
+
+                        if (
+                            notificacion.nivel === "CRITICA"
+                        ) {
+                            encabezado =
+                                "Atención. Nueva notificación crítica.";
+                        } else if (
+                            notificacion.nivel === "ADVERTENCIA"
+                        ) {
+                            encabezado =
+                                "Aviso. Nueva advertencia.";
+                        } else if (
+                            notificacion.nivel === "INFO"
+                        ) {
+                            encabezado =
+                                "Nueva notificación informativa.";
+                        }
+
+                        return (
+                            `${encabezado} ${titulo}.` +
+                            (
+                                mensaje
+                                    ? ` ${mensaje}.`
+                                    : ""
+                            )
+                        );
+                    }
+                );
+
+
+        if (
+            ordenadas.length > 3
+        ) {
+
+            mensajes.push(
+                `Además tienes ${ordenadas.length - 3} notificaciones nuevas adicionales.`
+            );
+        }
+
 
         console.log(
             "DANTE: NUEVAS NOTIFICACIONES:",
             ordenadas
         );
 
-        // V9.6: una notificación nueva es solamente otra puerta de entrada.
-        // Guardamos la prioritaria como pendiente y preguntamos si se desea
-        // revisarla. Si responde sí, se deriva al flujo V9.5 correspondiente.
-        const prioritaria = ordenadas[0];
-        entradaAutomaticaNotificacionDanteRef.current = prioritaria;
-
-        const nombre = obtenerNombreUsuarioDante();
-        const saludo = nombre ? `${nombre}, ` : "";
-        const tipoEntrada = describirTipoEntradaAutomaticaDante(prioritaria);
-        const titulo = String(prioritaria.titulo || "Notificación").trim();
-
         responderDante(
-            `${saludo}llegó una notificación ${tipoEntrada}. ${titulo}. ¿Quieres revisarla?`
+            mensajes.join(" ")
         );
     }
 
@@ -11688,6 +11862,18 @@ export default function BotNotificaciones({
         );
     }
     // ========================================================
+    // DANTE V10.1 - LIMPIEZA TIMER AL DESMONTAR
+    // ========================================================
+    useEffect(() => {
+        return () => {
+            const timer = timerDanteRef.current;
+            if (timer?.timeoutId) clearTimeout(timer.timeoutId);
+            timerDanteRef.current = null;
+            cronometroDanteRef.current = null;
+        };
+    }, []);
+
+    // ========================================================
     // SINCRONIZAR REF ESTADO
     // ========================================================
 
@@ -12895,196 +13081,6 @@ export default function BotNotificaciones({
         }
 
         return servicioClienteDanteRef.current;
-    }
-
-    // ========================================================
-    // DANTE V10 - GESTION CONVERSACIONAL DE LAS 4 AREAS ISP
-    // Reutiliza exactamente los endpoints de las paginas existentes.
-    // ========================================================
-    async function apiGestionIspDante(path: string, init: RequestInit = {}) {
-        const headers = new Headers(init.headers);
-        if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-        headers.set("Authorization", `Bearer ${getToken()}`);
-        const respuesta = await fetch(`${API_BASE}${path}`, { ...init, headers, cache: "no-store" });
-        const data = await respuesta.json().catch(() => ({}));
-        if (!respuesta.ok) throw new Error(data?.message || data?.error || "No pude completar la consulta");
-        return data;
-    }
-
-    function dineroDante(valor: any) {
-        return new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD" }).format(Number(valor || 0));
-    }
-
-    function nombreClienteGestionDante(cliente: any) {
-        return `${cliente?.nombres || cliente?.nombre || ""} ${cliente?.apellidos || cliente?.apellido || ""}`.replace(/\s+/g, " ").trim();
-    }
-
-    function extraerFechaGestionDante(textoOriginal: string): string | null {
-        const texto = normalizarTextoDante(textoOriginal);
-        const iso = textoOriginal.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
-        if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
-        const latam = textoOriginal.match(/\b(\d{1,2})[\/-](\d{1,2})[\/-](20\d{2})\b/);
-        if (latam) return `${latam[3]}-${latam[2].padStart(2, "0")}-${latam[1].padStart(2, "0")}`;
-        const hoy = new Date();
-        if (/\bmanana\b/.test(texto)) {
-            hoy.setDate(hoy.getDate() + 1);
-            return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
-        }
-        if (/\bhoy\b/.test(texto)) {
-            return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`;
-        }
-        return null;
-    }
-
-    async function obtenerClienteGestionDante(textoOriginal: string) {
-        if (servicioClienteDanteRef.current) return servicioClienteDanteRef.current;
-        const consulta = extraerEntidadClienteNaturalDante(textoOriginal);
-        if (consulta) await buscarClienteDante(consulta);
-        return servicioClienteDanteRef.current;
-    }
-
-    async function procesarConfirmacionGestionIspDante(textoOriginal: string): Promise<boolean> {
-        const pendiente = gestionIspPendienteDanteRef.current;
-        if (!pendiente) return false;
-        if (!esSiDante(textoOriginal) && !esNoDante(textoOriginal)) {
-            responderDante("Tengo una acción pendiente. Respóndeme sí para confirmarla o no para dejarla sin cambios.");
-            return true;
-        }
-        if (esNoDante(textoOriginal)) {
-            gestionIspPendienteDanteRef.current = null;
-            responderDante("De acuerdo. No hice ningún cambio.");
-            return true;
-        }
-        try {
-            if (pendiente.tipo === "CREAR_PROMESA") {
-                await apiGestionIspDante("/promesas-pago", {
-                    method: "POST",
-                    body: JSON.stringify({ mensualidadId: pendiente.mensualidadId, fechaPromesaPago: pendiente.fechaPromesaPago, observacion: pendiente.observacion }),
-                });
-                responderDante(`Listo. Registré la promesa de pago de ${pendiente.clienteNombre} para el ${pendiente.fechaPromesaPago}.`);
-            } else if (pendiente.tipo === "CANCELAR_PROMESA") {
-                await apiGestionIspDante(`/promesas-pago/${pendiente.promesaId}/cancelar`, {
-                    method: "PATCH",
-                    body: JSON.stringify({ motivo: "Cancelada mediante Dante" }),
-                });
-                responderDante(`Listo. Cancelé la promesa de pago de ${pendiente.clienteNombre}.`);
-            }
-        } catch (error: any) {
-            responderDante(`No pude completar la acción. ${error?.message || "Revisa los datos e inténtalo nuevamente."}`);
-        } finally {
-            gestionIspPendienteDanteRef.current = null;
-        }
-        return true;
-    }
-
-    async function procesarGestionIspDante(textoOriginal: string): Promise<boolean> {
-        const texto = normalizarTextoDante(textoOriginal);
-        const mencionaFinanzas = /\b(finanza|finanzas|facturado|cobrado|cartera|utilidad|gastos|ingresos)\b/.test(texto);
-        const mencionaContabilidad = /\b(contabilidad|contable|balance|estado de resultados|asientos|cuentas contables|balance de comprobacion)\b/.test(texto);
-        const mencionaCrm = /\b(crm|seguimiento|interaccion|interacciones|tarea crm|tareas crm|oportunidad|oportunidades|perfil 360|360)\b/.test(texto);
-        const mencionaPromesa = /\b(promesa|promesas)\b.*\b(pago|pagos)\b|\b(pago|pagos)\b.*\b(promesa|promesas)\b/.test(texto);
-        if (!mencionaFinanzas && !mencionaContabilidad && !mencionaCrm && !mencionaPromesa) return false;
-
-        try {
-            // ---------------- FINANZAS ISP ----------------
-            if (mencionaFinanzas) {
-                const ahora = new Date();
-                const periodoEncontrado = textoOriginal.match(/\b(20\d{2})-(0[1-9]|1[0-2])\b/);
-                const periodo = periodoEncontrado?.[0] || `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}`;
-                const data = await apiGestionIspDante(`/finanzas-isp/resumen?periodo=${encodeURIComponent(periodo)}`);
-                responderDante(`Finanzas de ${periodo}: facturado ${dineroDante(data?.ingresos?.facturado)}, cobrado ${dineroDante(data?.ingresos?.cobrado)}, cartera ${dineroDante(data?.ingresos?.cartera)}, gastos pagados ${dineroDante(data?.gastos?.pagados)} y utilidad operativa ${dineroDante(data?.resultado?.utilidadOperativa)}.`);
-                return true;
-            }
-
-            // ---------------- CONTABILIDAD ISP ----------------
-            if (mencionaContabilidad) {
-                const ahora = new Date();
-                const desdeDefault = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-01`;
-                const hastaDefault = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")}`;
-                const fechas = [...textoOriginal.matchAll(/\b(20\d{2}-\d{2}-\d{2})\b/g)].map(m => m[1]);
-                const desde = fechas[0] || desdeDefault, hasta = fechas[1] || hastaDefault;
-                if (/balance general/.test(texto)) {
-                    const d = await apiGestionIspDante(`/contabilidad-isp/reportes/balance-general?desde=${desde}&hasta=${hasta}`);
-                    const a = d?.totales?.activo ?? d?.activo ?? d?.activos ?? 0;
-                    const p = d?.totales?.pasivo ?? d?.pasivo ?? d?.pasivos ?? 0;
-                    const pt = d?.totales?.patrimonio ?? d?.patrimonio ?? 0;
-                    responderDante(`Balance general del ${desde} al ${hasta}: activos ${dineroDante(a)}, pasivos ${dineroDante(p)} y patrimonio ${dineroDante(pt)}.`);
-                } else if (/estado de resultados|resultado/.test(texto)) {
-                    const d = await apiGestionIspDante(`/contabilidad-isp/reportes/estado-resultados?desde=${desde}&hasta=${hasta}`);
-                    responderDante(`Estado de resultados del ${desde} al ${hasta}: ingresos ${dineroDante(d?.totales?.ingresos ?? d?.ingresos)}, gastos ${dineroDante(d?.totales?.gastos ?? d?.gastos)} y resultado ${dineroDante(d?.totales?.resultado ?? d?.resultado ?? d?.utilidad)}.`);
-                } else {
-                    const [c, p, a] = await Promise.all([apiGestionIspDante("/contabilidad-isp/cuentas"), apiGestionIspDante("/contabilidad-isp/periodos"), apiGestionIspDante("/contabilidad-isp/asientos")]);
-                    responderDante(`Contabilidad: tengo ${(c?.cuentas || []).length} cuentas contables, ${(p?.periodos || []).length} períodos y ${(a?.asientos || []).length} asientos registrados. Puedes pedirme el balance general o el estado de resultados.`);
-                }
-                return true;
-            }
-
-            // ---------------- CRM CLIENTES ----------------
-            if (mencionaCrm) {
-                if (/oportunidad|oportunidades/.test(texto) && !/cliente|de /.test(texto)) {
-                    const d = await apiGestionIspDante("/crm/oportunidades");
-                    const ops = d?.oportunidades || [];
-                    if (!ops.length) responderDante("No hay oportunidades CRM registradas en este momento.");
-                    else responderDante(`Tengo ${ops.length} oportunidades CRM. ${ops.slice(0, 5).map((o: any, i: number) => `${i + 1}, ${nombreClienteGestionDante(o) || "cliente"}: ${o.nombre || "oportunidad"}, etapa ${o.etapa || "sin etapa"}, valor ${dineroDante(o.valor_estimado)}`).join(". ")}.`);
-                    return true;
-                }
-                const cliente = await obtenerClienteGestionDante(textoOriginal);
-                const clienteId = cliente?.clienteId;
-                if (!clienteId) {
-                    responderDante("Para trabajar con CRM, dime primero el nombre, cédula, teléfono o IP del cliente.");
-                    return true;
-                }
-                const nombre = nombreClienteGestionDante(cliente) || "el cliente";
-                const perfil = await apiGestionIspDante(`/crm/clientes/${clienteId}/360`);
-                const p = perfil?.perfil || perfil;
-                responderDante(`CRM de ${nombre}: ${(p?.interacciones || []).length} interacciones, ${(p?.tareas || []).filter((t: any) => normalizarTextoDante(t?.estado || "") !== "completada").length} tareas pendientes y ${(p?.oportunidades || []).length} oportunidades. Puedes pedirme sus tareas, interacciones u oportunidades.`);
-                return true;
-            }
-
-            // ---------------- PROMESAS DE PAGO ----------------
-            if (mencionaPromesa) {
-                if (/crear|crea|registrar|registra|hacer|haz/.test(texto)) {
-                    const cliente = await obtenerClienteGestionDante(textoOriginal);
-                    if (!cliente?.clienteId) {
-                        responderDante("Dime primero a qué cliente deseas registrar la promesa de pago.");
-                        return true;
-                    }
-                    const fecha = extraerFechaGestionDante(textoOriginal);
-                    if (!fecha) {
-                        responderDante("Indícame la fecha de la promesa, por ejemplo mañana o 2026-10-10.");
-                        return true;
-                    }
-                    const d = await apiGestionIspDante(`/promesas-pago/mensualidades-cliente/${cliente.clienteId}`);
-                    const mensualidades = (d?.mensualidades || []).filter((m: any) => !["PAGADA", "PAGADO", "ANULADA", "CANCELADA"].includes(String(m?.estado || "").toUpperCase()));
-                    if (!mensualidades.length) {
-                        responderDante(`${nombreClienteGestionDante(cliente)} no tiene mensualidades pendientes disponibles para crear una promesa.`);
-                        return true;
-                    }
-                    if (mensualidades.length > 1) {
-                        responderDante(`${nombreClienteGestionDante(cliente)} tiene ${mensualidades.length} mensualidades pendientes. Para evitar registrar la promesa en una mensualidad equivocada, entra a Promesas de Pago y selecciona la mensualidad correspondiente.`);
-                        return true;
-                    }
-                    const m = mensualidades[0];
-                    gestionIspPendienteDanteRef.current = { tipo: "CREAR_PROMESA", mensualidadId: String(m.mensualidadId), fechaPromesaPago: fecha, observacion: "Registrada mediante Dante", clienteNombre: nombreClienteGestionDante(cliente) };
-                    responderDante(`${nombreClienteGestionDante(cliente)} tiene la mensualidad ${m.periodo || m.mensualidadId} pendiente por ${dineroDante(m.valorMensualidad)}. Voy a registrar la promesa para el ${fecha}. ¿Confirmas?`);
-                    return true;
-                }
-
-                const d = await apiGestionIspDante("/promesas-pago");
-                let promesas = d?.promesas || [];
-                if (/incumplid/.test(texto)) promesas = promesas.filter((x: any) => String(x.estado).toUpperCase() === "INCUMPLIDA");
-                else if (/activ/.test(texto) || /pendiente/.test(texto)) promesas = promesas.filter((x: any) => String(x.estado).toUpperCase() === "ACTIVA");
-                const actual = servicioClienteDanteRef.current;
-                if (actual && /cliente|este|esta|su /.test(texto)) promesas = promesas.filter((x: any) => String(x.clienteId || x.cliente_id || "") === String(actual.clienteId));
-                if (!promesas.length) responderDante("No encontré promesas de pago que coincidan con esa consulta.");
-                else responderDante(`Encontré ${promesas.length} promesas. ${promesas.slice(0, 5).map((x: any, i: number) => `${i + 1}, ${nombreClienteGestionDante(x) || "cliente"}, ${x.periodo || "sin período"}, fecha ${String(x.fechaPromesaPago || "").slice(0, 10)}, estado ${x.estado || "sin estado"}`).join(". ")}.`);
-                return true;
-            }
-        } catch (error: any) {
-            responderDante(`No pude completar esa gestión. ${error?.message || "Inténtalo nuevamente."}`);
-            return true;
-        }
-        return false;
     }
 
     async function ejecutarIntencionCentralDante(
@@ -15297,10 +15293,26 @@ export default function BotNotificaciones({
             );
 
         // ========================================================
+        // DANTE V10.1 - TIMER / CRONÓMETRO
+        // La cancelación específica debe resolverse antes de la global:
+        // "cancela timer" no debe cerrar los demás flujos de Dante.
+        // ========================================================
+        if (esComandoEspecificoTimerCronometroDante(limpio)) {
+            const procesadoTiempo = procesarTimerCronometroDante(limpio);
+            if (procesadoTiempo) return;
+        }
+
+        // "Avísame en 5 minutos" también se interpreta como timer.
+        if (/\b(avisame|avisa me)\s+(en|dentro de)\b/.test(texto)) {
+            const procesadoTiempo = procesarTimerCronometroDante(limpio);
+            if (procesadoTiempo) return;
+        }
+
+        // ========================================================
         // DANTE - CANCELACIÓN GLOBAL ABSOLUTA
         // ========================================================
-        // ESTE BLOQUE DEBE SER EL PRIMER INTÉRPRETE DE COMANDOS.
-        // Nada tiene prioridad sobre "cancelar".
+        // "Dante cancela" sigue siendo absoluto. Las cancelaciones
+        // específicas de timer/cronómetro ya fueron atendidas arriba.
         // ========================================================
 
         if (
@@ -15321,17 +15333,6 @@ export default function BotNotificaciones({
             const procesadoDiagnosticoActivo =
                 await procesarFlujoDiagnosticoInternetDante(limpio);
             if (procesadoDiagnosticoActivo) return;
-        }
-
-        // V9.6: respuesta sí/no a la puerta automática. No ejecuta un
-        // flujo nuevo: deriva a los mismos flujos V9.5 ya existentes.
-        if (procesarEntradaAutomaticaNotificacionDante(limpio)) {
-            return;
-        }
-
-        // DANTE V10: confirmaciones de escritura para las nuevas áreas ISP.
-        if (await procesarConfirmacionGestionIspDante(limpio)) {
-            return;
         }
 
         // V9.5: si acabamos de listar notificaciones, interpretar la
@@ -15696,14 +15697,6 @@ export default function BotNotificaciones({
             if (seleccionProcesada) {
                 return;
             }
-        }
-
-        // ========================================================
-        // DANTE V10 - FINANZAS / CONTABILIDAD / CRM / PROMESAS DE PAGO
-        // ========================================================
-        const gestionIspProcesada = await procesarGestionIspDante(limpio);
-        if (gestionIspProcesada) {
-            return;
         }
 
         // ========================================================
