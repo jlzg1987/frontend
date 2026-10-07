@@ -192,7 +192,7 @@ export default function PoliticaPrivacidadPage() {
                         </Link>
 
                         <Link
-                            href="/terminos-y-condiciones"
+                            href="/documentacion/terminos-condiciones"
                             className="rounded-xl border border-slate-700 bg-slate-900 px-5 py-3 font-bold text-slate-200 transition hover:border-cyan-500/60"
                         >
                             Ver términos y condiciones
