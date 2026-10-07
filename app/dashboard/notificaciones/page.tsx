@@ -15176,6 +15176,59 @@ export default function BotNotificaciones({
             }
 
             // ========================================================
+            // DANTE CORE v3.0 - TIMER / CRONÓMETRO
+            // Core interpreta la intención. El reloj sigue ejecutándose en
+            // el navegador para que la alarma pueda dispararse sin depender
+            // de una nueva petición al servidor.
+            // ========================================================
+            const timeAction = String(data?.data?.timeAction || "");
+            if (timeAction) {
+                if (timeAction === "TIMER_INICIAR") {
+                    const duracionMs = Number(data?.data?.duracionMs || 0);
+                    if (duracionMs > 0) iniciarTimerDante(duracionMs);
+                    else responderDante("No pude identificar la duración del timer.");
+                    return true;
+                }
+                if (timeAction === "TIMER_CANCELAR") { cancelarTimerDante(true); return true; }
+                if (timeAction === "TIMER_ESTADO") {
+                    const timer = timerDanteRef.current;
+                    if (!timer) responderDante("No hay ningún timer activo.");
+                    else responderDante(`Al timer le quedan ${formatearDuracionDante(timer.terminaEn - Date.now())}.`);
+                    return true;
+                }
+                if (timeAction === "CRONOMETRO_INICIAR") {
+                    cronometroDanteRef.current = { iniciadoEn: Date.now(), acumuladoMs: 0, pausado: false };
+                    responderDante("Cronómetro iniciado."); return true;
+                }
+                if (timeAction === "CRONOMETRO_PAUSAR") {
+                    const c = cronometroDanteRef.current;
+                    if (!c) responderDante("No hay ningún cronómetro activo.");
+                    else if (c.pausado) responderDante("El cronómetro ya está pausado.");
+                    else { c.acumuladoMs += Date.now() - c.iniciadoEn; c.pausado = true; responderDante(`Cronómetro pausado en ${formatearDuracionDante(c.acumuladoMs)}.`); }
+                    return true;
+                }
+                if (timeAction === "CRONOMETRO_REANUDAR") {
+                    const c = cronometroDanteRef.current;
+                    if (!c) responderDante("No hay ningún cronómetro para continuar.");
+                    else if (!c.pausado) responderDante("El cronómetro ya está corriendo.");
+                    else { c.iniciadoEn = Date.now(); c.pausado = false; responderDante("Cronómetro reanudado."); }
+                    return true;
+                }
+                if (timeAction === "CRONOMETRO_DETENER") {
+                    const c = cronometroDanteRef.current;
+                    if (!c) responderDante("No hay ningún cronómetro activo.");
+                    else { const ms = tiempoCronometroDante(); cronometroDanteRef.current = null; responderDante(`Cronómetro detenido. Tiempo final: ${formatearDuracionDante(ms)}.`); }
+                    return true;
+                }
+                if (timeAction === "CRONOMETRO_CANCELAR") { cancelarCronometroDante(true); return true; }
+                if (timeAction === "CRONOMETRO_ESTADO") {
+                    if (!cronometroDanteRef.current) responderDante("No hay ningún cronómetro activo.");
+                    else responderDante(`El cronómetro lleva ${formatearDuracionDante(tiempoCronometroDante())}.`);
+                    return true;
+                }
+            }
+
+            // ========================================================
             // DANTE CORE v2.9 - AGENDA / RECORDATORIOS
             // Core interpreta la intención y resuelve fecha/hora.
             // Durante la migración, NetcomRF conserva el guardado físico
@@ -15292,12 +15345,18 @@ export default function BotNotificaciones({
         // "cancela timer" no debe cerrar los demás flujos de Dante.
         // ========================================================
         if (esComandoEspecificoTimerCronometroDante(limpio)) {
+            // v3.0: Core interpreta primero. Si Core no está disponible o no
+            // reconoce la frase, conservamos el motor local como fallback.
+            const procesadoTiempoCore = await procesarConDanteCore(limpio);
+            if (procesadoTiempoCore) return;
             const procesadoTiempo = procesarTimerCronometroDante(limpio);
             if (procesadoTiempo) return;
         }
 
-        // "Avísame en 5 minutos" también se interpreta como timer.
+        // "Avísame en 5 minutos" también pasa primero por Core.
         if (/\b(avisame|avisa me)\s+(en|dentro de)\b/.test(texto)) {
+            const procesadoTiempoCore = await procesarConDanteCore(limpio);
+            if (procesadoTiempoCore) return;
             const procesadoTiempo = procesarTimerCronometroDante(limpio);
             if (procesadoTiempo) return;
         }
