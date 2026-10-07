@@ -873,6 +873,11 @@ export default function BotNotificaciones({
     const servicioClienteDanteRef =
         useRef<ServicioClienteDante | null>(null);
 
+    // Conversación mantenida por Dante Core.
+    // El frontend solo conserva el identificador opaco de la sesión.
+    const conversacionDanteCoreIdRef =
+        useRef<string | null>(null);
+
 
     // ========================================================
     // ROUTER MIKROTIK ACTUAL EN CONTEXTO DE DANTE
@@ -8893,150 +8898,56 @@ export default function BotNotificaciones({
     async function buscarClienteDante(
         terminoBusqueda: string
     ) {
-
-        const termino =
-            normalizarTextoDante(
-                terminoBusqueda
-            );
+        const termino = normalizarTextoDante(terminoBusqueda);
 
         if (!termino) {
-
             responderDante(
                 "Indícame el nombre, cédula, teléfono o IP del cliente."
             );
-
             return;
         }
 
         try {
+            responderDante(`Buscando al cliente ${terminoBusqueda}.`);
 
-            responderDante(
-                `Buscando al cliente ${terminoBusqueda}.`
+            const token = getToken();
+
+            const res = await fetch(
+                `${API_BASE}/dante-core/clientes/buscar?q=${encodeURIComponent(terminoBusqueda)}`,
+                {
+                    headers: token
+                        ? { Authorization: `Bearer ${token}` }
+                        : {},
+                    cache: "no-store",
+                }
             );
 
+            const data = await res.json();
 
-            const res =
-                await fetch(
-                    `${API_BASE}/cliente-servicio`
-                );
-
-
-            const data =
-                await res.json();
-
-
-            if (
-                !res.ok ||
-                data.ok === false
-            ) {
-
+            if (!res.ok || data.ok === false) {
                 responderDante(
-                    "No pude consultar los servicios de clientes."
+                    data?.message || "No pude consultar los clientes."
                 );
-
                 return;
             }
 
-
-            const servicios:
-                ServicioClienteDante[] =
-                Array.isArray(data.servicios)
-                    ? data.servicios
+            const coincidencias: ServicioClienteDante[] =
+                Array.isArray(data.clientes)
+                    ? data.clientes
                     : [];
 
-
-            // ====================================================
-            // BUSCAR COINCIDENCIAS
-            // ====================================================
-            const coincidencias =
-                servicios.filter(
-                    (servicio) => {
-
-                        const nombreCompleto =
-                            `${servicio.nombres || ""} ${servicio.apellidos || ""}`;
-
-
-                        const cedula =
-                            normalizarTextoDante(
-                                servicio.cedula || ""
-                            );
-
-
-                        const telefono =
-                            normalizarTextoDante(
-                                servicio.telefono || ""
-                            );
-
-
-                        const email =
-                            normalizarTextoDante(
-                                servicio.email || ""
-                            );
-
-
-                        const ip =
-                            normalizarTextoDante(
-                                servicio.ipCliente || ""
-                            );
-
-
-                        const pppoe =
-                            normalizarTextoDante(
-                                servicio.pppSecret || ""
-                            );
-
-
-                        const coincideNombre =
-                            nombreCoincideDante(
-                                termino,
-                                nombreCompleto
-                            );
-
-
-                        return (
-                            coincideNombre ||
-                            cedula.includes(termino) ||
-                            telefono.includes(termino) ||
-                            email.includes(termino) ||
-                            ip.includes(termino) ||
-                            pppoe.includes(termino)
-                        );
-                    }
-                );
-
-            // ====================================================
-            // NO ENCONTRADO
-            // ====================================================
-
-            if (
-                coincidencias.length === 0
-            ) {
-
-                servicioClienteDanteRef.current =
-                    null;
-
-                clientesPendientesSeleccionDanteRef.current =
-                    [];
-
+            if (coincidencias.length === 0) {
+                servicioClienteDanteRef.current = null;
+                clientesPendientesSeleccionDanteRef.current = [];
 
                 responderDante(
                     `No encontré ningún cliente que coincida con ${terminoBusqueda}.`
                 );
-
                 return;
             }
 
-
-            // ====================================================
-            // VARIAS COINCIDENCIAS
-            // ====================================================
-
-            if (
-                coincidencias.length > 1
-            ) {
-
-                clientesPendientesSeleccionDanteRef.current =
-                    coincidencias;
+            if (coincidencias.length > 1) {
+                clientesPendientesSeleccionDanteRef.current = coincidencias;
 
                 actualizarContextoDante({
                     tema: "CLIENTE",
@@ -9045,14 +8956,13 @@ export default function BotNotificaciones({
                     datoPendiente: "SELECCION_CLIENTE",
                 });
 
-                const opciones =
-                    coincidencias
-                        .slice(0, 9)
-                        .map(
-                            (servicio, index) =>
-                                `${index + 1}. ${servicio.nombres || ""} ${servicio.apellidos || ""}`.trim()
-                        )
-                        .join(". ");
+                const opciones = coincidencias
+                    .slice(0, 9)
+                    .map(
+                        (servicio, index) =>
+                            `${index + 1}. ${servicio.nombres || ""} ${servicio.apellidos || ""}`.trim()
+                    )
+                    .join(". ");
 
                 const adicionales =
                     coincidencias.length > 9
@@ -9064,85 +8974,35 @@ export default function BotNotificaciones({
                     `Te los muestro para que elijas: ${opciones}. ` +
                     `${adicionales} ¿Cuál deseas consultar? Puedes decirme el número, por ejemplo 2, o el nombre completo.`
                 );
-
                 return;
             }
 
+            const servicio = coincidencias[0];
 
-            // ====================================================
-            // CLIENTE ENCONTRADO
-            // ====================================================
+            clientesPendientesSeleccionDanteRef.current = [];
+            servicioClienteDanteRef.current = servicio;
 
-            const servicio =
-                coincidencias[0];
-
-
-            clientesPendientesSeleccionDanteRef.current =
-                [];
-
-            servicioClienteDanteRef.current =
-                servicio;
-
-            // ====================================================
-            // DANTE - ACTUALIZAR CONTEXTO CONVERSACIONAL
-            // ====================================================
             actualizarContextoDante({
-
-                tema:
-                    "CLIENTE",
-
-                entidadId:
-                    servicio.clienteId,
-
+                tema: "CLIENTE",
+                entidadId: servicio.clienteId,
                 entidadNombre:
-                    `${servicio.nombres || ""} ${servicio.apellidos || ""}`
-                        .trim(),
-
-                ultimaIntencion:
-                    "BUSCAR_CLIENTE",
-
-                esperandoRespuesta:
-                    false,
-
-                datoPendiente:
-                    null,
-
+                    `${servicio.nombres || ""} ${servicio.apellidos || ""}`.trim(),
+                ultimaIntencion: "BUSCAR_CLIENTE",
+                esperandoRespuesta: false,
+                datoPendiente: null,
             });
 
-            console.log(
-                "DANTE CONTEXTO ACTUAL:",
-                contextoDanteRef.current
-            );
-
-            console.log(
-                "DANTE CLIENTE ENCONTRADO:",
-                servicio
-            );
-
-
-            console.log(
-                "DANTE SERVICIO ID:",
-                servicio.servicioId
-            );
-
+            console.log("DANTE CONTEXTO ACTUAL:", contextoDanteRef.current);
+            console.log("DANTE CLIENTE ENCONTRADO:", servicio);
+            console.log("DANTE SERVICIO ID:", servicio.servicioId);
 
             responderDante(
                 `Encontré a ${servicio.nombres} ${servicio.apellidos}. ` +
                 `Su servicio está ${servicio.estadoServicio || "registrado"}.`
             );
-
-
         } catch (error) {
-
-            console.error(
-                "Error buscando cliente con Dante:",
-                error
-            );
-
-
-            responderDante(
-                "Ocurrió un error al buscar al cliente."
-            );
+            console.error("Error buscando cliente con Dante:", error);
+            responderDante("Ocurrió un error al buscar al cliente.");
         }
     }
 
@@ -12220,13 +12080,15 @@ export default function BotNotificaciones({
                             ) {
                                 iniciarReconocimientoSeguro();
                             }
-                        }, 150);
+                        }, 700);
                     }
 
                     resolve();
                 };
 
-                setTimeout(liberarCuandoTermine, 150);
+                // Margen anti-eco: esperamos a que desaparezca también
+                // el audio residual de los parlantes antes de escuchar.
+                setTimeout(liberarCuandoTermine, 700);
             };
 
             const hablarBloque = (indice: number) => {
@@ -12253,15 +12115,16 @@ export default function BotNotificaciones({
                     if (vozId !== vozDanteIdRef.current) return;
 
                     danteHablandoRef.current = true;
-                    pausaReconocimientoPorVozDanteRef.current =
-                        pausaMicrofonoAnalisisDanteRef.current;
 
-                    if (pausaMicrofonoAnalisisDanteRef.current) {
-                        try {
-                            reconocimientoRef.current?.abort();
-                        } catch {
-                            // Ya estaba detenido.
-                        }
+                    // Mientras Dante habla, el reconocimiento debe quedar
+                    // SIEMPRE detenido. Dejarlo abierto permite que el
+                    // micrófono capture la propia voz sintetizada de Dante.
+                    pausaReconocimientoPorVozDanteRef.current = true;
+
+                    try {
+                        reconocimientoRef.current?.abort();
+                    } catch {
+                        // Ya estaba detenido.
                     }
                 };
 
@@ -12298,15 +12161,15 @@ export default function BotNotificaciones({
             try {
                 danteHablandoRef.current = true;
                 interrupcionVozDanteRef.current = false;
-                pausaReconocimientoPorVozDanteRef.current =
-                    pausaMicrofonoAnalisisDanteRef.current;
 
-                if (pausaMicrofonoAnalisisDanteRef.current) {
-                    try {
-                        reconocimientoRef.current?.abort();
-                    } catch {
-                        // Ya estaba detenido.
-                    }
+                // Bloqueo anti-eco: el micrófono no escucha mientras
+                // SpeechSynthesis reproduce una respuesta de Dante.
+                pausaReconocimientoPorVozDanteRef.current = true;
+
+                try {
+                    reconocimientoRef.current?.abort();
+                } catch {
+                    // Ya estaba detenido.
                 }
 
                 // Cancela cualquier respuesta anterior una sola vez.
@@ -15273,6 +15136,137 @@ export default function BotNotificaciones({
         return false;
     }
 
+    async function procesarConDanteCore(
+        mensaje: string
+    ): Promise<boolean> {
+        try {
+            const token = getToken();
+
+            if (!token) {
+                return false;
+            }
+
+            const res = await fetch(
+                `${API_BASE}/dante-core/conversation/message`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
+                    cache: "no-store",
+                    body: JSON.stringify({
+                        message: mensaje,
+                        conversationId:
+                            conversacionDanteCoreIdRef.current || undefined,
+                    }),
+                }
+            );
+
+            const data = await res.json().catch(() => ({}));
+
+            if (!res.ok || data?.ok === false) {
+                console.warn("DANTE CORE: fallback al motor anterior", data);
+                return false;
+            }
+
+            if (data?.conversationId) {
+                conversacionDanteCoreIdRef.current =
+                    String(data.conversationId);
+            }
+
+            // ========================================================
+            // DANTE CORE v2.9 - AGENDA / RECORDATORIOS
+            // Core interpreta la intención y resuelve fecha/hora.
+            // Durante la migración, NetcomRF conserva el guardado físico
+            // mediante guardarEventoAgendaDante(), que ya trabaja con el
+            // usuario autenticado y el sistema actual de recordatorios.
+            // ========================================================
+            if (
+                data?.data?.agendaAction === "CREAR" &&
+                data?.data?.agenda?.contenido &&
+                data?.data?.agenda?.fechaLocal
+            ) {
+                const fechaAgendaCore =
+                    new Date(String(data.data.agenda.fechaLocal));
+
+                if (!Number.isNaN(fechaAgendaCore.getTime())) {
+                    await guardarEventoAgendaDante(
+                        String(data.data.agenda.contenido),
+                        fechaAgendaCore
+                    );
+                    return true;
+                }
+            }
+
+            // Mientras conviven ambos motores, sincronizamos el cliente
+            // elegido por Core para que las funciones antiguas no pierdan contexto.
+            if (data?.selectedClient?.servicioId) {
+                servicioClienteDanteRef.current =
+                    data.selectedClient as ServicioClienteDante;
+
+                actualizarContextoDante({
+                    tema: "CLIENTE",
+                    entidadId: data.selectedClient.clienteId || null,
+                    entidadNombre:
+                        `${data.selectedClient.nombres || ""} ${data.selectedClient.apellidos || ""}`.trim(),
+                    ultimaIntencion: data.intent || "DANTE_CORE",
+                    esperandoRespuesta:
+                        data.status === "SELECCION_REQUERIDA",
+                    datoPendiente:
+                        data.status === "SELECCION_REQUERIDA"
+                            ? "SELECCION_CLIENTE"
+                            : null,
+                });
+            }
+
+            // v2.5: sincronizamos también el MikroTik seleccionado por Core.
+            // El contexto conversacional real vive en Core, pero mantener esta
+            // referencia permite que las funciones históricas del page.tsx
+            // sigan siendo compatibles mientras termina la migración.
+            if (data?.selectedRouter?.id) {
+                routerMikrotikDanteRef.current =
+                    data.selectedRouter as RouterMikrotikDante;
+
+                actualizarContextoDante({
+                    tema: "MIKROTIK",
+                    entidadId: String(data.selectedRouter.id),
+                    entidadNombre: String(
+                        data.selectedRouter.nombre ||
+                        `Router ${data.selectedRouter.id}`
+                    ),
+                    ultimaIntencion: data.intent || "DANTE_CORE_MIKROTIK",
+                    esperandoRespuesta:
+                        data.status === "SELECCION_ROUTER_REQUERIDA",
+                    datoPendiente:
+                        data.status === "SELECCION_ROUTER_REQUERIDA"
+                            ? "ROUTER_MIKROTIK"
+                            : null,
+                });
+            }
+
+
+            // Si Core todavía no reconoce la intención, dejamos que el
+            // page.tsx antiguo continúe como fallback durante la migración.
+            if (
+                data?.intent === "NINGUNA" ||
+                data?.status === "NO_ENTENDIDO"
+            ) {
+                return false;
+            }
+
+            const respuesta = String(data?.message || "").trim();
+            if (respuesta) {
+                responderDante(respuesta);
+            }
+
+            return true;
+        } catch (error) {
+            console.error("DANTE CORE FRONTEND:", error);
+            return false;
+        }
+    }
+
     async function procesarComandoDante(
         comando: string
     ) {
@@ -15632,6 +15626,23 @@ export default function BotNotificaciones({
         }
 
         // ========================================================
+        // DANTE v2.4 - CORE PRIMERO PARA CONSULTAS YA MIGRADAS
+        // ========================================================
+        // Dante Core decide primero las intenciones de cliente que ya fueron
+        // migradas: búsqueda/selección, perfil, ping, diagnóstico y facturación.
+        // Si Core responde NINGUNA/NO_ENTENDIDO, procesarConDanteCore devuelve
+        // false y el motor histórico continúa como fallback sin romper funciones
+        // locales ni acciones sensibles que todavía no han sido migradas.
+        const procesadoPorDanteCore =
+            await procesarConDanteCore(
+                limpio
+            );
+
+        if (procesadoPorDanteCore) {
+            return;
+        }
+
+        // ========================================================
         // DANTE V3 - DIAGNÓSTICO COMPUESTO DE INTERNET
         // Tiene prioridad antes de los comandos operativos porque
         // una frase como "revisa por qué Juan no tiene internet"
@@ -15718,6 +15729,8 @@ export default function BotNotificaciones({
         // Si reconoce una expresión natural nueva, reutiliza la
         // función existente. Si no la reconoce, devuelve false y
         // continúa exactamente con todos los comandos antiguos.
+        // Dante Core ya tuvo prioridad arriba. Este intérprete permanece
+        // temporalmente como fallback de compatibilidad durante la migración.
         const procesadoPorMotorCentral =
             await ejecutarIntencionCentralDante(
                 limpio
@@ -23095,6 +23108,19 @@ export default function BotNotificaciones({
         recognition.onresult = (
             event: SpeechRecognitionEventLike
         ) => {
+
+            // Defensa adicional: aunque el navegador entregue un resultado
+            // atrasado después de abort(), jamás procesamos audio capturado
+            // durante la voz de Dante.
+            if (
+                pausaReconocimientoPorVozDanteRef.current ||
+                danteHablandoRef.current
+            ) {
+                console.log(
+                    "🔇 IGNORADO: resultado recibido durante la voz de Dante"
+                );
+                return;
+            }
 
             console.log(
                 "🔥 ONRESULT DISPARADO",
