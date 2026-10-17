@@ -114,6 +114,7 @@ import {
     WalletCards,
     CircleDollarSign,
     TicketCheck,
+    Landmark,
 } from 'lucide-react';
 
 import {
@@ -134,6 +135,7 @@ import ConfiguracionSedesPage from '../gastos/sedes/page';
 import FinanzasIspPage from '../finanzas-isp/page';
 import ContabilidadIspPage from '../contabilidad-isp/page';
 import CrmClientesPage from '../crm-clientes/page';
+import BancosPage from '../bancos/page';
 
 
 type DashboardResponse = {
@@ -267,7 +269,7 @@ export default function DashboardPage() {
         | 'DETALLE' | 'EDITAR_SOLICITUD' | 'SOLICITUDES' | 'EN_PROCESO' | 'PENDIENTES_CLIENTE' | 'RESPONSABLES'
         | 'ENTREGADOS' | 'PROFORMAS' | 'usuarios' | 'ListdoUsuario' | 'PermisosUsuarios' | 'Administrarroles'
         | 'Menulateral' | 'Portalcliente' | 'Crearusuario' | 'monitoreoCliente' | 'AppPagos' | 'ConfiguracionSedes'
-        | 'CategoriasGastos' | 'GastosMensuales' | 'FinanzasISP' | 'ContabilidadISP' | 'CRMClientes' | 'PromesasPago'
+        | 'CategoriasGastos' | 'GastosMensuales' | 'Bancos' | 'FinanzasISP' | 'ContabilidadISP' | 'CRMClientes' | 'PromesasPago'
     >('dashboard');
 
     function normalizarCodigo(codigo: string) {
@@ -557,6 +559,7 @@ export default function DashboardPage() {
             color: 'bg-cyan-700',
             permiso: 'FACTURACION',
         },
+        { title: 'Bancos', desc: 'Administra las cuentas bancarias visibles para pagos en la app.', icon: Landmark, color: 'bg-cyan-700', permiso: 'ADMINISTRACION' },
         { title: 'Finanzas ISP', desc: 'Ingresos, gastos, utilidad y socios por sede.', icon: CircleDollarSign, color: 'bg-emerald-700', permiso: 'ADMINISTRACION' },
         { title: 'Contabilidad ISP', desc: 'Asientos, plan de cuentas y estados financieros.', icon: WalletCards, color: 'bg-violet-700', permiso: 'ADMINISTRACION' },
         { title: 'CRM Clientes', desc: 'Seguimiento comercial y perfil 360° del cliente.', icon: Users, color: 'bg-sky-700', permiso: 'GESTION_ISP' },
@@ -572,6 +575,7 @@ export default function DashboardPage() {
     function getHeaderInfo() {
 
 
+        if (vistaActual === 'Bancos') { return { titulo: 'Bancos', subtitulo: 'Cuentas bancarias disponibles para transferencias y depósitos.' }; }
         if (vistaActual === 'FinanzasISP') { return { titulo: 'Finanzas ISP', subtitulo: 'Ingresos, cartera, gastos, utilidad y socios por sede/router.' }; }
         if (vistaActual === 'ContabilidadISP') { return { titulo: 'Contabilidad ISP', subtitulo: 'Plan de cuentas, asientos y estados financieros.' }; }
         if (vistaActual === 'CRMClientes') { return { titulo: 'CRM de Clientes', subtitulo: 'Perfil 360°, seguimiento, tareas y oportunidades.' }; }
@@ -1605,6 +1609,7 @@ export default function DashboardPage() {
                                                             setVistaActual('facturasinternas');
                                                             return;
                                                         }
+                                                        if (item.title === 'Bancos') { setVistaActual('Bancos'); return; }
                                                         if (item.title === 'Finanzas ISP') { setVistaActual('FinanzasISP'); return; }
                                                         if (item.title === 'Contabilidad ISP') { setVistaActual('ContabilidadISP'); return; }
                                                         if (item.title === 'CRM Clientes') { setVistaActual('CRMClientes'); return; }
@@ -1911,6 +1916,9 @@ export default function DashboardPage() {
                                 onAbrirCategoriasGastos={() => setVistaActual('CategoriasGastos')}
                                 onAbrirGastosMensuales={() => setVistaActual('GastosMensuales')}
                             />
+                        )}
+                        {vistaActual === 'Bancos' && (
+                            <BancosPage onVolver={() => setVistaActual('dashboard')} />
                         )}
                         {vistaActual === 'FinanzasISP' && (<FinanzasIspPage />)}
                         {vistaActual === 'ContabilidadISP' && (<ContabilidadIspPage />)}

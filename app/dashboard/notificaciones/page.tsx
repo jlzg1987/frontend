@@ -772,6 +772,7 @@ export default function BotNotificaciones({
         if (recognitionEsperado && recognition !== recognitionEsperado) return false;
         if (inicioEsperado !== undefined && inicioEsperado !== inicioMicrofonoIdRef.current) return false;
         if (!microfonoActivoRef.current) return false;
+        if (!autoridadVozDanteRef.current) return false;
         if (pausaReconocimientoPorVozDanteRef.current) return false;
         if (pausaMicrofonoAnalisisDanteRef.current) return false;
 
@@ -844,6 +845,169 @@ export default function BotNotificaciones({
 
     const vozDanteIdRef =
         useRef(0);
+
+
+    // ========================================================
+    // DANTE CORE v3.2.2 - PRESENCIA / AUTORIDAD DE VOZ
+    // Solo la instancia que posee la autoridad puede escuchar o hablar.
+    // ========================================================
+    const autoridadVozDanteRef = useRef(false);
+    const [autoridadVozDante, setAutoridadVozDante] = useState(false);
+    const danteDeviceIdRef = useRef<string | null>(null);
+    const danteInstanceIdRef = useRef<string | null>(null);
+    const queriaMicrofonoAntesSilencioRef = useRef(false);
+
+    function aplicarAutoridadVozDante(tieneAutoridad: boolean, activeApp?: string | null) {
+        const anterior = autoridadVozDanteRef.current;
+        autoridadVozDanteRef.current = tieneAutoridad;
+        setAutoridadVozDante(tieneAutoridad);
+
+        if (!tieneAutoridad) {
+            if (anterior) {
+                queriaMicrofonoAntesSilencioRef.current = microfonoActivoRef.current;
+            }
+            microfonoActivoRef.current = false;
+            setMicrofonoActivo(false);
+            setEscuchando(false);
+            setTextoIntermedio("");
+            ++vozDanteIdRef.current;
+            danteHablandoRef.current = false;
+            pausaReconocimientoPorVozDanteRef.current = false;
+            interrupcionVozDanteRef.current = false;
+            try { reconocimientoRef.current?.abort(); } catch { }
+            try { window.speechSynthesis?.cancel(); } catch { }
+            if (activeApp && activeApp !== "NETCOMRF_ISP") {
+                setRespuestaDante(`Controlado por Dante Core (${activeApp}).`);
+            }
+            return;
+        }
+
+        if (!anterior && queriaMicrofonoAntesSilencioRef.current) {
+            queriaMicrofonoAntesSilencioRef.current = false;
+            setTimeout(() => { void iniciarMicrofono(); }, 250);
+        }
+    }
+
+    async function reclamarAutoridadVozDante(): Promise<boolean> {
+        const deviceId = danteDeviceIdRef.current;
+        const instanceId = danteInstanceIdRef.current;
+        const token = getToken();
+        if (!deviceId || !instanceId || !token) return false;
+
+        const llamar = (accion: "claim" | "register") => fetch(
+            `${API_BASE}/dante-core/presence/${accion}`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                cache: "no-store",
+                body: JSON.stringify({ deviceId, instanceId, app: "NETCOMRF_ISP", requestAuthority: accion === "register" }),
+            }
+        );
+
+        try {
+            let res = await llamar("claim");
+            if (res.status === 404) res = await llamar("register");
+            const data = await res.json().catch(() => ({}));
+            const tiene = Boolean(res.ok && data?.hasAuthority);
+            aplicarAutoridadVozDante(tiene, data?.activeApp || null);
+            return tiene;
+        } catch (error) {
+            console.warn("DANTE: no pude reclamar autoridad de voz", error);
+            return false;
+        }
+    }
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const token = getToken();
+        if (!token) return;
+
+        const deviceKey = "dante_core_device_id";
+        const instanceKey = "dante_core_netcomrf_instance_id";
+        let deviceId = localStorage.getItem(deviceKey);
+        if (!deviceId) {
+            deviceId = crypto.randomUUID();
+            localStorage.setItem(deviceKey, deviceId);
+        }
+        let instanceId = sessionStorage.getItem(instanceKey);
+        if (!instanceId) {
+            instanceId = crypto.randomUUID();
+            sessionStorage.setItem(instanceKey, instanceId);
+        }
+        danteDeviceIdRef.current = deviceId;
+        danteInstanceIdRef.current = instanceId;
+
+        let cerrado = false;
+        const streamController = new AbortController();
+
+        const post = async (accion: string, extra: Record<string, unknown> = {}) => {
+            const res = await fetch(`${API_BASE}/dante-core/presence/${accion}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                cache: "no-store",
+                body: JSON.stringify({ deviceId, instanceId, app: "NETCOMRF_ISP", ...extra }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && !cerrado) aplicarAutoridadVozDante(Boolean(data?.hasAuthority), data?.activeApp || null);
+            return res;
+        };
+
+        const abrirEventos = async () => {
+            try {
+                const res = await fetch(
+                    `${API_BASE}/dante-core/presence/events?deviceId=${encodeURIComponent(deviceId!)}`,
+                    { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: streamController.signal }
+                );
+                if (!res.ok || !res.body) return;
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = "";
+                while (!cerrado) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    const eventos = buffer.split("\n\n");
+                    buffer = eventos.pop() || "";
+                    for (const evento of eventos) {
+                        const linea = evento.split("\n").find((x) => x.startsWith("data:"));
+                        if (!linea) continue;
+                        try {
+                            const data = JSON.parse(linea.slice(5).trim());
+                            const propia = data?.activeInstanceId === instanceId;
+                            aplicarAutoridadVozDante(propia, data?.activeApp || null);
+                        } catch { }
+                    }
+                }
+            } catch (error: any) {
+                if (error?.name !== "AbortError" && !cerrado) {
+                    console.warn("DANTE: canal de presencia cerrado", error);
+                }
+            }
+        };
+
+        void post("register", { requestAuthority: false }).then(() => void abrirEventos());
+        const heartbeat = window.setInterval(() => { void post("heartbeat"); }, 15000);
+
+        const liberar = () => {
+            cerrado = true;
+            streamController.abort();
+            try {
+                fetch(`${API_BASE}/dante-core/presence/release`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ deviceId, instanceId }),
+                    keepalive: true,
+                }).catch(() => undefined);
+            } catch { }
+        };
+        window.addEventListener("pagehide", liberar, { once: true });
+
+        return () => {
+            window.clearInterval(heartbeat);
+            window.removeEventListener("pagehide", liberar);
+            liberar();
+        };
+    }, []);
 
     // ========================================================
     // DANTE - INTERRUPCIÓN DE VOZ POR PALABRA DE ACTIVACIÓN
@@ -12023,6 +12187,11 @@ export default function BotNotificaciones({
 
         return new Promise((resolve) => {
 
+            if (!autoridadVozDanteRef.current) {
+                resolve();
+                return;
+            }
+
             if (
                 typeof window === "undefined" ||
                 !("speechSynthesis" in window)
@@ -22939,6 +23108,14 @@ export default function BotNotificaciones({
 
     async function iniciarMicrofono() {
 
+        if (!autoridadVozDanteRef.current) {
+            const concedida = await reclamarAutoridadVozDante();
+            if (!concedida) {
+                setRespuestaDante("Dante está activo en otra interfaz de esta máquina.");
+                return;
+            }
+        }
+
         // Cada intento recibe un ID. Si aparece un intento más nuevo o el
         // componente se desmonta, el anterior queda invalidado y no puede
         // crear/reiniciar otra instancia de SpeechRecognition.
@@ -23172,6 +23349,7 @@ export default function BotNotificaciones({
             // atrasado después de abort(), jamás procesamos audio capturado
             // durante la voz de Dante.
             if (
+                !autoridadVozDanteRef.current ||
                 pausaReconocimientoPorVozDanteRef.current ||
                 danteHablandoRef.current
             ) {
@@ -23576,6 +23754,7 @@ export default function BotNotificaciones({
                 // ====================================================
 
                 if (
+                    autoridadVozDanteRef.current &&
                     microfonoActivoRef.current &&
                     !pausaReconocimientoPorVozDanteRef.current &&
                     !pausaMicrofonoAnalisisDanteRef.current
@@ -23594,6 +23773,7 @@ export default function BotNotificaciones({
                                 if (
                                     reconocimientoRef.current !== recognition ||
                                     inicioId !== inicioMicrofonoIdRef.current ||
+                                    !autoridadVozDanteRef.current ||
                                     !microfonoActivoRef.current ||
                                     pausaReconocimientoPorVozDanteRef.current ||
                                     pausaMicrofonoAnalisisDanteRef.current

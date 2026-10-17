@@ -636,49 +636,23 @@ export default function MensualidadesPage({
 
 
 
-    async function cargarSociosPago(routerId?: number | string | null) {
-
+    async function cargarSociosPago() {
         setSocioId('');
-
         setSociosPago([]);
 
-
-
-        console.log('ROUTER ID PARA SOCIOS:', routerId);
-
-
-
-        if (!routerId) return;
-
         try {
-
-            const data = await requestApi(
-
-                `/mensualidades/socios-por-router/${routerId}`
-
-            );
-
-
-
-            console.log('RESPUESTA SOCIOS:', data);
-
-
-
-            setSociosPago(Array.isArray(data?.data) ? data.data : []);
-
-
-
+            // Los socios activos no dependen del router asignado al cliente.
+            const data = await requestApi('/mensualidades/socios-activos');
+            if (!Array.isArray(data?.data)) {
+                throw new Error('Respuesta de socios no válida');
+            }
+            setSociosPago(data.data);
         } catch (error) {
-
             console.error('ERROR CARGANDO SOCIOS:', error);
-
             setSociosPago([]);
-
+            setMensaje('No se pudo cargar el listado de socios. Verifica la conexión e inténtalo nuevamente.');
         }
-
     }
-
-
 
     function calcularDescuentoPago() {
         const valorOriginal = Number(pagoSeleccionado?.valorMensual || 0);
@@ -1723,7 +1697,7 @@ export default function MensualidadesPage({
 
                                                         setSociosPago([]);
 
-                                                        void cargarSociosPago(m.routerId);
+                                                        void cargarSociosPago();
 
                                                         setMensaje('');
 
