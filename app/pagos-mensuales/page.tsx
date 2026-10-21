@@ -17,6 +17,9 @@ import { Download, Search, X } from 'lucide-react';
 type Mensualidad = {
 
     mensualidadId: string;
+    notaAdministrativa?: string | null;
+    socioReceptorId?: string | null;
+    nombreSocioReceptor?: string | null;
 
     routerId?: number | string | null;
 
@@ -134,6 +137,7 @@ export default function MensualidadesPage({
 
     const [socioId, setSocioId] = useState('');
 
+    const [guardandoCelda, setGuardandoCelda] = useState<string | null>(null);
     const [sociosPago, setSociosPago] = useState<Array<{ socioId: string; nombre: string }>>([]);
 
     const [tipoDescuento, setTipoDescuento] = useState<'NINGUNO' | 'VALOR' | 'PORCENTAJE' | 'DIAS'>('NINGUNO');
@@ -329,6 +333,7 @@ export default function MensualidadesPage({
     useEffect(() => {
 
         cargarMensualidades();
+        void cargarSociosPago();
 
     }, []);
 
@@ -637,9 +642,6 @@ export default function MensualidadesPage({
 
 
     async function cargarSociosPago() {
-        setSocioId('');
-        setSociosPago([]);
-
         try {
             // Los socios activos no dependen del router asignado al cliente.
             const data = await requestApi('/mensualidades/socios-activos');
@@ -649,8 +651,34 @@ export default function MensualidadesPage({
             setSociosPago(data.data);
         } catch (error) {
             console.error('ERROR CARGANDO SOCIOS:', error);
-            setSociosPago([]);
-            setMensaje('No se pudo cargar el listado de socios. Verifica la conexión e inténtalo nuevamente.');
+            setMensaje('No se pudo actualizar el listado de socios (se conserva la última lista cargada). Verifica la conexión e inténtalo nuevamente.');
+        }
+    }
+
+    async function guardarCampoMensualidad(m: Mensualidad, campo: 'nota' | 'socio', valor: string) {
+        const clave = `${m.mensualidadId}:${campo}`;
+        if (guardandoCelda === clave) return;
+        const anterior = campo === 'nota' ? (m.notaAdministrativa || '') : (m.socioReceptorId || '');
+        if (valor === anterior) return;
+        setGuardandoCelda(clave);
+        setMensaje('');
+        try {
+            await requestApi(`/mensualidades/${encodeURIComponent(m.mensualidadId)}/${campo}`, {
+                method: 'PATCH',
+                body: JSON.stringify(campo === 'nota' ? { nota: valor } : { socioId: valor || null }),
+            });
+            setMensualidades(prev => prev.map(item => item.mensualidadId !== m.mensualidadId ? item : {
+                ...item,
+                ...(campo === 'nota' ? { notaAdministrativa: valor } : {
+                    socioReceptorId: valor || null,
+                    nombreSocioReceptor: sociosPago.find(s => s.socioId === valor)?.nombre || null,
+                }),
+            }));
+        } catch (error: any) {
+            setMensaje(error.message || 'No se pudo guardar el cambio');
+            // Si falló, mantener los datos originales en lugar de fingir guardado.
+        } finally {
+            setGuardandoCelda(null);
         }
     }
 
@@ -663,7 +691,10 @@ export default function MensualidadesPage({
         else if (tipoDescuento === 'DIAS') valorDescuento = (valorOriginal / 30) * entrada;
         if (!Number.isFinite(valorDescuento) || valorDescuento < 0) valorDescuento = 0;
         valorDescuento = Math.min(valorDescuento, valorOriginal);
-        return { valorOriginal, valorDescuento, valorFinal: Math.max(0, valorOriginal - valorDescuento), valorDia: valorOriginal / 30 };
+        valorDescuento = Math.round(valorDescuento * 100) / 100;
+        const valorFinal = Math.round(Math.max(0, valorOriginal - valorDescuento) * 100) / 100;
+        const iva = Math.round(valorFinal * 0.15 * 100) / 100;
+        return { valorOriginal, valorDescuento, valorFinal, iva, total: Math.round((valorFinal + iva) * 100) / 100, valorDia: valorOriginal / 30 };
     }
 
     async function registrarPago() {
@@ -673,7 +704,7 @@ export default function MensualidadesPage({
 
 
         const calculoDescuento = calcularDescuentoPago();
-        const valor = calculoDescuento.valorFinal;
+        const valor = calculoDescuento.total;
 
         if (tipoDescuento !== 'NINGUNO') {
             const entrada = Number(descuentoEntrada);
@@ -1564,6 +1595,8 @@ export default function MensualidadesPage({
                                 <th className="p-3 text-left">Valor</th>
 
                                 <th className="p-3 text-left">Estado</th>
+                                <th className="p-3 text-left">Nota</th>
+                                <th className="p-3 text-left">Socio</th>
 
                                 <th className="p-3 text-left">Acción</th>
 
@@ -1635,6 +1668,27 @@ export default function MensualidadesPage({
 
 
 
+                                    <td className="p-3 min-w-48">
+                                        <input key={`${m.mensualidadId}:${m.notaAdministrativa || ''}`} type="text"
+                                            defaultValue={m.notaAdministrativa || ''} maxLength={2000}
+                                            placeholder="Añadir nota..." title="Se guarda al salir del campo"
+                                            onBlur={e => void guardarCampoMensualidad(m, 'nota', e.currentTarget.value)}
+                                            disabled={guardandoCelda === `${m.mensualidadId}:nota`}
+                                            className="w-full min-w-44 rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-xs" />
+                                    </td>
+                                    <td className="p-3 min-w-40">
+                                        {m.estado === 'PAGADA' ? (
+                                            <select value={m.socioReceptorId || ''}
+                                                onChange={e => void guardarCampoMensualidad(m, 'socio', e.target.value)}
+                                                disabled={guardandoCelda === `${m.mensualidadId}:socio`}
+                                                className="w-full rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-xs">
+                                                <option value="">---</option>
+                                                {m.socioReceptorId && !sociosPago.some(s => s.socioId === m.socioReceptorId) &&
+                                                    <option value={m.socioReceptorId}>{m.nombreSocioReceptor || 'Socio actual'}</option>}
+                                                {sociosPago.map(s => <option key={s.socioId} value={s.socioId}>{s.nombre}</option>)}
+                                            </select>
+                                        ) : <span className="text-slate-400">---</span>}
+                                    </td>
                                     <td className="p-3">
 
                                         <div className="flex flex-wrap gap-2">
@@ -1695,8 +1749,6 @@ export default function MensualidadesPage({
 
                                                         setSocioId('');
 
-                                                        setSociosPago([]);
-
                                                         void cargarSociosPago();
 
                                                         setMensaje('');
@@ -1731,7 +1783,7 @@ export default function MensualidadesPage({
 
                                 <tr>
 
-                                    <td colSpan={10} className="p-6 text-center text-slate-400">
+                                    <td colSpan={12} className="p-6 text-center text-slate-400">
 
                                         No hay mensualidades para el filtro seleccionado.
 
@@ -1747,7 +1799,7 @@ export default function MensualidadesPage({
 
                                 <tr>
 
-                                    <td colSpan={10} className="p-6 text-center text-slate-400">
+                                    <td colSpan={12} className="p-6 text-center text-slate-400">
 
                                         Cargando...
 
@@ -1803,9 +1855,9 @@ export default function MensualidadesPage({
                                 {tipoDescuento !== 'NINGUNO' && <div className="mt-1 flex justify-between text-amber-300"><span>Descuento:</span><span>-${calcularDescuentoPago().valorDescuento.toFixed(2)}</span></div>}
                                 <div className="my-2 border-t border-slate-700" />
                                 <div className="flex justify-between font-bold"><span>Base a pagar:</span><span>${calcularDescuentoPago().valorFinal.toFixed(2)}</span></div>
-                                <div className="mt-1 flex justify-between text-slate-400"><span>IVA 15%:</span><span>${(calcularDescuentoPago().valorFinal * 0.15).toFixed(2)}</span></div>
+                                <div className="mt-1 flex justify-between text-slate-400"><span>IVA 15%:</span><span>${calcularDescuentoPago().iva.toFixed(2)}</span></div>
                                 <div className="my-2 border-t border-slate-700" />
-                                <div className="flex justify-between text-base font-bold text-green-400"><span>Total:</span><span>${(calcularDescuentoPago().valorFinal * 1.15).toFixed(2)}</span></div>
+                                <div className="flex justify-between text-base font-bold text-green-400"><span>Total:</span><span>${calcularDescuentoPago().total.toFixed(2)}</span></div>
                             </div>
                         </div>
 
@@ -1814,10 +1866,10 @@ export default function MensualidadesPage({
                             <option value="NINGUNO">Sin descuento</option><option value="VALOR">Por valor</option><option value="PORCENTAJE">Por porcentaje</option><option value="DIAS">Por días</option>
                         </select>
 
-                        {tipoDescuento !== 'NINGUNO' && <><label className="block text-sm mb-1">{tipoDescuento === 'VALOR' ? 'Valor del descuento' : tipoDescuento === 'PORCENTAJE' ? 'Porcentaje de descuento' : 'Días de descuento'}</label><input type="number" min={tipoDescuento === 'DIAS' ? 1 : 0.01} max={tipoDescuento === 'PORCENTAJE' ? 100 : tipoDescuento === 'DIAS' ? 30 : undefined} step={tipoDescuento === 'DIAS' ? 1 : 0.01} value={descuentoEntrada} onChange={(e) => { setDescuentoEntrada(e.target.value); const entrada = Number(e.target.value || 0), original = Number(pagoSeleccionado.valorMensual || 0); let desc = tipoDescuento === 'VALOR' ? entrada : tipoDescuento === 'PORCENTAJE' ? original * entrada / 100 : (original / 30) * entrada; setValorPagado(Math.max(0, original - desc).toFixed(2)); }} disabled={loading} className="w-full mb-4 rounded-xl bg-slate-800 border border-slate-700 px-4 py-2 outline-none disabled:opacity-50" /></>}
+                        {tipoDescuento !== 'NINGUNO' && <><label className="block text-sm mb-1">{tipoDescuento === 'VALOR' ? 'Valor del descuento' : tipoDescuento === 'PORCENTAJE' ? 'Porcentaje de descuento' : 'Días de descuento'}</label><input type="number" min={tipoDescuento === 'DIAS' ? 1 : 0.01} max={tipoDescuento === 'PORCENTAJE' ? 100 : tipoDescuento === 'DIAS' ? 30 : undefined} step={tipoDescuento === 'DIAS' ? 1 : 0.01} value={descuentoEntrada} onChange={(e) => { setDescuentoEntrada(e.target.value); const entrada = Number(e.target.value || 0), original = Number(pagoSeleccionado.valorMensual || 0); let desc = tipoDescuento === 'VALOR' ? entrada : tipoDescuento === 'PORCENTAJE' ? original * entrada / 100 : (original / 30) * entrada; const base = Math.round(Math.max(0, original - Math.round(desc * 100) / 100) * 100) / 100; setValorPagado((base + Math.round(base * 0.15 * 100) / 100).toFixed(2)); }} disabled={loading} className="w-full mb-4 rounded-xl bg-slate-800 border border-slate-700 px-4 py-2 outline-none disabled:opacity-50" /></>}
 
-                        <label className="block text-sm mb-1">Valor a pagar (no incluye IVA)</label>
-                        <input type="number" value={calcularDescuentoPago().valorFinal.toFixed(2)} readOnly className="w-full mb-4 rounded-xl bg-slate-950 border border-slate-700 px-4 py-2 text-green-300 outline-none" />
+                        <label className="block text-sm mb-1">Total a recibir (incluye IVA)</label>
+                        <input type="number" value={calcularDescuentoPago().total.toFixed(2)} readOnly className="w-full mb-4 rounded-xl bg-slate-950 border border-slate-700 px-4 py-2 text-green-300 outline-none" />
 
                         <label className="block text-sm mb-1">Socio que recibió el pago (opcional)</label>
 
@@ -1915,7 +1967,6 @@ export default function MensualidadesPage({
 
                                     setSocioId('');
 
-                                    setSociosPago([]);
                                     setTipoDescuento('NINGUNO');
                                     setDescuentoEntrada('');
 
