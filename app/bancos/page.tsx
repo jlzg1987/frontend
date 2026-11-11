@@ -50,6 +50,7 @@ type FormularioCuenta = {
     estado: EstadoCuenta;
 };
 
+
 const FORMULARIO_INICIAL: FormularioCuenta = {
     banco: '',
     tipoCuenta: 'AHORROS',
@@ -260,9 +261,9 @@ export default function BancosPage({
 
             alert(
                 data.message ||
-                    (editando
-                        ? 'Cuenta bancaria actualizada correctamente.'
-                        : 'Cuenta bancaria creada correctamente.')
+                (editando
+                    ? 'Cuenta bancaria actualizada correctamente.'
+                    : 'Cuenta bancaria creada correctamente.')
             );
 
             limpiarFormulario();
@@ -518,8 +519,8 @@ export default function BancosPage({
                             {guardando
                                 ? 'Guardando...'
                                 : editando
-                                  ? 'Guardar cambios'
-                                  : 'Crear cuenta'}
+                                    ? 'Guardar cambios'
+                                    : 'Crear cuenta'}
                         </button>
 
                         {editando && (
@@ -634,11 +635,10 @@ export default function BancosPage({
                                             <td className="px-4 py-4 text-center font-bold">{cuenta.orden}</td>
                                             <td className="px-4 py-4 text-center">
                                                 <span
-                                                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-black ${
-                                                        cuenta.estado === 'ACTIVA'
+                                                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-black ${cuenta.estado === 'ACTIVA'
                                                             ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
                                                             : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                                                    }`}
+                                                        }`}
                                                 >
                                                     {cuenta.estado === 'ACTIVA' ? (
                                                         <CheckCircle2 className="w-3.5 h-3.5" />
@@ -661,11 +661,10 @@ export default function BancosPage({
                                                     <button
                                                         onClick={() => cambiarEstado(cuenta)}
                                                         disabled={cambiandoEstadoId === cuenta.id}
-                                                        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-bold transition disabled:opacity-50 ${
-                                                            cuenta.estado === 'ACTIVA'
+                                                        className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg font-bold transition disabled:opacity-50 ${cuenta.estado === 'ACTIVA'
                                                                 ? 'bg-amber-500 hover:bg-amber-400 text-slate-950'
                                                                 : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
-                                                        }`}
+                                                            }`}
                                                     >
                                                         {cuenta.estado === 'ACTIVA' ? (
                                                             <CircleOff className="w-4 h-4" />
@@ -675,8 +674,8 @@ export default function BancosPage({
                                                         {cambiandoEstadoId === cuenta.id
                                                             ? 'Procesando...'
                                                             : cuenta.estado === 'ACTIVA'
-                                                              ? 'Desactivar'
-                                                              : 'Activar'}
+                                                                ? 'Desactivar'
+                                                                : 'Activar'}
                                                     </button>
                                                 </div>
                                             </td>
