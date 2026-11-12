@@ -24203,28 +24203,30 @@ export default function BotNotificaciones({
 
     useEffect(() => {
 
-        const guardado =
-            localStorage.getItem(
-                "bot_notificaciones_pos"
-            );
-
-
-        if (
-            guardado
-        ) {
-
+        // A15: nueva ubicación por defecto, abajo a la derecha.
+        // Se usa una nueva clave para no heredar la ubicación antigua
+        // guardada arriba a la izquierda en versiones anteriores.
+        const posicionPredeterminada = {
+            x: Math.max(12, window.innerWidth - 80 - 24),
+            y: Math.max(12, window.innerHeight - 80 - 32),
+        };
+        const guardado = localStorage.getItem("bot_notificaciones_pos_v2");
+        if (guardado) {
             try {
-
-                setPos(
-                    JSON.parse(
-                        guardado
-                    )
-                );
-
+                const anterior = JSON.parse(guardado);
+                if (typeof anterior?.x === "number" && typeof anterior?.y === "number") {
+                    setPos({
+                        x: Math.max(12, Math.min(anterior.x, window.innerWidth - 92)),
+                        y: Math.max(12, Math.min(anterior.y, window.innerHeight - 112)),
+                    });
+                } else {
+                    setPos(posicionPredeterminada);
+                }
             } catch {
-
-                // Ignorar
+                setPos(posicionPredeterminada);
             }
+        } else {
+            setPos(posicionPredeterminada);
         }
 
 
@@ -24316,7 +24318,7 @@ export default function BotNotificaciones({
 
         localStorage.setItem(
 
-            "bot_notificaciones_pos",
+            "bot_notificaciones_pos_v2",
 
             JSON.stringify(
                 pos
@@ -24349,14 +24351,8 @@ export default function BotNotificaciones({
 
 
             setPos({
-
-                x:
-                    e.clientX -
-                    offset.x,
-
-                y:
-                    e.clientY -
-                    offset.y,
+                x: Math.max(12, Math.min(e.clientX - offset.x, window.innerWidth - 92)),
+                y: Math.max(12, Math.min(e.clientY - offset.y, window.innerHeight - 112)),
             });
         }
 
@@ -24831,9 +24827,12 @@ export default function BotNotificaciones({
                 <div
 
                     className="
-                        mt-5
-                        w-96
-                        overflow-hidden
+                        absolute
+                        bottom-[calc(100%+16px)]
+                        right-0
+                        w-[min(24rem,calc(100vw-2rem))]
+                        max-h-[calc(100vh-9rem)]
+                        overflow-y-auto
                         rounded-2xl
                         border
                         border-cyan-500/40
