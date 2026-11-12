@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Dependencias y compilaciones de Electron
+/desktop/node_modules/
+/desktop/dist/
+/desktop/release/
+/desktop/out/
