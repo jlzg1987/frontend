@@ -1,4 +1,10 @@
-import InstallNetcompApp from "@/src/components/pwa/InstallNetcompApp";
+import HeroNetcomp from "@/src/components/home/HeroNetcomp";
+import BeneficiosNetcomp from "@/src/components/home/BeneficiosNetcomp";
+import MapaCoberturaNetcomp from "@/src/components/home/MapaCoberturaNetcomp";
+import FloatingInstallNetcomp from "@/src/components/pwa/FloatingInstallNetcomp";
+import DanteChatPublico from "@/src/components/home/DanteChatPublico";
+import PortfolioNetcomp from "@/src/components/home/PortfolioNetcomp";
+import ContactoSoftware from "@/src/components/home/ContactoSoftware";
 import ProductosDestacados from "@/src/components/ProductosDestacados";
 import PublicidadWebPage from "./adnib-isp/publicidad/publiciadad-web/page";
 
@@ -20,6 +26,8 @@ export default function NetcomprfPage() {
 
     return (
         <main className="min-h-screen bg-slate-950 text-white">
+            <FloatingInstallNetcomp />
+            <DanteChatPublico />
             {/* HEADER */}
             <header className="sticky top-0 z-50 border-b border-white/10 bg-slate-950/80 backdrop-blur">
                 <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
@@ -33,6 +41,7 @@ export default function NetcomprfPage() {
                     <nav className="hidden gap-6 text-sm text-slate-300 md:flex">
                         <a href="#publicidad" className="hover:text-cyan-300">Anuncios</a>
                         <a href="#servicios" className="hover:text-cyan-300">Servicios</a>
+                        <a href="#software" className="hover:text-cyan-300">Software</a>
                         <a href="#tienda" className="hover:text-cyan-300">Tienda Online</a>
                         <a href="#cobertura" className="hover:text-cyan-300">Cobertura</a>
                         <a href="#test" className="hover:text-cyan-300">Test</a>
@@ -50,49 +59,8 @@ export default function NetcomprfPage() {
                 </div>
             </header>
 
-            {/* HERO */}
-            <section className="relative overflow-hidden px-6 py-24 text-center">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#0ea5e933,transparent_45%)]" />
-
-                <div className="relative mx-auto max-w-5xl">
-                    <p className="mb-4 text-sm font-bold uppercase tracking-[0.35em] text-cyan-300">
-                        Conecta tu mundo digital
-                    </p>
-
-                    <h1 className="text-4xl font-black md:text-7xl">
-                        Soluciones tecnológicas para hogares y empresas
-                    </h1>
-
-                    <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-slate-300">
-                        Internet, fibra óptica, cámaras de seguridad, sistemas web,
-                        punto de venta, ERP, CRM, paneles solares y tienda online.
-                    </p>
-
-                    <div className="mt-10 flex flex-col justify-center gap-4 sm:flex-row">
-                        <a
-                            href="https://wa.me/593988899116"
-                            target="_blank"
-                            className="rounded-full bg-cyan-400 px-8 py-4 font-bold text-slate-950 shadow-lg shadow-cyan-500/30"
-                        >
-                            Solicitar servicio
-                        </a>
-
-                        <a
-                            href="/inventario/tienda"
-                            className="rounded-full bg-lime-400 px-8 py-4 font-bold text-slate-950 shadow-lg shadow-lime-500/30"
-                        >
-                            Visita nuestra tienda online
-                        </a>
-
-                        <a
-                            href="#servicios"
-                            className="rounded-full border border-white/20 px-8 py-4 font-bold text-white"
-                        >
-                            Ver servicios
-                        </a>
-                    </div>
-                </div>
-            </section>
+            {/* HERO PREMIUM A27 */}
+            <HeroNetcomp />
 
             {/* PUBLICIDAD Y PROMOCIONES */}
             <section id="publicidad" className="relative overflow-hidden bg-slate-950 py-16">
@@ -155,32 +123,15 @@ export default function NetcomprfPage() {
                 </div>
             </section>
 
+            {/* PORTAFOLIO SOFTWARE E IA */}
+            <PortfolioNetcomp />
+
             {/* tienda online*/}
             <section id="tienda" className="px-6 py-20 border-cyan-400/30 bg-cyan-400/10">
                 <ProductosDestacados />
             </section>
-            {/* BENEFICIOS */}
-            <section className="bg-white/[0.04] px-6 py-20 ">
-                <h2 className="text-center text-3xl font-black">
-                    ¿Por qué elegir Netcomp?
-                </h2>
-
-                <div className="mx-auto mt-10 grid max-w-6xl gap-6 md:grid-cols-4">
-                    {[
-                        "Soporte local",
-                        "Instalación rápida",
-                        "Atención personalizada",
-                        "Soluciones a medida",
-                    ].map((item) => (
-                        <div
-                            key={item}
-                            className="rounded-3xl border border-white/10 bg-slate-900 p-6 text-center font-bold"
-                        >
-                            {item}
-                        </div>
-                    ))}
-                </div>
-            </section>
+            {/* BENEFICIOS CON IMÁGENES Y ANIMACIONES */}
+            <BeneficiosNetcomp />
 
             {/* COBERTURA */}
             <section id="cobertura" className="px-6 py-20 text-center">
@@ -190,6 +141,7 @@ export default function NetcomprfPage() {
                     Brindamos servicio en Esmeraldas, Tachina y sectores cercanos.
                     Consulta disponibilidad para tu domicilio, negocio o institución.
                 </p>
+                <MapaCoberturaNetcomp />
             </section>
             {/* TEST DE VELOCIDAD */}
             <section id="test" className="px-6 py-20">
@@ -244,17 +196,23 @@ export default function NetcomprfPage() {
                         </p>
 
                         <a
-                            href="https://play.google.com/store/apps/details?id=TU_APP_ID"
+                            href="https://play.google.com/store/apps/details?id=com.netcomprf.app"
                             target="_blank"
-                            className="mt-8 inline-block rounded-full bg-lime-400 px-8 py-4 font-bold text-slate-950 shadow-lg shadow-lime-500/30"
+                            rel="noopener noreferrer"
+                            className="mt-8 inline-flex items-center gap-3 rounded-full bg-lime-400 px-8 py-4 font-bold text-slate-950 shadow-lg shadow-lime-500/30 transition duration-300 hover:-translate-y-1 hover:shadow-lime-400/50"
                         >
                             Descargar en Play Store
                         </a>
                     </div>
 
                     <div className="rounded-3xl bg-slate-950 p-8 text-center">
-                        <div className="mx-auto flex h-48 w-48 items-center justify-center rounded-[2rem] border border-white/10 bg-white/5 text-6xl">
-                            📱
+                        <div className="relative mx-auto flex h-52 w-52 items-center justify-center">
+                            <div className="absolute inset-0 animate-pulse rounded-full bg-cyan-400/10 blur-2xl" />
+                            <div className="absolute inset-3 animate-[spin_24s_linear_infinite] rounded-full border border-dashed border-lime-400/40" />
+                            <div className="relative flex h-36 w-36 items-center justify-center rounded-[2rem] border border-cyan-300/40 bg-gradient-to-br from-slate-800 to-slate-950 shadow-[0_0_40px_rgba(34,211,238,0.2)] transition duration-500 hover:scale-110">
+                                <img src="/portfolio/netcomp.png" alt="Aplicación oficial NetcompRF" className="h-24 w-24 object-contain drop-shadow-[0_0_15px_rgba(132,204,22,0.45)]" />
+                            </div>
+                            <span className="absolute -bottom-2 rounded-full border border-lime-400/30 bg-lime-400/10 px-4 py-1 text-xs font-bold text-lime-300">Android · Play Store</span>
                         </div>
 
                         <p className="mt-6 text-lg font-bold text-lime-300">
@@ -282,8 +240,9 @@ export default function NetcomprfPage() {
 
                     <div className="mt-8 flex flex-col justify-center gap-4 sm:flex-row">
                         <a
-                            href="https://wa.me/593XXXXXXXXX"
+                            href="https://wa.me/593988899116?text=Hola%20Netcomp%20RF%2C%20deseo%20informaci%C3%B3n%20sobre%20sus%20servicios."
                             target="_blank"
+                            rel="noopener noreferrer"
                             className="rounded-full bg-slate-950 px-8 py-4 font-bold text-white"
                         >
                             Contactar por WhatsApp
@@ -298,6 +257,8 @@ export default function NetcomprfPage() {
                     </div>
                 </div>
             </section>
+
+            <ContactoSoftware />
 
             <footer className="border-t border-white/10 px-6 py-8 text-center text-sm text-slate-400">
                 © 2026 Netcomp R.F. S.A.S. Todos los derechos reservados.

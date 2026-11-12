@@ -78,7 +78,7 @@ export default function PublicidadWebPage() {
                 <img
                     src={item.url}
                     alt={item.titulo}
-                    className="h-full w-full object-cover"
+                    className="block h-auto max-h-[75vh] w-auto max-w-full object-contain"
                 />
             );
         }
@@ -91,7 +91,7 @@ export default function PublicidadWebPage() {
                     autoPlay
                     muted
                     loop
-                    className="h-full w-full bg-black object-cover"
+                    className="block h-auto max-h-[75vh] w-auto max-w-full bg-black object-contain"
                 />
             );
         }
@@ -146,59 +146,54 @@ export default function PublicidadWebPage() {
     const item = items[actual];
 
     return (
-        <main className="min-h-screen bg-slate-950 text-white">
-            <section className="relative h-screen w-full overflow-hidden">
+        <div className="w-full bg-slate-950 text-white">
+            <section className="relative flex min-h-[220px] w-full items-center justify-center overflow-hidden rounded-2xl bg-slate-950 sm:min-h-[320px]">
+                <span className="absolute right-3 top-3 z-10 rounded-full bg-slate-950/85 px-3 py-1 text-xs font-semibold text-cyan-200 shadow-md" aria-live="polite">
+                    {actual + 1} de {items.length} anuncios
+                </span>
+                {/* Preservar siempre las proporciones originales del material publicitario. */}
                 {renderPublicidad(item)}
-
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-slate-950/30" />
-
-                <div className="absolute bottom-12 left-1/2 z-20 w-full max-w-5xl -translate-x-1/2 px-6 text-center">
-                    {(item.tipo === "IMAGEN" || item.tipo === "VIDEO") && (
-                        <>
-                            <h1 className="text-4xl font-black md:text-6xl">
-                                {item.titulo}
-                            </h1>
-
-                            {item.descripcion && (
-                                <p className="mx-auto mt-4 max-w-2xl text-lg text-slate-200">
-                                    {item.descripcion}
-                                </p>
-                            )}
-                        </>
-                    )}
-
-                    <div className="mt-6 flex justify-center gap-2">
-                        {items.map((_, index) => (
-                            <button
-                                key={index}
-                                onClick={() => setActual(index)}
-                                className={`h-3 rounded-full transition-all ${index === actual
-                                        ? "w-10 bg-pink-500"
-                                        : "w-3 bg-white/40"
-                                    }`}
-                            />
-                        ))}
-                    </div>
-                </div>
 
                 {items.length > 1 && (
                     <>
                         <button
+                            type="button"
                             onClick={anterior}
-                            className="absolute left-5 top-1/2 z-30 -translate-y-1/2 rounded-full bg-black/50 px-4 py-3 text-2xl hover:bg-black/70"
+                            aria-label="Publicidad anterior"
+                            className="absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-black/65 px-3 py-2 text-2xl text-white transition hover:bg-black/85 sm:left-4"
                         >
                             ‹
                         </button>
-
                         <button
+                            type="button"
                             onClick={siguiente}
-                            className="absolute right-5 top-1/2 z-30 -translate-y-1/2 rounded-full bg-black/50 px-4 py-3 text-2xl hover:bg-black/70"
+                            aria-label="Publicidad siguiente"
+                            className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-black/65 px-3 py-2 text-2xl text-white transition hover:bg-black/85 sm:right-4"
                         >
                             ›
                         </button>
                     </>
                 )}
             </section>
-        </main>
+
+            {/* Los indicadores quedan debajo para no cubrir textos o promociones del arte. */}
+            {items.length > 1 && (
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                    {items.map((_, index) => (
+                        <button
+                            key={index}
+                            type="button"
+                            onClick={() => setActual(index)}
+                            aria-label={`Ver publicidad ${index + 1}`}
+                            aria-current={index === actual ? "true" : undefined}
+                            className={`h-2.5 rounded-full transition-all ${index === actual
+                                ? "w-9 bg-cyan-400"
+                                : "w-2.5 bg-white/40 hover:bg-white/70"
+                            }`}
+                        />
+                    ))}
+                </div>
+            )}
+        </div>
     );
 }
