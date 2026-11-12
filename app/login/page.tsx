@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Eye, EyeOff } from 'lucide-react';
 import { API_BASE, saveToken } from '@/src/lib/api';
 import { Suspense } from 'react';
+import InstallNetcompApp from '@/src/components/pwa/InstallNetcompApp';
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -166,6 +167,8 @@ function LoginContent() {
             >
               Crear cuenta
             </button>
+
+            <InstallNetcompApp variant="login" />
 
             <p className="text-center text-xs text-slate-500">
               Plataforma web para administración de ERP ISP

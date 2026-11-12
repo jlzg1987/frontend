@@ -1,3 +1,4 @@
+import InstallNetcompApp from "@/src/components/pwa/InstallNetcompApp";
 import ProductosDestacados from "@/src/components/ProductosDestacados";
 import PublicidadWebPage from "./adnib-isp/publicidad/publiciadad-web/page";
 

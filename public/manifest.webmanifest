@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "Netcomp RF - Sistema ERP ISP",
+  "short_name": "Netcomp RF",
+  "description": "Sistema web ERP ISP Netcomp RF",
+  "start_url": "/login",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#0f172a",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "/icons/netcomp-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/netcomp-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
