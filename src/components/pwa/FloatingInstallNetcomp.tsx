@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Download, X, Smartphone, Check, Info } from "lucide-react";
+import { getWindowsInstallerUrl, isNetcompDesktop, isWindowsDevice } from "./windowsInstaller";
 
 type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -22,9 +23,13 @@ export default function FloatingInstallNetcomp() {
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [windows, setWindows] = useState(false);
+  const [desktop, setDesktop] = useState(false);
 
   useEffect(() => {
     setInstalled(isStandalone());
+    setWindows(isWindowsDevice());
+    setDesktop(isNetcompDesktop());
     try { setDismissed(sessionStorage.getItem(DISMISS_KEY) === "1"); } catch { /* almacenamiento deshabilitado */ }
     setReady(true);
     const onBeforeInstall = (event: Event) => {
@@ -50,7 +55,13 @@ export default function FloatingInstallNetcomp() {
     try { sessionStorage.setItem(DISMISS_KEY, "1"); } catch { /* almacenamiento deshabilitado */ }
   };
 
+  const windowsUrl = windows ? getWindowsInstallerUrl() : null;
+
   const install = async () => {
+    if (!installPrompt && windowsUrl) {
+      window.location.assign(windowsUrl);
+      return;
+    }
     if (!installPrompt) {
       setHelpOpen((previous) => !previous);
       return;
@@ -71,7 +82,7 @@ export default function FloatingInstallNetcomp() {
     }
   };
 
-  if (!ready || installed || dismissed) return null;
+  if (!ready || installed || desktop || dismissed) return null;
 
   return (
     <aside
@@ -105,7 +116,7 @@ export default function FloatingInstallNetcomp() {
         className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-4 py-3 text-sm font-extrabold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-wait disabled:opacity-70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
       >
         <Download className="h-4 w-4" aria-hidden="true" />
-        {busy ? "Abriendo instalador…" : "Instalar aplicación"}
+        {busy ? "Abriendo instalador…" : windows && !installPrompt ? "Descargar para Windows" : "Instalar aplicación"}
       </button>
       {helpOpen && (
         <div role="status" className="mt-3 rounded-xl border border-white/10 bg-slate-800 p-3 text-xs leading-relaxed text-slate-200">

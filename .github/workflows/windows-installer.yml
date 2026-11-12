@@ -1,0 +1,30 @@
+name: Compilar instalador Netcomp RF para Windows
+on:
+  workflow_dispatch:
+    inputs:
+      app_url:
+        description: 'URL HTTPS del frontend Netcomp RF (ej. https://erp.midominio.com)'
+        required: true
+        type: string
+jobs:
+  installer:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar dependencias de escritorio
+        run: npm install
+      - name: Generar instalador EXE
+        env:
+          NETCOMP_APP_URL: ${{ inputs.app_url }}
+        run: npm run dist:win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NetcompRF-Instalador-Windows
+          path: desktop/dist/NetcompRF-Setup.exe
+          if-no-files-found: error

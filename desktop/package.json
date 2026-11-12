@@ -1,0 +1,26 @@
+{
+  "name": "netcomprf-desktop",
+  "version": "1.0.0",
+  "description": "Aplicación de escritorio Netcomp RF ISP",
+  "private": true,
+  "main": "main.cjs",
+  "author": "Netcomp RF S.A.S.",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "node scripts/prepare.cjs && electron .",
+    "dist:win": "node scripts/prepare.cjs && electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^35.7.5",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.netcomprf.isp.desktop",
+    "productName": "Netcomp RF ISP",
+    "artifactName": "NetcompRF-Setup.${ext}",
+    "directories": { "output": "dist" },
+    "files": ["main.cjs", "app-url.json", "assets/netcomp.ico", "package.json"],
+    "win": { "target": ["nsis"], "icon": "assets/netcomp.ico" },
+    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true, "createStartMenuShortcut": true, "shortcutName": "Netcomp RF ISP", "deleteAppDataOnUninstall": false }
+  }
+}

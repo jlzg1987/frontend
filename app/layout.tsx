@@ -19,8 +19,9 @@ export const metadata: Metadata = {
   applicationName: "Netcomp RF ISP",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "Netcomp RF", statusBarStyle: "black-translucent" },
-  icons: { icon: [{ url: "/icons/netcomp-192.png", sizes: "192x192", type: "image/png" }, { url: "/icons/netcomp-512.png", sizes: "512x512", type: "image/png" }], apple: "/icons/netcomp-192.png" },
+  icons: { icon: [{ url: "/portfolio/netcomp.pn", sizes: "192x192", type: "image/png" }, { url: "/icons/netcomp-512.png", sizes: "512x512", type: "image/png" }], apple: "/icons/netcomp-192.png" },
 };
+
 
 export default function RootLayout({
   children,
